@@ -1,0 +1,8 @@
+fastapi==0.115.5
+pydantic==2.10.3
+uvicorn==0.32.1
+httpx==0.28.1
+redis==5.2.1
+chromadb==0.5.23
+python-dotenv==1.0.1
+posthog==3.25.0

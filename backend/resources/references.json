@@ -1,0 +1,46 @@
+[
+  {
+    "key": "lab-context",
+    "title": "阅读化验报告时需要结合哪些信息",
+    "domain": "report",
+    "text": "MedlinePlus介绍，化验结果只是评估健康情况的一部分，需要结合症状、检查和病史理解。参考范围可能因检测方法与人群不同而变化；单个结果超出或落在范围内都不能独自确定健康状态。请提供项目名称、数值、单位及本报告参考范围，交由医护结合实际情况解释。",
+    "url": "https://medlineplus.gov/lab-tests/how-to-understand-your-lab-results/",
+    "version": "summary-2026-10-26",
+    "scope": "一般报告阅读知识，不用于个人诊断。",
+    "approved": true
+  },
+  {
+    "key": "ibuprofen-overview",
+    "title": "成人布洛芬资料的适用范围",
+    "domain": "medicine",
+    "text": "NHS的成人布洛芬页面面向18岁及以上人群，说明其属于非甾体抗炎药，可缓解疼痛及炎症。该页面区分片剂、胶囊、外用等剂型，并强调按具体包装或说明书核对使用方法；不确定时询问药师或医生。本索引仅保存简短导读，没有收录具体地区或品牌制剂说明书，也没有完整禁忌和相互作用数据库。",
+    "url": "https://www.nhs.uk/medicines/ibuprofen-for-adults/",
+    "version": "summary-2026-10-26",
+    "scope": "英国成人公开概览；不能据此给个人选择药物或剂量。",
+    "approved": true,
+    "entities": [
+      "布洛芬",
+      "ibuprofen"
+    ]
+  },
+  {
+    "key": "consultation-record",
+    "title": "就医沟通记录表",
+    "domain": "visit",
+    "text": "这是项目自行设计的通用沟通模板：按时间记录主要不适与变化；列出现用药品、已知过敏情况；整理已有报告和想向医生确认的问题。具体证件、收费、预约入口和号源需要在目标医疗机构的官方渠道核实，本模板不提供这些医院业务事实。",
+    "url": "https://github.com/xuyul6/med-agent-runtime-v1/blob/main/docs/consultation-template.md",
+    "version": "template-1",
+    "scope": "本项目原创信息整理模板，不是医院挂号规则或临床指南。",
+    "approved": true
+  },
+  {
+    "key": "symptom-record",
+    "title": "症状信息记录模板",
+    "domain": "symptoms",
+    "text": "这是项目自行设计的信息收集模板：记录不适部位、开始时间、持续或间歇情况、随时间的变化及对日常活动的影响。无法从这些文字得出诊断，应把记录交给医护人员评估。本模板不提供疾病与科室的医学映射。",
+    "url": "https://github.com/xuyul6/med-agent-runtime-v1/blob/main/docs/consultation-template.md",
+    "version": "template-1",
+    "scope": "本项目原创沟通模板，不是诊断或分诊指南。",
+    "approved": true
+  }
+]

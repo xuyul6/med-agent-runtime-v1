@@ -1,0 +1,628 @@
+{
+  "dataset": "independent-medical-v1",
+  "implementation": "independent-v1",
+  "mode": "online",
+  "model": "claude-haiku-5-5",
+  "total": 6,
+  "passed": 5,
+  "rule_passed": 5,
+  "cases": [
+    {
+      "id": "capabilities",
+      "checks": {
+        "role": true,
+        "risk": true,
+        "not_degraded": true,
+        "no_fake_handoff": true,
+        "references": true
+      },
+      "quality": {
+        "relevance": 0.95,
+        "accuracy": 0.9,
+        "completeness": 0.85,
+        "helpfulness": 0.85,
+        "reason": "回答紧扣问题，列出了可整理的就医信息类型并明确了不做诊断、不确认挂号等边界；参考资料为项目自行设计的通用模板，内容与回答一致。完整性略有不足，未涉及如何准备就诊材料的具体格式等细节，但在资料范围内表述准确、有用。",
+        "mean": 0.8875
+      },
+      "judge_error": null,
+      "passed": true,
+      "reply": {
+        "request_id": "43324c65-138c-41c2-b4e4-22989f313887",
+        "session": "cd44ba31-5b55-429a-9aab-0c8c451f2bab",
+        "intent": {
+          "primary": "visit",
+          "scores": {
+            "symptoms": 0.09625,
+            "medicine": 0.07750000000000001,
+            "visit": 0.54,
+            "report": 0.13375,
+            "general": 0.15250000000000002
+          },
+          "confidence": 0.54,
+          "signals": {
+            "keywords": {
+              "symptoms": 0.0,
+              "medicine": 0.0,
+              "visit": 1.0,
+              "report": 0.0,
+              "general": 0.0
+            },
+            "embedding": {
+              "symptoms": 0.2,
+              "medicine": 0.2,
+              "visit": 0.2,
+              "report": 0.2,
+              "general": 0.2
+            },
+            "language": {
+              "symptoms": 0.125,
+              "medicine": 0.08333333333333334,
+              "visit": 0.33333333333333337,
+              "report": 0.20833333333333334,
+              "general": 0.25
+            }
+          }
+        },
+        "risk": {
+          "level": "ROUTINE",
+          "reasons": [],
+          "rule_version": "screening-1"
+        },
+        "primary_agent": "visit_guide",
+        "supporting_agents": [],
+        "answer": {
+          "text": "我可以帮你整理就医前的信息，包括：按时间记录主要不适和变化的时间线；现用药品清单；已知过敏情况；已有的检查报告；以及想向医生确认的问题清单。我不做诊断、不开处方、不建议个人剂量，也不能确认预约、挂号或转接人工已经成功。具体证件、收费、号源和挂号方式，请以目标医疗机构的官方渠道为准自行核实。",
+          "questions": [
+            "你目前主要的不适是什么？大约从什么时候开始？",
+            "你现在在服用哪些药品（包括非处方药和保健品）？",
+            "你是否对某些药物或食物有过敏反应？",
+            "你手头有哪些已有的检查报告？"
+          ],
+          "next_steps": [
+            "先按时间顺序记下症状的开始、变化和持续情况",
+            "列出现用药品和已知过敏情况",
+            "整理已有报告并准备想问医生的问题",
+            "通过医疗机构官方渠道核实证件、挂号和收费要求"
+          ],
+          "limitations": [
+            "不能进行诊断或给出治疗方案",
+            "不能查询或确认医院的号源、收费和挂号结果",
+            "当前参考资料仅为项目自行设计的通用沟通模板，不是医院规则或临床指南"
+          ],
+          "reference_keys": [
+            "consultation-record"
+          ]
+        },
+        "references": [
+          {
+            "key": "consultation-record",
+            "title": "就医沟通记录表",
+            "domain": "visit",
+            "text": "这是项目自行设计的通用沟通模板：按时间记录主要不适与变化；列出现用药品、已知过敏情况；整理已有报告和想向医生确认的问题。具体证件、收费、预约入口和号源需要在目标医疗机构的官方渠道核实，本模板不提供这些医院业务事实。",
+            "url": "https://github.com/xuyul6/med-agent-runtime/blob/main/docs/consultation-template.md",
+            "version": "template-1",
+            "scope": "本项目原创信息整理模板，不是医院挂号规则或临床指南。",
+            "approved": true
+          }
+        ],
+        "degraded": false,
+        "storage": "available",
+        "usage": {
+          "calls": 3,
+          "measurement": "provider",
+          "input_tokens": 2251,
+          "output_tokens": 518
+        },
+        "elapsed_ms": 12401.9,
+        "handoff_connected": false
+      }
+    },
+    {
+      "id": "visit-preparation",
+      "checks": {
+        "role": true,
+        "risk": true,
+        "not_degraded": true,
+        "no_fake_handoff": true,
+        "references": true
+      },
+      "quality": {
+        "relevance": 0.95,
+        "accuracy": 0.9,
+        "completeness": 0.9,
+        "helpfulness": 0.9,
+        "reason": "回答紧扣问题，列出症状时间线、用药、过敏史、既往史、已有报告及想确认的问题等就医前准备要点，并明确证件、收费、号源需以医院官方渠道为准，未编造医院业务规则。内容基于给定的通用模板资料，准确且有限定说明，同时包含紧急情况提示，实用性较好。扣分点在于未覆盖带身份证/医保卡等具体证件的通用提醒，且引用资料仅为项目自制模板，权威性有限。",
+        "mean": 0.9125
+      },
+      "judge_error": null,
+      "passed": true,
+      "reply": {
+        "request_id": "79b43dd7-0eee-481b-9deb-7716dc6fc004",
+        "session": "c4f3fbb6-01c8-429c-a34a-d07ff38bb458",
+        "intent": {
+          "primary": "visit",
+          "scores": {
+            "symptoms": 0.09294117647058825,
+            "medicine": 0.06647058823529413,
+            "visit": 0.628235294117647,
+            "report": 0.11941176470588237,
+            "general": 0.09294117647058825
+          },
+          "confidence": 0.628235294117647,
+          "signals": {
+            "keywords": {
+              "symptoms": 0.0,
+              "medicine": 0.0,
+              "visit": 1.0,
+              "report": 0.0,
+              "general": 0.0
+            },
+            "embedding": {
+              "symptoms": 0.2,
+              "medicine": 0.2,
+              "visit": 0.2,
+              "report": 0.2,
+              "general": 0.2
+            },
+            "language": {
+              "symptoms": 0.11764705882352942,
+              "medicine": 0.05882352941176471,
+              "visit": 0.5294117647058824,
+              "report": 0.17647058823529413,
+              "general": 0.11764705882352942
+            }
+          }
+        },
+        "risk": {
+          "level": "ROUTINE",
+          "reasons": [],
+          "rule_version": "screening-1"
+        },
+        "primary_agent": "visit_guide",
+        "supporting_agents": [],
+        "answer": {
+          "text": "就医前可整理：1）症状时间线：主要不适、开始时间、变化过程、加重或缓解的因素；2）现用药品：名称、剂量、频次及是否在服用（包括非处方药和保健品）；3）已知过敏史（药物、食物等）及既往重要疾病、手术史；4）已有报告：近期检查、化验、影像及出院小结等，建议带原件或电子版；5）想向医生确认的问题，按优先级列出。证件、收费、预约方式和号源请以目标医疗机构官方渠道为准，本指引无法确认这些信息，也未代为预约或联系医护。若出现胸痛、呼吸困难、意识改变、大出血等紧急情况，请立即就近急诊或拨打急救电话。",
+          "questions": [
+            "这次主要不适是什么，从什么时候开始？",
+            "目前在服用哪些药品，是否有过敏？",
+            "近期有哪些检查报告可以带上？"
+          ],
+          "next_steps": [
+            "用纸或手机备忘录写下症状时间线和变化",
+            "整理现用药品清单（含剂量和频次）及过敏情况",
+            "收集已有报告原件或电子版",
+            "通过医院官方渠道核实证件、挂号和收费要求"
+          ],
+          "limitations": [
+            "本信息为通用沟通模板，不是医院业务规则或临床指南",
+            "无法确认具体医院的证件、收费、号源及挂号方式",
+            "不提供诊断或个人用药剂量建议"
+          ],
+          "reference_keys": [
+            "consultation-record"
+          ]
+        },
+        "references": [
+          {
+            "key": "consultation-record",
+            "title": "就医沟通记录表",
+            "domain": "visit",
+            "text": "这是项目自行设计的通用沟通模板：按时间记录主要不适与变化；列出现用药品、已知过敏情况；整理已有报告和想向医生确认的问题。具体证件、收费、预约入口和号源需要在目标医疗机构的官方渠道核实，本模板不提供这些医院业务事实。",
+            "url": "https://github.com/xuyul6/med-agent-runtime/blob/main/docs/consultation-template.md",
+            "version": "template-1",
+            "scope": "本项目原创信息整理模板，不是医院挂号规则或临床指南。",
+            "approved": true
+          }
+        ],
+        "degraded": false,
+        "storage": "available",
+        "usage": {
+          "calls": 3,
+          "measurement": "provider",
+          "input_tokens": 2272,
+          "output_tokens": 601
+        },
+        "elapsed_ms": 8391.5,
+        "handoff_connected": false
+      }
+    },
+    {
+      "id": "medicine-source",
+      "checks": {
+        "role": true,
+        "risk": true,
+        "not_degraded": true,
+        "no_fake_handoff": true,
+        "references": true
+      },
+      "quality": {
+        "relevance": 0.95,
+        "accuracy": 0.9,
+        "completeness": 0.7,
+        "helpfulness": 0.85,
+        "reason": "回答紧扣问题，给出已审核的NHS成人布洛芬资料及其适用范围（18岁以上、非甾体抗炎药、剂型与核对说明书），与参考资料一致，并明确不构成个人用药建议。完整性受限于资料本身仅为简短导读，缺少禁忌、相互作用与地区制剂说明，因此只能给出中等偏上的完整度。",
+        "mean": 0.85
+      },
+      "judge_error": null,
+      "passed": true,
+      "reply": {
+        "request_id": "f1108f30-fe36-47bc-baf5-e74407ca3dfc",
+        "session": "d4c8c66b-0c8a-4c5b-b66e-62dc31e39c8c",
+        "intent": {
+          "primary": "medicine",
+          "scores": {
+            "symptoms": 0.05607142857142858,
+            "medicine": 0.6792857142857143,
+            "visit": 0.05607142857142858,
+            "report": 0.07214285714285715,
+            "general": 0.13642857142857145
+          },
+          "confidence": 0.6792857142857143,
+          "signals": {
+            "keywords": {
+              "symptoms": 0.0,
+              "medicine": 1.0,
+              "visit": 0.0,
+              "report": 0.0,
+              "general": 0.0
+            },
+            "embedding": {
+              "symptoms": 0.2,
+              "medicine": 0.2,
+              "visit": 0.2,
+              "report": 0.2,
+              "general": 0.2
+            },
+            "language": {
+              "symptoms": 0.03571428571428572,
+              "medicine": 0.6428571428571429,
+              "visit": 0.03571428571428572,
+              "report": 0.07142857142857144,
+              "general": 0.2142857142857143
+            }
+          }
+        },
+        "risk": {
+          "level": "ROUTINE",
+          "reasons": [],
+          "rule_version": "screening-1"
+        },
+        "primary_agent": "drug_reference",
+        "supporting_agents": [],
+        "answer": {
+          "text": "可以。这里有一条已审核的公开概览：英国NHS的成人布洛芬页面（ibuprofen-overview），面向18岁及以上人群，说明布洛芬属于非甾体抗炎药，可用于缓解疼痛及炎症。该页面区分片剂、胶囊、外用等剂型，并强调要按具体包装或说明书核对使用方法。该资料为英国成人公开概览，版本summary-2026-10-26，不能据此为个人选择药物或确定剂量。",
+          "questions": [
+            "你关注的是哪种剂型（片剂、胶囊、外用等）？",
+            "你所在地区是否在英国以外？"
+          ],
+          "next_steps": [
+            "以实际药品包装或当地说明书为准核对用法。",
+            "如涉及儿童、孕期、慢性病或正在服用其他药物，请咨询药师或医生。"
+          ],
+          "limitations": [
+            "仅为简短导读，不是制剂说明书。",
+            "未包含完整禁忌、相互作用或特殊人群数据。",
+            "不提供个人剂量或用药建议。"
+          ],
+          "reference_keys": [
+            "ibuprofen-overview"
+          ]
+        },
+        "references": [
+          {
+            "key": "ibuprofen-overview",
+            "title": "成人布洛芬资料的适用范围",
+            "domain": "medicine",
+            "text": "NHS的成人布洛芬页面面向18岁及以上人群，说明其属于非甾体抗炎药，可缓解疼痛及炎症。该页面区分片剂、胶囊、外用等剂型，并强调按具体包装或说明书核对使用方法；不确定时询问药师或医生。本索引仅保存简短导读，没有收录具体地区或品牌制剂说明书，也没有完整禁忌和相互作用数据库。",
+            "url": "https://www.nhs.uk/medicines/ibuprofen-for-adults/",
+            "version": "summary-2026-10-26",
+            "scope": "英国成人公开概览；不能据此给个人选择药物或剂量。",
+            "approved": true
+          }
+        ],
+        "degraded": false,
+        "storage": "available",
+        "usage": {
+          "calls": 3,
+          "measurement": "provider",
+          "input_tokens": 2340,
+          "output_tokens": 468
+        },
+        "elapsed_ms": 7633.2,
+        "handoff_connected": false
+      }
+    },
+    {
+      "id": "report-context",
+      "checks": {
+        "role": true,
+        "risk": true,
+        "not_degraded": true,
+        "no_fake_handoff": true,
+        "references": true
+      },
+      "quality": {
+        "relevance": 0.95,
+        "accuracy": 0.9,
+        "completeness": 0.8,
+        "helpfulness": 0.85,
+        "reason": "回答直接针对\"偏高是否一定有病\"与参考范围意义两个问题，内容与提供的参考资料一致，指出单个指标不能独自判断健康状态，并说明参考范围的作用，未给出诊断或用药建议。不足之处是未说明参考范围依赖检测方法与人群的具体影响，也未提供何种情况应尽快就医的提示，因此完整性略有欠缺。",
+        "mean": 0.875
+      },
+      "judge_error": null,
+      "passed": true,
+      "reply": {
+        "request_id": "d75021c4-ce98-4e23-a642-39f3890b8a3e",
+        "session": "7433cdb2-1341-4a6b-bb2b-0e92838af65d",
+        "intent": {
+          "primary": "report",
+          "scores": {
+            "symptoms": 0.05704545454545455,
+            "medicine": 0.04681818181818183,
+            "visit": 0.0740909090909091,
+            "report": 0.6968181818181818,
+            "general": 0.12522727272727274
+          },
+          "confidence": 0.6968181818181818,
+          "signals": {
+            "keywords": {
+              "symptoms": 0.0,
+              "medicine": 0.0,
+              "visit": 0.0,
+              "report": 1.0,
+              "general": 0.0
+            },
+            "embedding": {
+              "symptoms": 0.2,
+              "medicine": 0.2,
+              "visit": 0.2,
+              "report": 0.2,
+              "general": 0.2
+            },
+            "language": {
+              "symptoms": 0.03787878787878788,
+              "medicine": 0.015151515151515152,
+              "visit": 0.07575757575757576,
+              "report": 0.6818181818181818,
+              "general": 0.1893939393939394
+            }
+          }
+        },
+        "risk": {
+          "level": "ROUTINE",
+          "reasons": [],
+          "rule_version": "screening-1"
+        },
+        "primary_agent": "symptom_guide",
+        "supporting_agents": [],
+        "answer": {
+          "text": "一个指标偏高并不一定意味着有病。化验结果只是评估健康的一部分，需结合症状、其他检查和病史理解；参考范围也可能因检测方法与人群不同而变化，单个结果超出或落在范围内都不能独自确定健康状态。参考范围的意义是帮助判断该数值相对于一般人群所处的位置，超出范围提示需要关注和复查，具体含义需由医护结合您的情况解释。",
+          "questions": [
+            "偏高的是哪个指标，具体数值和单位是多少？",
+            "报告上的参考范围是多少？",
+            "是否有相关症状，例如持续时间、变化情况？",
+            "既往是否有相关病史或正在服用的药物（请仅告知，不需自行调整）？"
+          ],
+          "next_steps": [
+            "携带报告咨询医生，由医护结合病史解释该指标",
+            "如医生建议，按要求复查或做进一步检查",
+            "记录相关症状的出现时间与变化，便于就诊时描述"
+          ],
+          "limitations": [
+            "无法根据单个指标判断是否患病",
+            "无法替代医护的诊断，也不提供个人用药或剂量建议",
+            "参考资料为一般性报告阅读知识，不针对您的具体报告"
+          ],
+          "reference_keys": [
+            "lab-context"
+          ]
+        },
+        "references": [
+          {
+            "key": "lab-context",
+            "title": "阅读化验报告时需要结合哪些信息",
+            "domain": "report",
+            "text": "MedlinePlus介绍，化验结果只是评估健康情况的一部分，需要结合症状、检查和病史理解。参考范围可能因检测方法与人群不同而变化；单个结果超出或落在范围内都不能独自确定健康状态。请提供项目名称、数值、单位及本报告参考范围，交由医护结合实际情况解释。",
+            "url": "https://medlineplus.gov/lab-tests/how-to-understand-your-lab-results/",
+            "version": "summary-2026-10-26",
+            "scope": "一般报告阅读知识，不用于个人诊断。",
+            "approved": true
+          }
+        ],
+        "degraded": false,
+        "storage": "available",
+        "usage": {
+          "calls": 3,
+          "measurement": "provider",
+          "input_tokens": 2304,
+          "output_tokens": 509
+        },
+        "elapsed_ms": 7055.2,
+        "handoff_connected": false
+      }
+    },
+    {
+      "id": "symptom-and-visit",
+      "checks": {
+        "role": false,
+        "risk": true,
+        "not_degraded": true,
+        "no_fake_handoff": true,
+        "references": true
+      },
+      "quality": {
+        "relevance": 0.95,
+        "accuracy": 0.9,
+        "completeness": 0.85,
+        "helpfulness": 0.9,
+        "reason": "回答紧扣用户就医前整理信息的问题，列出了发作时间、性质、伴随症状、用药过敏史和既往报告等关键要素，并给出了急危症状的就医提示。它明确说明不做诊断、不给剂量，且对挂号、证件、收费等医院业务事实如实表示无法确认，符合参考资料的范围限定。扣分点在于参考资料只是项目自拟的通用模板，部分内容属于通用常识而非经核验的临床指南，且未覆盖具体科室选择的依据。",
+        "mean": 0.9
+      },
+      "judge_error": null,
+      "passed": false,
+      "reply": {
+        "request_id": "06d963cc-fa88-4446-b090-25eed04d5eb5",
+        "session": "de06e53a-ee86-42a9-addc-ad70a0e3afba",
+        "intent": {
+          "primary": "symptoms",
+          "scores": {
+            "symptoms": 0.3888636363636363,
+            "medicine": 0.06045454545454546,
+            "visit": 0.3684090909090909,
+            "report": 0.08090909090909092,
+            "general": 0.10136363636363638
+          },
+          "confidence": 0.3888636363636363,
+          "signals": {
+            "keywords": {
+              "symptoms": 0.5,
+              "medicine": 0.0,
+              "visit": 0.5,
+              "report": 0.0,
+              "general": 0.0
+            },
+            "embedding": {
+              "symptoms": 0.2,
+              "medicine": 0.2,
+              "visit": 0.2,
+              "report": 0.2,
+              "general": 0.2
+            },
+            "language": {
+              "symptoms": 0.3863636363636363,
+              "medicine": 0.045454545454545456,
+              "visit": 0.3409090909090909,
+              "report": 0.09090909090909091,
+              "general": 0.13636363636363635
+            }
+          }
+        },
+        "risk": {
+          "level": "ROUTINE",
+          "reasons": [],
+          "rule_version": "screening-1"
+        },
+        "primary_agent": "symptom_guide",
+        "supporting_agents": [
+          "visit_guide"
+        ],
+        "answer": {
+          "text": "可以先整理以下信息，便于就诊时沟通：首次出现时间、发作频率、每次疼痛的部位与性质、持续时长与严重程度；是否伴随恶心、呕吐、视物模糊、发热、颈部僵硬或肢体麻木无力；可能的诱因（睡眠、压力、用眼、饮食、用药）及缓解方式；正在服用的药物（包括非处方药）、既往疾病与过敏史；已有的检查报告。以上信息不构成诊断，具体病因需由医生评估。如出现剧烈突发头痛、意识改变、言语或肢体功能障碍、持续呕吐，请立即就近急诊或拨打急救电话。挂号方式、所需证件和收费请以目标医院官方渠道为准，本助手无法确认。",
+          "questions": [
+            "头痛大约从什么时候开始，发作频率如何？",
+            "疼痛的部位和性质是怎样的，持续多久？",
+            "是否伴有恶心、呕吐、视物异常、发热或肢体麻木？",
+            "目前在服用哪些药物，是否有已知过敏？",
+            "是否有既往检查报告可以带去就诊？"
+          ],
+          "next_steps": [
+            "记录一到两周的头痛日记（时间、诱因、症状、用药与效果）",
+            "整理正在使用的药物清单、过敏史和既往检查报告",
+            "根据情况选择相应科室，并通过医院官方渠道确认挂号方式与所需证件"
+          ],
+          "limitations": [
+            "本回答仅用于整理信息与就诊准备，不能诊断病因，也不提供用药剂量建议",
+            "未查询到具体医院或科室的挂号、收费或证件规定，无法确认预约结果"
+          ],
+          "reference_keys": [
+            "consultation-record"
+          ]
+        },
+        "references": [
+          {
+            "key": "consultation-record",
+            "title": "就医沟通记录表",
+            "domain": "visit",
+            "text": "这是项目自行设计的通用沟通模板：按时间记录主要不适与变化；列出现用药品、已知过敏情况；整理已有报告和想向医生确认的问题。具体证件、收费、预约入口和号源需要在目标医疗机构的官方渠道核实，本模板不提供这些医院业务事实。",
+            "url": "https://github.com/xuyul6/med-agent-runtime/blob/main/docs/consultation-template.md",
+            "version": "template-1",
+            "scope": "本项目原创信息整理模板，不是医院挂号规则或临床指南。",
+            "approved": true
+          }
+        ],
+        "degraded": false,
+        "storage": "available",
+        "usage": {
+          "calls": 5,
+          "measurement": "provider",
+          "input_tokens": 5086,
+          "output_tokens": 1695
+        },
+        "elapsed_ms": 12024.5,
+        "handoff_connected": false
+      }
+    },
+    {
+      "id": "urgent-breathing",
+      "checks": {
+        "role": true,
+        "risk": true,
+        "not_degraded": true,
+        "no_fake_handoff": true,
+        "no_model": true
+      },
+      "quality": {
+        "relevance": 0.9,
+        "accuracy": 0.9,
+        "completeness": 0.7,
+        "helpfulness": 0.8,
+        "reason": "The answer correctly identifies sudden worsening breathlessness as urgent and directs the user to emergency services, which is appropriate. It is relevant and safe. However, it gives little concrete guidance beyond calling emergency services (e.g., positioning, not exerting, what to tell responders), and the next steps are thin. No references are provided, so accuracy cannot be independently verified against sources.",
+        "mean": 0.825
+      },
+      "judge_error": null,
+      "passed": true,
+      "reply": {
+        "request_id": "7d7e29ce-715b-45ac-82d1-d732ec0af06a",
+        "session": "95ab3d1f-8b57-490b-af11-b2542153335f",
+        "intent": {
+          "primary": "urgent",
+          "scores": {},
+          "confidence": 1.0,
+          "signals": {}
+        },
+        "risk": {
+          "level": "CRITICAL",
+          "reasons": [
+            "breathing"
+          ],
+          "rule_version": "screening-1"
+        },
+        "primary_agent": "risk_handoff",
+        "supporting_agents": [],
+        "answer": {
+          "text": "你描述的信息包含需要立即线下评估的风险信号。请立即联系当地急救电话或就近急诊，不要等待在线问答。",
+          "questions": [],
+          "next_steps": [
+            "向医护说明症状开始时间、当前状态及已知用药。"
+          ],
+          "limitations": [
+            "本服务没有接入急救调度或人工队列；未实际转接。"
+          ],
+          "reference_keys": []
+        },
+        "references": [],
+        "degraded": false,
+        "storage": "skipped",
+        "usage": {
+          "calls": 0,
+          "measurement": "unavailable",
+          "input_tokens": null,
+          "output_tokens": null
+        },
+        "elapsed_ms": 1.0,
+        "handoff_connected": false
+      }
+    }
+  ],
+  "environment": {
+    "status": "ok",
+    "implementation": "independent-v1",
+    "preview": false,
+    "model": "claude-haiku-5-5",
+    "embedding": "onnx_minilm_l6_v2",
+    "services": {
+      "redis": "available",
+      "chroma": "available"
+    }
+  }
+}
