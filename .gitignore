@@ -18,3 +18,9 @@
 **/.DS_Store
 **/.idea/
 **/.vscode/
+
+# Synthetic validation reports and project documents stay local.
+backend/artifacts/
+docs/
+# Personal notes such as interview preparation are never published.
+local-notes/

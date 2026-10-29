@@ -6,9 +6,9 @@ This is one repository with a Python backend and Vue frontend. Run Git commands 
 
 - `backend/medagent/`: API, contracts, risk screening, classification, retrieval, memory, execution, monitoring and evaluation.
 - `backend/resources/`: reviewed public reference summaries, role Skills and synthetic evaluation cases.
-- `backend/tests/`: deterministic pytest tests; `backend/artifacts/` contains explicitly selected synthetic validation reports.
+- `backend/tests/`: deterministic pytest tests. `backend/artifacts/` holds synthetic validation reports locally and is ignored by Git.
 - `frontend/src/`: workbench, API client and CSS; `frontend/tests/` contains Node tests.
-- `docs/`: architecture, consultation template and verification. `.local-backup/` is ignored recovery material.
+- `docs/`: local-only and ignored by Git: `guides/` (handover, demo, operations), `design/` (module design), `plans/` (plans and experiment protocols) and `records/` (dated acceptance and repair records by scenario); see `docs/README.md`. `.local-backup/` and `local-notes/` are ignored too.
 
 ## Development Commands
 
@@ -27,6 +27,8 @@ Use four spaces, type hints on public Python interfaces, `snake_case` functions 
 Name tests `test_*.py` and `test_*`; use `asyncio.run` for asynchronous cases. Unit tests must not call paid models or download embedding weights. Cover changed failure behavior, scope isolation and output validation. Frontend changes need client tests when behavior changes and a production build. No coverage threshold is configured.
 
 Run `python -m medagent.evaluate` only for explicitly authorized real model validation. Preserve Judge errors, unknown Token usage and failed cases. Never carry scores between implementations or claim clinical validation.
+
+`python -m medagent.benchmark` saves a plan without model calls; `--execute` needs explicit online scope and budget. Keep paired snapshots, cold/warm cache results, failures and synthetic counts distinct from real provider measurements.
 
 ## Commits and Configuration
 
