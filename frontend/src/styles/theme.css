@@ -186,6 +186,10 @@ h1 {
 .sidebar {
   display: grid;
   gap: 18px;
+  position: sticky;
+  top: 16px;
+  max-height: min(calc(100vh - 32px), 560px);
+  overflow-y: auto;
 }
 
 .panel-heading {
@@ -233,18 +237,6 @@ h4 {
 .empty {
   text-align: center;
   padding: 35px 16px 25px;
-}
-
-.empty-mark {
-  display: grid;
-  place-items: center;
-  margin: auto;
-  width: 53px;
-  height: 53px;
-  background: #eef6ef;
-  color: var(--green);
-  border-radius: 50%;
-  font-size: 30px;
 }
 
 .empty h3 {
@@ -331,7 +323,7 @@ textarea:focus {
   background: #136c5d;
 }
 
-.session label,.document-form label {
+.session label,.document-form label,.evaluation-settings label {
   display: block;
   font-size: 12px;
   color: var(--muted);
@@ -365,6 +357,13 @@ dd {
   margin: 0;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.messages {
+  max-height: min(60vh, 650px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .message {
@@ -404,6 +403,29 @@ dd {
 .answer-text {
   white-space: pre-wrap;
   line-height: 1.95;
+}
+
+.report-items {
+  margin: 16px 0;
+  padding: 12px 14px;
+  background: #f3f7f1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.report-items h4 {
+  margin: 0;
+}
+
+.report-items p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.report-items dl {
+  margin: 10px 0 0;
+  gap: 6px 12px;
 }
 
 .messages ul {
@@ -508,6 +530,65 @@ pre {
   color: var(--muted);
 }
 
+.monitor-note {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.monitor-details {
+  margin-top: 12px;
+}
+
+.monitor-row {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+
+.monitor-row h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.monitor-row h3 small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.monitor-row dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 10px;
+  margin: 0;
+  font-size: 10px;
+}
+
+.monitor-row dt { color: var(--muted); }
+.monitor-row dd { margin: 0; text-align: right; }
+.monitor-reload { margin-top: 16px; }
+
+.execution-details h3 { font-size: 12px; margin: 16px 0 6px; }
+.execution-row { border-bottom: 1px solid var(--line); padding: 8px 0; overflow-wrap: anywhere; font-size: 11px; }
+.execution-row p { margin: 4px 0; color: var(--muted); }
+
+.catalog-snapshot, .role-card {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.catalog-snapshot h3, .role-heading h3 { margin: 0; }
+.catalog-snapshot p, .role-meta { color: var(--muted); font-size: 11px; margin: 6px 0; }
+.role-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.role-heading small { color: var(--muted); }
+.role-label { font-weight: 600; font-size: 12px; margin-bottom: 0; }
+.role-label + p { margin-top: 4px; }
+.role-card ol, .role-card ul { padding-left: 22px; }
+.role-card li small { color: var(--muted); }
+
 .notice {
   padding: 12px 18px;
   background: #fff3df;
@@ -577,6 +658,15 @@ pre {
   font-size: 13px;
 }
 
+.evaluation-settings {
+  margin: 20px 0;
+}
+
+.evaluation-settings details {
+  margin: 16px 0;
+  font-size: 13px;
+}
+
 .evaluation-summary {
   display: flex;
   flex-direction: column;
@@ -614,6 +704,22 @@ pre {
 
 .evaluation-case small {
   font-size: 10px;
+}
+
+.evaluation-turns {
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.evaluation-turn {
+  margin-top: 12px;
+  padding: 12px;
+  border-left: 2px solid var(--line);
+}
+
+.evaluation-regressions {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .good {
@@ -670,6 +776,9 @@ footer {
   }
   .sidebar {
     grid-template-columns: 1fr 1fr;
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
   .runtime {
     grid-column: 1/-1;
@@ -683,7 +792,11 @@ footer {
   .header nav {
     order: 3;
     width: 100%;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .header nav button {
+    padding: 7px 2px;
   }
   .connection {
     margin-left: auto;
