@@ -39,7 +39,9 @@ FIELD_RULES = {
     **{name:"wrong_field_type" for name in ("string_type","list_type","dict_type","model_type","model_attributes_type")},
     **{name:"invalid_field_value" for name in ("literal_error","enum","too_short","too_long","string_too_short","string_too_long")},
 }
-SAFE_RULES = frozenset([*ROOT_RULE_FIELDS,*FIELD_RULES.values(),"schema_validation_failed","unknown_rule"])
+BOUNDARY_RULES = ("dose_amount", "dose_frequency", "dose_relative", "medication_decision", "safety_guarantee",
+                  "diagnosis", "prescription", "action_claim")
+SAFE_RULES = frozenset([*ROOT_RULE_FIELDS,*FIELD_RULES.values(),*BOUNDARY_RULES,"schema_validation_failed","unknown_rule"])
 REPORT_EVIDENCE_REASONS = frozenset({"no_sources_cited", "exact_sentence_in_uncited_source",
                                      "no_range_sentence_in_cited_sources", "not_exact_cited_sentence"})
 

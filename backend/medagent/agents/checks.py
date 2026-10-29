@@ -9,6 +9,7 @@ from ..knowledge.medication_evidence import validate_output_identity
 from .output_validation import AgentOutputError, schema_error
 from .profiles import AgentProfile
 from ..core.provider import object_from_text
+from ..understanding.medications import NAMES
 
 
 SOURCE_GAP_QUESTIONS = {
@@ -37,7 +38,44 @@ def checked_answer(data: dict, known: dict | list[str]) -> Answer:
     return answer
 
 
+NUMBER = r"(?:\d+(?:\.\d+)?|[一二两三四五六七八九十半]+)"
+DOSE_UNIT = r"(?:片|粒|颗|袋|包|支|滴|毫克|mg|克|g|毫升|ml)"
+# Intake wording only: a strength ("每片含200 mg", "规格是 200 mg") has no intake verb before the number.
+DOSE_AMOUNT = (r"(?:吃|服|服用|口服|含服|用|加)\s*" + NUMBER + r"(?:\s*(?:到|至|-|~)\s*" + NUMBER + r")?\s*"
+               + DOSE_UNIT + r"(?![a-z])")
+DOSE_FREQUENCY = (r"(?:每(?:隔)?\s*" + NUMBER + r"?\s*(?:次|天|日|小时|周|顿|餐|晚|早)|一次|一天|一日|早晚)[^，。；！？]{0,10}?"
+                  + NUMBER + r"\s*(?:次|" + DOSE_UNIT + r")")
+REFUSAL_BEFORE = (r"不能|无法|不会|不可以|不应|不建议|不要|别|勿|未|没有|是否|能否|可否|不表示|不代表|并非|不等于"
+                  r"|需要(?:由)?(?:医生|医师|药师)|请(?:向|咨询)|咨询|核实|核对")
+# A conditional excuses only a claimed action ("如果已经联系了医生"); "如果没效果可以多吃一点" is still advice.
+CONDITION_BEFORE = REFUSAL_BEFORE + r"|如果|假如|若"
+# Payload summaries restate the user in second or third person ("用户自述每次吃一片").
+USER_QUOTE = r"(?:你|您)(?:提到|说过|说(?!得)|描述|自述)|用户(?:提到|说|描述|自述|要求|以为|询问)"
+# (code, rule, pattern, words that excuse the match when they come earlier in the clause). Dose amounts are
+# never excused by a hedge or a question; a clause quoting the user ("你提到一次吃了两片") is not advice.
+BOUNDARIES = (
+    ("individual_dosing_not_supported", "dose_amount", DOSE_AMOUNT, None),
+    ("individual_dosing_not_supported", "dose_frequency", DOSE_FREQUENCY, None),
+    ("individual_dosing_not_supported", "dose_relative",
+     r"多吃(?:一点|一些|点|些)?(?=[。，；！？,;!?]|$)|(?:剂量|药量|用量)(?:可以|可)?(?:加倍|减半|增加|减少|加大)"
+     r"|加倍|减半|加量|减量|再加(?:一|两|半)(?:片|粒|颗)", REFUSAL_BEFORE),
+    ("medical_boundary_violation", "medication_decision",
+     r"停(?:药|用|服|一停)|换成(?:" + NAMES + r"|别的药|其他药)|(?:不用|不必|别)再(?:吃|用|服)", REFUSAL_BEFORE),
+    ("medical_boundary_violation", "safety_guarantee",
+     r"(?:肯定|一定|完全|绝对)(?:没问题|没事|安全|没有(?:风险|副作用))|放心(?:吃|用|服用)|(?:很|非常)安全"
+     r"|没有(?:任何)?(?:风险|副作用)", REFUSAL_BEFORE),
+    ("medical_boundary_violation", "diagnosis",
+     r"确诊为|诊断为|你患有|患有|(?:很|极|非常|大)可能是|看起来像|应该是|考虑(?:是|为)|大概率|多半是|你得的是|这是典型的",
+     REFUSAL_BEFORE),
+    ("medical_boundary_violation", "prescription", r"(?:给你|为你|帮你)开(?:药|处方|点|些)?", REFUSAL_BEFORE),
+    ("medical_boundary_violation", "action_claim",
+     r"已(?:经)?(?:帮你|为你|替你|给你)?(?:预约|挂号|挂好|联系|通知|转接|安排|呼叫)|帮你(?:预约|挂号|挂好)"
+     r"|(?:救护车|医生)(?:正在路上|稍后会|会联系你|会回电)", CONDITION_BEFORE),
+)
+
+
 def check_boundaries(data) -> None:
+    """Reject dosing, medication decisions, safety guarantees, diagnoses and claimed actions in any visible text."""
     def strings(value):
         if isinstance(value, str):
             yield value
@@ -47,11 +85,19 @@ def check_boundaries(data) -> None:
         elif isinstance(value, list):
             for item in value:
                 yield from strings(item)
-    visible = "\n".join(strings(data))
-    if re.search(r"(?:确诊为|诊断为|你患有|给你开处方|已为你(?:预约|挂号)|已转接人工)", visible):
-        raise AgentOutputError("medical_boundary_violation")
-    if re.search(r"(?:每次|每日|一天|一次).{0,10}\d+\s*(?:毫克|mg|片|粒)", visible, re.I):
-        raise AgentOutputError("individual_dosing_not_supported")
+    for text in strings(data):
+        for clause in re.findall(r"[^。！？!?；;\n，,]+[。！？!?；;\n，,]?", text):
+            if re.search(USER_QUOTE, clause):
+                continue
+            question = re.search(r"(?:吗|？|\?)\s*[。！？!?；;，,]?$", clause)
+            for code, rule, pattern, excused_by in BOUNDARIES:
+                for match in re.finditer(pattern, clause, re.I):
+                    before = clause[:match.start()]
+                    # Wording inside quotation marks is mentioned ("不能说“一定安全”"), not asserted.
+                    quoted = before.count("“") > before.count("”") or before.count("「") > before.count("」")
+                    if excused_by and (question or quoted or re.search(excused_by, before)):
+                        continue
+                    raise AgentOutputError(code, rules=(rule,))
 
 
 def check_report_range_claims(text: str, keys: list[str], references: dict, field: str) -> None:
