@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -20,7 +20,28 @@ class Settings:
     model_timeout: float = 35
     agent_timeout: float = 100
     tool_timeout: float = 20
+    tool_call_limit: int = 12
     memory_timeout: float = 20
+    supporting_agent_limit: int = 2
+    agent_concurrency: int = 2
+    collaboration_timeout: float = 120
+    monitor_interval: float = 10
+    monitor_window_size: int = 40
+    monitor_window_seconds: float = 300
+    monitor_min_samples: int = 5
+    monitor_agent_success_rate: float = .90
+    monitor_agent_latency_ms: float = 15000
+    monitor_tool_success_rate: float = .90
+    monitor_tool_latency_ms: float = 10000
+    monitor_local_tool_latency_ms: float = 1000
+    monitor_penalty_step: float = .25
+    monitor_max_penalty: float = .8
+    monitor_fallback_penalty: float = .5
+    monitor_bad_ticks: int = 2
+    monitor_recovery_successes: int = 2
+    monitor_recovery_ticks: int = 2
+    monitor_probe_cooldown: float = 30
+    monitor_probe_timeout: float = 15
     skill_directory: Path = ROOT / "resources" / "skills"
 
     @classmethod
@@ -40,5 +61,11 @@ class Settings:
             model_timeout=float(env.get("MAR_MODEL_TIMEOUT", "35")),
             agent_timeout=float(env.get("MAR_AGENT_TIMEOUT", "100")),
             tool_timeout=float(env.get("MAR_TOOL_TIMEOUT", "20")),
+            tool_call_limit=int(env.get("MAR_TOOL_CALL_LIMIT", "12")),
             memory_timeout=float(env.get("MAR_MEMORY_TIMEOUT", "20")),
+            supporting_agent_limit=int(env.get("MAR_SUPPORTING_AGENT_LIMIT", "2")),
+            agent_concurrency=int(env.get("MAR_AGENT_CONCURRENCY", "2")),
+            collaboration_timeout=float(env.get("MAR_COLLABORATION_TIMEOUT", "120")),
+            **{field.name:(int if field.name in {"monitor_window_size", "monitor_min_samples", "monitor_bad_ticks", "monitor_recovery_successes", "monitor_recovery_ticks"} else float)
+               (env.get("MAR_"+field.name.upper(), str(field.default))) for field in fields(cls) if field.name.startswith("monitor_")},
         )

@@ -1,46 +1,69 @@
-"""Measure target-turn provider usage; preparation calls are reported separately."""
+"""Review a bounded paired protocol; --execute explicitly calls the isolated API."""
 import argparse
 import asyncio
+from copy import deepcopy
 import json
-import uuid
 from pathlib import Path
 import httpx
+from .benchmark_contracts import BenchmarkRequest, PROTOCOL, resolve_benchmark
+from .benchmark_runner import schedule
+from .evaluation_metrics import digest
 
-CASES = [
-    ["我想整理去看医生之前的信息。", "我已经有一份体检报告，也列好了现在使用的药品。", "请总结我还应该记录和准备哪些就诊信息。"],
-    ["我在学习如何阅读体检报告。", "我知道报告里有项目、结果、单位和参考范围。", "单项结果在参考范围之外一定表示有病吗？"]
-]
+def build_plan(request: BenchmarkRequest):
+    version,cases = resolve_benchmark(request)
+    pairs = schedule(request,cases)
+    body = request.model_dump(mode="json")
+    body["cases"] = [case.model_dump(mode="json") for case in cases]
+    return {"schema_version":"paired-benchmark-plan-1","online_status":"not_run","dataset":version,
+            "protocol":deepcopy(PROTOCOL),"protocol_hash":digest(PROTOCOL),"request":body,
+            "planned_pairs":len(pairs),"planned_targets":2*len(pairs),"schedule":pairs,
+            "notice":"Only --execute sends requests; no fixed percentage or clinical equivalence is assumed."}
 
 
-async def compare(url, output):
-    rows = []
-    async with httpx.AsyncClient(timeout=300) as client:
-        for case_id, messages in enumerate(CASES):
-            for mode in ["selective", "full"]:
-                session, preparation = "", []
-                user = f"benchmark-{uuid.uuid4()}"
-                for index, text in enumerate(messages):
-                    response = await client.post(url.rstrip("/")+"/chat",json={"text":text,"user":user,"session":session,"context":mode})
-                    response.raise_for_status()
-                    reply=response.json()
-                    session=reply["session"]
-                    if index < len(messages)-1:
-                        preparation.append(reply["usage"])
-                rows.append({"case":case_id,"mode":mode,"target_usage":reply["usage"],"preparation_usage":preparation,
-                             "reply":reply,"runtime_check":not reply["degraded"]})
-    totals = {mode:[row["target_usage"]["input_tokens"] for row in rows if row["mode"]==mode] for mode in ["selective","full"]}
-    means = {mode:sum(values)/len(values) if all(isinstance(value,int) for value in values) else None for mode,values in totals.items()}
-    reduction = 1-means["selective"]/means["full"] if means["selective"] is not None and means["full"] else None
-    report={"dataset":"context-dialogue-v1","mean_input_tokens":means,"input_reduction":reduction,"quality_equivalence":"not_established","rows":rows}
+def write_report(output, report):
     target=Path(output)
     target.parent.mkdir(parents=True,exist_ok=True)
-    target.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
-    print(target)
+    with target.open("x") as handle:
+        handle.write(json.dumps(report,ensure_ascii=False,indent=2,allow_nan=False)+"\n")
+
+
+async def compare(url, output, request=None):
+    if Path(output).exists(): raise FileExistsError("preserve_existing_benchmark_report")
+    plan = build_plan(request or BenchmarkRequest())
+    async with httpx.AsyncClient(timeout=plan["request"]["limits"]["timeout_seconds"]+30) as client:
+        response = await client.post(url.rstrip("/")+"/benchmark/run",json=plan["request"])
+        response.raise_for_status()
+        report = response.json()
+    report["client_plan"] = {key:value for key,value in plan.items() if key not in {"request","schedule","online_status"}}
+    metadata = report.get("metadata",{})
+    mismatches = [name for name,actual,expected in [
+        ("protocol_hash",metadata.get("protocol_hash"),plan["protocol_hash"]),
+        ("request_hash",metadata.get("request_hash"),digest(plan["request"]))] if actual != expected]
+    report["client_plan_mismatch"] = mismatches
+    if mismatches:
+        report["quality_noninferiority"] = "not_established"
+        report["supported_input_reduction"] = {cache:None for cache in plan["request"]["cache_conditions"]}
+        report.setdefault("claim_blockers",[]).append("client_server_protocol_or_request_mismatch")
+    write_report(output,report)
+    print(f'complete={report["complete"]}; noninferiority={report["quality_noninferiority"]}. Saved: {output}')
+    return report
 
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument("--url",default="http://127.0.0.1:8000")
     parser.add_argument("--output",default="artifacts/context.json")
+    parser.add_argument("--cases",help="JSON BenchmarkRequest; protocol limits and selected cases are reviewed before execution")
+    parser.add_argument("--execute",action="store_true",help="Run against /benchmark/run; may incur model charges")
+    parser.add_argument("--no-judge",action="store_true",help="Disable Judge only; runtime models still run with --execute")
     args=parser.parse_args()
-    asyncio.run(compare(args.url,args.output))
+    body = json.loads(Path(args.cases).read_text()) if args.cases else {}
+    if args.no_judge: body["judge"] = False
+    request = BenchmarkRequest.model_validate(body)
+    if Path(args.output).exists(): raise FileExistsError("preserve_existing_benchmark_report")
+    if args.execute:
+        asyncio.run(compare(args.url,args.output,request))
+    else:
+        plan = build_plan(request)
+        write_report(args.output,plan)
+        print(f'Plan only: {plan["planned_pairs"]} pairs / {plan["planned_targets"]} targets; no network or model calls. Saved: {args.output}')

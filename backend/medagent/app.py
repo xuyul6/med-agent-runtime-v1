@@ -3,13 +3,20 @@ import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Response
 from redis.asyncio import Redis
+from pydantic import ValidationError
 from .config import ROOT, Settings
 from .contracts import DocumentBatch, Question, Reference, Reply
+from .benchmark_contracts import BenchmarkRequest
+from .benchmark_runner import run_benchmark
 from .evaluation import evaluate
+from .evaluation_isolation import ReferenceSnapshotError
+from .evaluation_contracts import EvaluationRequest
+from .evaluation_metrics import BaselineError, BaselineStore
 from .memory import SessionMemory
 from .provider import ClaudeGateway
-from .retrieval import ReferenceIndex, Vectorizer
+from .retrieval import ReferenceIndex, Vectorizer, catalog_updates
 from .runtime import MedicalRuntime
+from .skills import SkillValidationError
 
 
 def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=None) -> FastAPI:
@@ -20,7 +27,11 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
         if runtime is not None:
             app.state.runtime = runtime
             app.state.services = {"mode":"injected"}
-            yield
+            runtime.monitor.start()
+            try:
+                yield
+            finally:
+                await runtime.monitor.stop()
             return
         gateway = None if settings.preview else ClaudeGateway(settings)
         vectors = Vectorizer("hash" if settings.preview else settings.embeddings)
@@ -49,24 +60,26 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
         index = ReferenceIndex(vectors, gateway, collection)
         await index.restore()
         seed = [Reference.model_validate(record) for record in json.loads((ROOT/"resources"/"references.json").read_text())]
-        missing = [record for record in seed if record.key not in index.documents]
-        # Same-version catalog metadata may gain aliases without replacing edited content.
-        missing += [index.documents[record.key].model_copy(update={"entities":record.entities}) for record in seed
-                    if record.key in index.documents and record.entities and not index.documents[record.key].entities
-                    and record.version == index.documents[record.key].version]
+        missing = catalog_updates(seed, index.documents)
         if missing:
             await index.upsert(missing)
         memory = SessionMemory(redis, episodes, vectors, gateway)
         memory.available = settings.preview or redis is not None
         app.state.runtime = MedicalRuntime(settings, gateway, vectors, index, memory)
         app.state.services = services
-        yield
-        if gateway:
-            await gateway.close()
-        if redis:
-            await redis.aclose()
+        app.state.runtime.monitor.start()
+        try:
+            yield
+        finally:
+            await app.state.runtime.monitor.stop()
+            if gateway:
+                await gateway.close()
+            if redis:
+                await redis.aclose()
 
     app = FastAPI(title="MedAgent Runtime", version="1.0.0", lifespan=lifespan)
+    app.state.evaluation_lock = asyncio.Lock()
+    app.state.baseline_store = BaselineStore()
 
     @app.get("/health")
     async def health():
@@ -79,8 +92,17 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
         return await app.state.runtime.chat(question)
 
     @app.get("/runtime")
+    @app.get("/monitor")
     async def status():
         return app.state.runtime.monitor.snapshot()
+
+    @app.get("/agents")
+    async def agent_profiles():
+        return {"agents":[profile.describe() for profile in app.state.runtime.registry.profiles.values()]}
+
+    @app.get("/tools")
+    async def tool_catalog():
+        return {"tools":[spec.describe() for spec in app.state.runtime.tools.registry.specs.values()]}
 
     @app.get("/traces/{request_id}")
     async def trace(request_id: str):
@@ -102,22 +124,47 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
 
     @app.get("/skills")
     async def skills():
-        return {"roles":sorted(app.state.runtime.skills.content)}
+        return app.state.runtime.skills.snapshot().describe()
 
     @app.post("/skills/reload")
     async def reload_skills():
-        return app.state.runtime.skills.reload()
+        try:
+            return await asyncio.to_thread(app.state.runtime.skills.reload)
+        except SkillValidationError as exc:
+            raise HTTPException(422, {"code":"invalid_skills", "reason":str(exc),
+                                      "active_snapshot_id":app.state.runtime.skills.snapshot().snapshot_id}) from exc
 
     @app.post("/eval/run")
-    async def run_evaluation():
-        if settings.preview:
+    async def run_evaluation(request: EvaluationRequest | None = None):
+        request = request or EvaluationRequest()
+        if settings.preview and request.judge:
             raise HTTPException(409,"online_evaluation_requires_model")
-        return await evaluate(app.state.runtime)
+        if app.state.evaluation_lock.locked(): raise HTTPException(409,"evaluation_already_running")
+        async with app.state.evaluation_lock:
+            try:
+                return await evaluate(app.state.runtime,request,baseline_store=app.state.baseline_store)
+            except ReferenceSnapshotError as exc:
+                raise HTTPException(409,{"code":"reference_snapshot_rejected","reason":str(exc)}) from exc
+            except BaselineError as exc:
+                raise HTTPException(409,{"code":"baseline_rejected","reason":str(exc)}) from exc
+            except ValidationError as exc:
+                raise HTTPException(422,{"code":"invalid_evaluation_cases",
+                    "errors":exc.errors(include_input=False,include_context=False,include_url=False)}) from exc
+            except ValueError as exc:
+                raise HTTPException(422,{"code":"invalid_evaluation_cases","reason":type(exc).__name__}) from exc
+
+    @app.post("/benchmark/run")
+    async def run_context_benchmark(request: BenchmarkRequest | None = None):
+        request = request or BenchmarkRequest()
+        if settings.preview and request.judge:
+            raise HTTPException(409,"online_benchmark_requires_model")
+        if app.state.evaluation_lock.locked(): raise HTTPException(409,"evaluation_already_running")
+        async with app.state.evaluation_lock:
+            return await run_benchmark(app.state.runtime,request)
 
     @app.get("/metrics")
     async def metrics():
-        snapshot = app.state.runtime.monitor.snapshot()
-        return Response(f'mar_requests_total {snapshot["requests"]}\nmar_degraded_total {snapshot["degraded"]}\n',
+        return Response(app.state.runtime.monitor.prometheus(),
                         media_type="text/plain; version=0.0.4")
 
     return app

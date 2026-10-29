@@ -1,119 +1,260 @@
 import asyncio
-import json
+import math
 import time
 import uuid
-from .classification import IntentRouter, LEXICON
-from .contracts import Answer, Intent, Question, Reply, Understanding
-from .execution import ROLE_FOR_INTENT, RoleAgent, Skills, ToolExecutor, checked_answer
+from .classification import IntentRouter
+from .contracts import ExecutionAttempt, Intent, Question, Reply, RoutingFallback, TaskUnderstanding, Understanding
+from .execution import RoleAgent, RiskHandoffAgent, Skills, ToolExecutor, checked_role_output
 from .memory import scope_key
 from .observability import CURRENT, RunLog, Monitor, event
 from .risk import RiskGate
-import re
+from .profiles import DEFAULT_REGISTRY, ProfileRegistry
+from .tools import ToolBudget
+from .conversation import SubjectTracker, institution_request, recover_visit_followup, role_details
+from .consultation_needs import consultation_need
+from .routing import RoutingPlanner
+from .collaboration import compose
+from .monitoring import MonitorExcluded, MonitorPolicy
+from .output_validation import AgentOutputError
 
 
 class MedicalRuntime:
-    def __init__(self, settings, model, vectors, index, memory):
+    def __init__(self, settings, model, vectors, index, memory, profiles=None, skills=None):
         self.settings, self.model, self.index, self.memory = settings, model, index, memory
-        self.monitor, self.risk = Monitor(), RiskGate()
+        self.monitor, self.risk = Monitor(MonitorPolicy.from_settings(settings)), RiskGate()
+        self.subjects = SubjectTracker()
         self.router = IntentRouter(vectors, model)
-        self.skills = Skills(settings.skill_directory)
-        self.tools = ToolExecutor(timeout=settings.tool_timeout)
-        self.agents = {role:[RoleAgent(role, f"{role}.{slot}", model, index, self.skills, self.tools) for slot in [1,2]]
-                       for role in ["symptom_guide","drug_reference","visit_guide","general"]}
+        self.registry = DEFAULT_REGISTRY if profiles is None else ProfileRegistry(profiles)
+        self.skills = skills if skills is not None else Skills(settings.skill_directory, self.registry)
+        self.tools = ToolExecutor(timeout=settings.tool_timeout, monitor=self.monitor)
+        self.monitor.circuits = self.tools.circuit_snapshot
+        for name,spec in self.tools.registry.specs.items(): self.monitor.register_tool(name, spec.dependency)
+        ToolBudget(settings.tool_call_limit)
+        if not 1 <= settings.agent_concurrency <= 4 or not math.isfinite(settings.collaboration_timeout) or not 0 < settings.collaboration_timeout <= 600:
+            raise ValueError("invalid_collaboration_budget")
+        self.planner = RoutingPlanner(self.registry, self.tools.registry, settings.supporting_agent_limit)
+        self.risk_agent = RiskHandoffAgent(self.registry, self.tools)
+        self.agents = {role:[RoleAgent(role, f"{role}.{slot}", model, index, self.skills, self.tools, self.registry) for slot in [1,2]]
+                       for role, profile in self.registry.profiles.items() if not profile.deterministic}
+        for role,agents in self.agents.items():
+            for agent in agents: self.monitor.register_agent(agent.instance, role)
+        self.monitor.register_agent(self.risk_agent.instance, "risk_handoff", deterministic=True)
 
-    async def _execute(self, role, question, understanding, context):
-        instances = sorted(self.agents[role], key=lambda agent:self.monitor.health(agent.instance), reverse=True)
-        domain = understanding.primary
-        if ROLE_FOR_INTENT[domain] != role:
-            domain = Intent.VISIT if role == "visit_guide" else Intent.SYMPTOMS
-        for agent in instances:
-            started = time.perf_counter()
+    async def _execute(self, assignment, decision, question, understanding, context, risk, skill_snapshot, tool_budget):
+        role = assignment.role
+        instances = {agent.instance:agent for agent in self.agents.get(role, [])}
+        scoped = understanding.model_copy(update={"primary":assignment.intent,
+            "tasks":[TaskUnderstanding(intent=assignment.intent, goal=assignment.input_text[:300])],
+            "entities":{name:understanding.entities[name] for name in assignment.context_fields}})
+        if role == "drug_reference" and not any(name == "medication_name" and fact.state in {"provided", "topic"}
+                                               for name,fact in scoped.entities.items()):
+            scoped.missing_fields = ["medication_name"]
+        details = role_details(scoped, role)
+        if role == "symptom_guide" and context.get("consultation_need") in {"clarify", "clarify_followup", "food", "medicine"}:
+            details["consultation_need"] = context["consultation_need"]
+        # The assignment excerpt is bounded; do not lose a later institution question.
+        if role == "visit_guide" and institution_request(question.text):
+            details["institution_specific"] = True
+        context = {**context, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in scoped.entities.items()}}
+        visit_followup = None
+        if role == "visit_guide" and understanding.primary == Intent.VISIT and not understanding.subject_ambiguous:
             try:
-                result = await asyncio.wait_for(agent.run(question.text, domain, context, question.context), self.settings.agent_timeout)
-                self.monitor.record(agent.instance, True, (time.perf_counter()-started)*1000)
-                event("agent", instance=agent.instance, status="ok")
+                visit_followup = recover_visit_followup(question.text, context,
+                    subject_changed=understanding.subject_changed, now=getattr(self.memory, "context_clock", time.time)())
+            except (TypeError, ValueError, OverflowError):
+                visit_followup = None
+        target = scoped.entities.get("medication_name")
+        query = target.value+" 药品公开资料 "+assignment.input_text if role == "drug_reference" and target and target.state in {"provided", "topic"} else assignment.input_text
+        for index, choice in enumerate(assignment.instances):
+            started = time.perf_counter()
+            probe = None
+            try:
+                probe = self.monitor.claim(choice.instance)
+                agent = instances[choice.instance]
+                if agent.role != role or assignment.intent not in agent.profile.knowledge_domains:
+                    raise ValueError("instance_outside_assignment")
+                result = await asyncio.wait_for(agent.run(assignment.input_text, assignment.intent, context, question.context,
+                    subject=question.subject, subject_changed=understanding.subject_changed, risk=risk,
+                    skill_snapshot=skill_snapshot, tool_budget=tool_budget,
+                    details=details, reference_query=query[:6000], assignment=assignment, original_request=question.text,
+                    visit_followup=visit_followup),
+                    min(self.settings.agent_timeout, self.monitor.policy.probe_timeout) if probe is not None else self.settings.agent_timeout)
+                if result.execution.role != role or result.instance != choice.instance or result.execution.instance != choice.instance:
+                    raise ValueError("result_outside_assignment")
+                checked_role_output(agent.profile, {"role":role, "status":result.execution.status,
+                    "answer":result.answer.model_dump(), "missing_fields":result.execution.missing_fields,
+                    "payload":result.execution.payload}, {ref.key:ref for ref in result.references})
+                result.execution.task_id = assignment.task_id
+                assignment.selected_instance, assignment.status = agent.instance, result.execution.status
+                assignment.attempts.append(ExecutionAttempt(instance=agent.instance, status="ok"))
+                self.monitor.record(agent.instance, True, (time.perf_counter()-started)*1000,
+                                    recovery_evidence=result.execution.status == "answered" and result.model_dependency_exercised)
+                event("agent", instance=agent.instance, task_id=assignment.task_id, status="ok")
                 return result
+            except MonitorExcluded:
+                self.monitor.reject(choice.instance)
+                assignment.attempts.append(ExecutionAttempt(instance=choice.instance, status="failed", error="MonitorExcluded"))
+                decision.fallbacks.append(RoutingFallback(role=role, instance=choice.instance, reason="monitor_admission_changed", action="try_next_planned_instance"))
+            except asyncio.CancelledError:
+                assignment.status = "cancelled"
+                assignment.attempts.append(ExecutionAttempt(instance=choice.instance, status="cancelled", error="CancelledError"))
+                self.monitor.record(choice.instance, False, (time.perf_counter()-started)*1000, status="cancelled", error="CancelledError")
+                event("agent", instance=choice.instance, task_id=assignment.task_id, status="cancelled")
+                raise
             except Exception as exc:
-                self.monitor.record(agent.instance, False, (time.perf_counter()-started)*1000)
-                event("agent", instance=agent.instance, status="failed", error=type(exc).__name__)
+                status = "timeout" if isinstance(exc, TimeoutError) else "failed"
+                diagnostic = {"error_code":exc.code,"error_stage":exc.stage} if isinstance(exc,AgentOutputError) else {}
+                assignment.attempts.append(ExecutionAttempt(instance=choice.instance, status=status, error=type(exc).__name__,**diagnostic))
+                self.monitor.record(choice.instance, False, (time.perf_counter()-started)*1000, status=status, error=type(exc).__name__)
+                event("agent", instance=choice.instance, task_id=assignment.task_id, status=status, error=type(exc).__name__,**diagnostic)
+                if index+1 < len(assignment.instances):
+                    decision.fallbacks.append(RoutingFallback(role=role, instance=choice.instance, reason=status, action="retry_same_role"))
+            finally:
+                self.monitor.release(choice.instance, probe)
+        assignment.status = "failed"
+        if assignment.attempts and all(attempt.error == "MonitorExcluded" for attempt in assignment.attempts):
+            if role not in decision.monitor_fallback: decision.monitor_fallback.append(role)
+            decision.routing_reason += ";monitor_fallback=["+role+"]"
+        decision.fallbacks.append(RoutingFallback(role=role, reason="instances_exhausted", action="transparent_guidance"))
         return None
+
+    async def _dispatch(self, decision, question, understanding, context, risk, skill_snapshot, tool_budget):
+        outputs, semaphore = {}, asyncio.Semaphore(self.settings.agent_concurrency)
+        async def execute(assignment):
+            try:
+                async with semaphore:
+                    result = await self._execute(assignment, decision, question, understanding, context, risk, skill_snapshot, tool_budget)
+                    if result is not None:
+                        outputs[assignment.role] = result
+            except asyncio.CancelledError:
+                assignment.status = "cancelled"
+                raise
+            except Exception as exc:
+                assignment.status = "failed"
+                decision.fallbacks.append(RoutingFallback(role=assignment.role, reason="task_setup_or_dispatch_failed", action="transparent_guidance"))
+                event("routing_task_error", task_id=assignment.task_id, error=type(exc).__name__)
+        try:
+            await asyncio.wait_for(asyncio.gather(*(execute(assignment) for assignment in decision.assignments)), self.settings.collaboration_timeout)
+        except TimeoutError:
+            decision.fallbacks.append(RoutingFallback(role=decision.primary_agent, reason="collaboration_deadline", action="preserve_completed_tasks"))
+            event("collaboration_timeout", completed_roles=sorted(outputs))
+        return outputs
 
     async def chat(self, question: Question) -> Reply:
         log = RunLog()
         token = CURRENT.set(log)
         degraded, storage = False, "skipped"
         session = question.session or str(uuid.uuid4())
-        scope = scope_key(question.user, session, question.subject)
+        resolution = self.subjects.resolve(question, session)
+        question = question.model_copy(update={"subject":resolution.subject})
+        scope = scope_key(question.user, session, "__unresolved__" if resolution.ambiguous else question.subject)
         try:
+            tool_budget = ToolBudget(self.settings.tool_call_limit)
+            skill_snapshot = self.skills.snapshot()
+            event("skills_snapshot", snapshot_id=skill_snapshot.snapshot_id, common_hash=skill_snapshot.common_hash)
             risk = self.risk.screen(question.text, scope)
             event("risk", level=risk.level, reasons=risk.reasons, version=risk.rule_version)
             if risk.level == "CRITICAL":
-                answer = Answer(text=f"你描述的信息包含需要立即线下评估的风险信号。请立即联系{self.settings.emergency_phone}或就近急诊，不要等待在线问答。",
-                    next_steps=["向医护说明症状开始时间、当前状态及已知用药。"],
-                    limitations=["本服务没有接入急救调度或人工队列；未实际转接。"])
-                understanding = Understanding(primary=Intent.URGENT, confidence=1)
-                primary, support, refs = "risk_handoff", [], []
+                document = skill_snapshot.documents["risk_handoff"]
+                event("skill_binding", role="risk_handoff", version=document.version, sha256=document.sha256,
+                      snapshot_id=skill_snapshot.snapshot_id, deterministic=True, injected=False)
+                risk_started = time.perf_counter()
+                result = self.risk_agent.run(question.text, risk, self.settings.emergency_phone, question.subject, tool_budget)
+                self.monitor.record(result.instance, True, (time.perf_counter()-risk_started)*1000)
+                answer, agent_results = result.answer, [result.execution]
+                understanding = Understanding(primary=Intent.URGENT, confidence=1, subject=question.subject, turn_id=log.request_id)
+                decision = self.planner.plan(question.text, understanding, self.agents, self.monitor)
+                event("routing", **self.planner.trace(decision))
+                self.monitor.observe_routing(decision, log.request_id)
+                assignment = decision.assignments[0]
+                assignment.selected_instance, assignment.status = result.instance, result.execution.status
+                assignment.attempts.append(ExecutionAttempt(instance=result.instance, status="ok"))
+                result.execution.task_id = assignment.task_id
+                decision.collaboration_status = "single"
+                refs = []
             else:
                 state = {"messages":[],"summary":""}
+                need_action, previous_need, need_now = None, None, None
                 try:
-                    if not self.memory.available:
+                    if resolution.ambiguous:
+                        storage = "skipped"
+                    elif not self.memory.available:
                         raise ConnectionError("memory_unavailable")
-                    state = await asyncio.wait_for(self.memory.read(scope), timeout=3)
-                    if state.get("summary"):
-                        state["episodes"] = await asyncio.wait_for(self.memory.recall(scope, question.text), timeout=3)
-                    storage = "memory_preview" if self.settings.preview else "available"
+                    else:
+                        state = await asyncio.wait_for(self.memory.read(scope), timeout=3)
+                        if state.get("summary"):
+                            state["episodes"] = await asyncio.wait_for(self.memory.recall(scope, question.text), timeout=3)
+                        storage = "memory_preview" if self.settings.preview else "available"
                 except Exception as exc:
+                    state = {"messages":[], "summary":""}
                     degraded, storage = True, "degraded"
                     event("memory_error", stage="read", error=type(exc).__name__)
                 if not self.settings.preview and self.index.collection is None:
                     degraded = True
                     event("storage_fallback", service="reference_index")
-                understanding = await self.router.understand(question.text)
-                primary = ROLE_FOR_INTENT[understanding.primary]
-                candidates = []
-                for role in self.agents:
-                    matching = sum(score for key,score in understanding.scores.items() if ROLE_FOR_INTENT[Intent(key)] == role)
-                    health = max(self.monitor.health(a.instance) for a in self.agents[role])
-                    candidates.append({"role":role,"domain_score":round(matching,4),"health":round(health,4),"score":round(matching*health,4)})
-                support = []
-                # Assistance is constrained by explicit task evidence, not health-based cross-domain fallback.
-                if primary == "visit_guide" and re.search(LEXICON[Intent.SYMPTOMS], question.text):
-                    support = ["symptom_guide"]
-                elif primary in {"symptom_guide","drug_reference"} and re.search(LEXICON[Intent.VISIT], question.text):
-                    support = ["visit_guide"]
-                event("routing", primary=primary, support=support, candidates=candidates, reason="intent_scope_and_instance_health")
-                outputs = await asyncio.gather(*(self._execute(role, question, understanding, state) for role in [primary]+support))
-                valid = [x for x in outputs if x is not None]
-                degraded = degraded or len(valid) != len(outputs)
-                refs_by_key = {ref.key:ref for output in valid for ref in output.references}
-                if not outputs[0]:
-                    degraded = True
-                    answer = Answer(text="当前未能完成可靠回答。请稍后重试，或携带问题和相关资料咨询医护人员。",
-                                    limitations=["模型、工具或输出校验未完成，未生成诊断或预约结果。"])
+                if resolution.ambiguous:
+                    understanding = Understanding(primary=Intent.GENERAL, confidence=1, subject=question.subject,
+                        subject_ambiguous=True, missing_fields=["subject"], turn_id=log.request_id)
                 else:
-                    answer = outputs[0].answer
-                if outputs[0] is not None and len(valid) > 1 and self.model:
+                    understanding = await self.router.understand(question.text, state, subject=question.subject, turn_id=log.request_id)
+                    if storage == "degraded": understanding.fallbacks.append("memory_unavailable")
+                understanding.subject_resolution, understanding.subject_changed = resolution.method, resolution.changed
+                if not resolution.ambiguous:
                     try:
-                        merged = await self.model.json("synthesis", "合并各角色的信息，保留不确定性与适用范围，不增加医学事实。输出Answer JSON字段text,questions,next_steps,limitations,reference_keys。",
-                            json.dumps({"answers":[x.answer.model_dump() for x in valid],"allowed_references":list(refs_by_key)},ensure_ascii=False), 1700)
-                        answer = checked_answer(merged, refs_by_key)
-                    except Exception as exc:
-                        degraded = True
-                        answer.limitations.append("辅助结果未通过汇总校验，当前显示主角色结果。")
-                        event("synthesis_error", error=type(exc).__name__)
-                refs = [refs_by_key[key] for key in answer.reference_keys]
+                        need_now = getattr(self.memory, "context_clock", time.time)()
+                        need_action, previous_need = consultation_need(question.text, state, subject=question.subject,
+                            subject_changed=resolution.changed, now=need_now, recent_critical=scope in self.risk.hints)
+                    except (TypeError, ValueError, OverflowError):
+                        need_action, previous_need = None, None
+                if need_action:
+                    understanding.primary = Intent.SYMPTOMS
+                    understanding.confidence = understanding.scores.get(Intent.SYMPTOMS.value, 0)
+                    understanding.tasks = [TaskUnderstanding(intent=Intent.SYMPTOMS, goal=question.text[:300], confidence=understanding.confidence)]
+                    event("classification_rule", rule="bounded_consultation_focus")
+                state = {**state, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in understanding.entities.items()}}
+                state["consultation_need"] = need_action
+                decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need_action)
+                event("routing", **self.planner.trace(decision))
+                self.monitor.observe_routing(decision, log.request_id)
+                execution_started = time.perf_counter()
+                outputs = await self._dispatch(decision, question, understanding, state, risk, skill_snapshot, tool_budget)
+                remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
+                answer, refs, routing_degraded = await compose(decision, outputs, understanding,
+                    self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
+                degraded = degraded or routing_degraded
+                agent_results = [outputs[assignment.role].execution for assignment in decision.assignments if assignment.role in outputs]
+                if decision.primary_agent in outputs:
+                    understanding.missing_fields = outputs[decision.primary_agent].execution.missing_fields
                 if risk.level == "CAUTION":
                     answer.limitations = (answer.limitations+["涉及特殊人群或用药风险，需医师或药师结合具体情况核实。"])[:6]
                 try:
-                    if not self.memory.available:
+                    if resolution.ambiguous:
+                        pass
+                    elif not self.memory.available:
                         raise ConnectionError("memory_unavailable")
-                    await asyncio.wait_for(self.memory.remember(scope, question.text, answer.text), timeout=self.settings.memory_timeout)
+                    else:
+                        pending = None
+                        if (need_action in {"clarify", "clarify_followup"} and decision.primary_agent == "symptom_guide"
+                            and "symptom_guide" in outputs and outputs["symptom_guide"].execution.status == "needs_clarification"
+                            and "consultation_focus" in outputs["symptom_guide"].execution.missing_fields):
+                            pending = {"kind":"food_or_medicine", "subject":question.subject,
+                                "created_at":previous_need["created_at"] if previous_need else need_now,
+                                "source_turn_id":previous_need["source_turn_id"] if previous_need else log.request_id,
+                                "continuations":previous_need["continuations"]+1 if previous_need else 0}
+                        await asyncio.wait_for(self.memory.remember(scope, question.text, answer.text, understanding,
+                            pending, state.get("last_intent_turn_id")), timeout=self.settings.memory_timeout)
                 except Exception as exc:
                     degraded, storage = True, "degraded"
                     event("memory_error", stage="write", error=type(exc).__name__)
+            self.monitor.observe_execution(decision, log.request_id)
+            event("routing_execution", primary=decision.primary_agent, status=decision.collaboration_status, monitor_fallback=decision.monitor_fallback,
+                assignments=[{"task_id":assignment.task_id, "role":assignment.role, "status":assignment.status,
+                              "selected_instance":assignment.selected_instance, "attempts":[attempt.model_dump() for attempt in assignment.attempts]}
+                             for assignment in decision.assignments], fallbacks=[fallback.model_dump() for fallback in decision.fallbacks])
             reply = Reply(request_id=log.request_id, session=session, intent=understanding, risk=risk,
-                          primary_agent=primary, supporting_agents=support, answer=answer, references=refs,
-                          degraded=degraded, storage=storage, usage=log.usage(), elapsed_ms=round(log.elapsed,1))
+                          primary_agent=decision.primary_agent, supporting_agents=decision.supporting_agents, answer=answer, references=refs,
+                          degraded=degraded, storage=storage, usage=log.usage(), elapsed_ms=round(log.elapsed,1),
+                          agent_results=agent_results, subject=question.subject, routing_decision=decision)
             self.monitor.finish(log, degraded)
             return reply
         finally:
