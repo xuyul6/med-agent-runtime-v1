@@ -4,19 +4,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Response
 from redis.asyncio import Redis
 from pydantic import ValidationError
-from .config import ROOT, Settings
-from .contracts import DocumentBatch, Question, Reference, Reply
-from .benchmark_contracts import BenchmarkRequest
-from .benchmark_runner import run_benchmark
-from .evaluation import evaluate
-from .evaluation_isolation import ReferenceSnapshotError
-from .evaluation_contracts import EvaluationRequest
-from .evaluation_metrics import BaselineError, BaselineStore
+from .core.config import ROOT, Settings
+from .core.contracts import DocumentBatch, Question, Reference, Reply
+from .benchmark.contracts import BenchmarkRequest
+from .benchmark.runner import run_benchmark
+from .evaluation.runner import evaluate
+from .evaluation.isolation import ReferenceSnapshotError
+from .evaluation.contracts import EvaluationRequest
+from .evaluation.metrics import BaselineError, BaselineStore
 from .memory import SessionMemory
-from .provider import ClaudeGateway
-from .retrieval import ReferenceIndex, Vectorizer, catalog_updates
+from .core.provider import ClaudeGateway
+from .knowledge.retrieval import ReferenceIndex, Vectorizer, catalog_updates
 from .runtime import MedicalRuntime
-from .skills import SkillValidationError
+from .agents.skills import SkillValidationError
 
 
 def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=None) -> FastAPI:

@@ -4,7 +4,7 @@ import json
 import time
 import uuid
 import weakref
-from .observability import event
+from .core.observability import event
 
 _UNCHANGED = object()
 
@@ -52,7 +52,7 @@ class SessionMemory:
             state["messages"] = state["messages"] + [{"role":"user", "content":user, "turn_id":turn_id, "turn_index":turn_index},
                                                         {"role":"assistant", "content":assistant, "turn_id":turn_id, "turn_index":turn_index}]
             if understanding is not None:
-                from .conversation import merge_fields
+                from .understanding.conversation import merge_fields
                 updates = [fact.model_copy(update={"source":fact.source.model_copy(update={"turn_index":turn_index})})
                            if fact.source.turn_id == turn_id else fact for fact in understanding.updates]
                 fields = merge_fields(state.get("entities", {}), updates, understanding.subject)

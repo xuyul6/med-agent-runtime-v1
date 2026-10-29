@@ -2,20 +2,20 @@ import asyncio
 import math
 import time
 import uuid
-from .classification import IntentRouter
-from .contracts import ExecutionAttempt, Intent, Question, Reply, RoutingFallback, TaskUnderstanding, Understanding
-from .execution import RoleAgent, RiskHandoffAgent, Skills, ToolExecutor, checked_role_output
+from .understanding.classification import IntentRouter
+from .core.contracts import ExecutionAttempt, Intent, Question, Reply, RoutingFallback, TaskUnderstanding, Understanding
+from .agents.execution import RoleAgent, RiskHandoffAgent, Skills, ToolExecutor, checked_role_output
 from .memory import scope_key
-from .observability import CURRENT, RunLog, Monitor, event
-from .risk import RiskGate
-from .profiles import DEFAULT_REGISTRY, ProfileRegistry
-from .tools import ToolBudget
-from .conversation import SubjectTracker, institution_request, recover_visit_followup, role_details
-from .consultation_needs import consultation_need
-from .routing import RoutingPlanner
-from .collaboration import compose
-from .monitoring import MonitorExcluded, MonitorPolicy
-from .output_validation import AgentOutputError
+from .core.observability import CURRENT, RunLog, event
+from .understanding.risk import RiskGate
+from .agents.profiles import DEFAULT_REGISTRY, ProfileRegistry
+from .tools.registry import ToolBudget
+from .understanding.conversation import SubjectTracker, institution_request, recover_visit_followup, role_details
+from .understanding.consultation_needs import consultation_need
+from .understanding.routing import RoutingPlanner
+from .agents.collaboration import compose
+from .monitoring import Monitor, MonitorExcluded, MonitorPolicy
+from .agents.output_validation import AgentOutputError
 
 
 class MedicalRuntime:
