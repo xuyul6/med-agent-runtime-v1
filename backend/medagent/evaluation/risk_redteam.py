@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from ..core.config import ROOT
 from ..core.contracts import Risk
-from ..understanding.risk import RiskGate
+from ..understanding.risk import RULE_VERSION, RiskGate
 
 DATASET = ROOT/"resources"/"risk-redteam-v1.json"
 LEVELS = ("ROUTINE", "CAUTION", "CRITICAL")
@@ -79,7 +79,7 @@ def run(dataset: Path = DATASET) -> dict:
                      "expected":case["expected"], "actual":risk.level, "reasons":risk.reasons,
                      "passed":risk.level == case["expected"], **({"note":case["note"]} if "note" in case else {})})
     return {"kind":"offline_risk_redteam", "dataset":body["dataset"], "synthetic":body["synthetic"],
-            "dataset_sha256":hashlib.sha256(raw).hexdigest(), "rule_version":Risk().rule_version,
+            "dataset_sha256":hashlib.sha256(raw).hexdigest(), "rule_version":RULE_VERSION,
             "labels":"engineering labels, not clinically reviewed", "paid_model_calls":0,
             "generated_at":datetime.now(timezone.utc).isoformat(),
             "summary":summarize(rows, set(body["covered_categories"])), "cases":rows}

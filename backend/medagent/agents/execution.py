@@ -470,6 +470,8 @@ class RiskHandoffAgent:
         workflow.complete("prepare_evidence", "evidence", skipped=True)
         notice = f"你描述的信息包含需要立即线下评估的风险信号。请立即联系{emergency_phone}或就近急诊，不要等待在线问答。"
         next_steps = ["向医护说明症状开始时间、当前状态及已知用药。"]
+        if "self_harm" in risk.reasons:
+            next_steps.insert(0, "如果有伤害自己的想法，请让身边可信任的人陪着你，并联系当地心理危机干预热线。")
         return finish_result(profile, self.instance, workflow,
             {"role":"risk_handoff", "status":"handoff_required", "missing_fields":[],
              "answer":{"text":notice, "next_steps":next_steps,

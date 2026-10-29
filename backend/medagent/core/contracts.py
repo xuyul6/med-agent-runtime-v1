@@ -16,7 +16,7 @@ class Intent(str, Enum):
 class Risk(BaseModel):
     level: Literal["ROUTINE", "CAUTION", "CRITICAL"] = "ROUTINE"
     reasons: list[str] = Field(default_factory=list)
-    rule_version: str = "screening-1"
+    rule_version: str = "screening-2"
 
 
 class Question(BaseModel):
