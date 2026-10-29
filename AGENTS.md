@@ -28,7 +28,7 @@ Name tests `test_*.py` and `test_*`; use `asyncio.run` for asynchronous cases. U
 
 Run `python -m medagent.evaluate` only for explicitly authorized real model validation. Preserve Judge errors, unknown Token usage and failed cases. Never carry scores between implementations or claim clinical validation.
 
-`python -m medagent.benchmark` saves a plan without model calls; `--execute` needs explicit online scope and budget. Keep paired snapshots, cold/warm cache results, failures and synthetic counts distinct from real provider measurements.
+`python -m medagent.comparison` and `python -m medagent.benchmark` save a plan without model calls; `--execute` needs explicit online scope and budget. Keep paired snapshots, cold/warm cache results, failures and synthetic counts distinct from real provider measurements.
 
 ## Commits and Configuration
 

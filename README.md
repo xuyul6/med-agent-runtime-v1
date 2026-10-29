@@ -41,7 +41,7 @@
 - **复合问题并行**：一句话里同时涉及症状和药品时，两个角色同时执行。
 - **分角色迭代**：每个角色有独立的输入输出契约，可以单独测试和修改。
 
-拆分也有代价：路由可能出错，合并时可能冲突，Token 和延迟会增加。所以由路由决定每次用几个角色，简单问题只用一个。**多角色是否真的比单 Agent 更好，还没有做对照实验**，见下文“验证现状”。
+拆分也有代价：路由可能出错，合并时可能冲突，Token 和延迟会增加。所以由路由决定每次用几个角色，简单问题只用一个。**多角色是否真的比单 Agent 更好，还没有用真实模型测过**。对照实验已经实现，见下文“验证现状”。
 
 ## 角色与权限
 
@@ -62,14 +62,14 @@
 
 | 项目 | 方法 | 结果 |
 | --- | --- | --- |
-| 离线测试 | 假模型，不调用付费服务 | 后端 1019 项通过、1 项跳过、3 项为已知缺口（`xfail`，都与没有身份认证有关）；前端 40 项通过，生产构建通过 |
+| 离线测试 | 假模型，不调用付费服务 | 后端 1032 项通过、1 项跳过、3 项为已知缺口（`xfail`，都与没有身份认证有关）；前端 40 项通过，生产构建通过 |
 | 风险筛查 | 红队集 `risk-redteam-v1.json`（104 例）和预留集 `risk-redteam-holdout-v1.json`（40 例），规则版本 `screening-2` | 调优集急症识别 56/56，误报 2/48；预留集 26/26，误报 1/14。预留集结果出来后又改过一次规则，预留集已不算独立 |
 | 意图与路由 | 标注集 `routing-labels-v1.json`（58 例）和预留集 `routing-labels-holdout-v1.json`（30 例），只用关键词和哈希向量两路，不调用模型 | 调优集的主角色和参与角色全部正确；预留集主角色 26/30、参与角色集合 25/30（改规则前为 21/30、17/30）。两个集合由同一人编写，预留集只能防止针对单个案例打补丁 |
 | 回答边界 | 红队集 `answer-boundary-redteam-v1.json`（38 例违规、30 例正常）和预留集（19 例违规、11 例正常），只测确定性检查，不调用模型 | 调优集违规全部拦截，正常内容无误拦；预留集违规拦住 8/19（改规则前为 0/19），正常内容无误拦。剂量类拦住 7/8；诊断、停换药、安全保证、虚构预约这类说法变化多，只拦住 1/11 |
 | 隔离与注入 | 假设模型被注入内容完全控制，只检查代码层的防线 | 越权工具、跨领域检索、个人剂量、诊断、伪造预约都被拦截，用户之间的记忆不串用；角色系统提示里不含用户原话和资料原文。没有身份认证带来的缺口见“已知局限” |
 | 药名识别 | 63 个常见通用名及英文名，按 4 种句式生成请求 | 320/320 条识别出药名并路由到 `drug_reference`；词表外的药名依赖模型提议，且必须能在原话中找到 |
 | 真实模型 | 2026-10-29 前做过定向回归和一次上下文配对实验 | 配对实验 32 对完成 24 对，未完成；当前版本还没有重跑完整回归 |
-| 多 Agent 对单 Agent | — | **未做**，暂不能说多角色编排效果更好 |
+| 多 Agent 对单 Agent | 三组对照：当前编排、只用主角色、单 Agent 基线。单 Agent 使用同样的模型、风险门、记忆、意图理解、检索过滤、工具额度和回答检查，只是没有路由、角色契约和合并；16 个合成案例分 5 类，每例 3 次，轮换先后顺序 | 已实现，并用假模型完整演练（144 个目标回答全部跑完，临时数据已清理）。**真实模型未运行，暂不能说哪种更好** |
 
 离线测试只能证明代码按设计运行，不能证明真实模型的回答质量。
 
@@ -123,7 +123,8 @@ backend/medagent/
   memory.py            Redis 工作记忆与 Chroma 摘要
   monitoring.py        单进程内存监控、告警、路由降权与恢复探测
   evaluation/          评测隔离、指标、基线、LLM-as-Judge、风险红队统计
-  benchmark/           配对实验（默认只生成计划）
+  comparison/          多 Agent / 只用主角色 / 单 Agent 对照实验（默认只生成计划）
+  benchmark/           上下文配对实验（默认只生成计划）
   smoke/               对运行中后端的联网冒烟检查
   core/                配置、公共契约、模型网关、请求 Trace
 backend/resources/     资料导读、角色 Skills、药名词表、评测与红队数据集
@@ -138,6 +139,8 @@ python -m pytest -q
 python -m medagent.evaluation.risk_redteam --output artifacts/risk-redteam.json
 python -m medagent.evaluation.routing_labels --output artifacts/routing-labels.json
 python -m medagent.evaluation.answer_boundary --output artifacts/answer-boundary.json
+# 只生成对照实验计划，不连接后端或模型；加 --execute 才会真实运行
+python -m medagent.comparison --output artifacts/comparison-plan.json
 # 以下命令会调用真实模型并产生费用，只在明确授权后运行
 python -m medagent.evaluate --url http://127.0.0.1:8000 --output artifacts/evaluation.json
 python -m medagent.smoke.roles --url http://127.0.0.1:8000 --output artifacts/role-smoke.json

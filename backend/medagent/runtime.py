@@ -3,7 +3,8 @@ import math
 import time
 import uuid
 from .understanding.classification import IntentRouter
-from .core.contracts import ExecutionAttempt, Intent, Question, Reply, RoutingFallback, TaskUnderstanding, Understanding
+from .core.contracts import (AgentAssignment, Answer, ExecutionAttempt, InstanceChoice, Intent, Question, Reply, RoutingDecision,
+                             RoutingFallback, TaskUnderstanding, Understanding)
 from .agents.execution import RoleAgent, RiskHandoffAgent
 from .agents.checks import checked_role_output
 from .agents.skills import Skills
@@ -16,6 +17,7 @@ from .understanding.conversation import SubjectTracker, institution_request, rec
 from .understanding.consultation_needs import consultation_need
 from .understanding.routing import RoutingPlanner
 from .agents.collaboration import compose
+from .agents.single import INSTANCE as SINGLE_INSTANCE, SINGLE_AGENT, SingleAgent
 from .monitoring import Monitor, MonitorExcluded, MonitorPolicy
 from .agents.output_validation import AgentOutputError
 
@@ -71,6 +73,11 @@ class MedicalRuntime:
         for role,agents in self.agents.items():
             for agent in agents: self.monitor.register_agent(agent.instance, role)
         self.monitor.register_agent(self.risk_agent.instance, "risk_handoff", deterministic=True)
+        if settings.architecture not in {"multi_agent", SINGLE_AGENT}:
+            raise ValueError("invalid_architecture")
+        self.single = SingleAgent(model, index, self.tools, self.registry) if settings.architecture == SINGLE_AGENT else None
+        if self.single:
+            self.monitor.register_agent(SINGLE_INSTANCE, SINGLE_AGENT)
 
     async def _execute(self, assignment, decision, question, understanding, context, risk, skill_snapshot, tool_budget):
         role = assignment.role
@@ -213,16 +220,21 @@ class MedicalRuntime:
         understanding, need = await self._understand(question, resolution, state, storage, scope, log)
         state = {**state, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in understanding.entities.items()}}
         state["consultation_need"] = need[0]
-        decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need[0])
-        event("routing", **self.planner.trace(decision))
-        self.monitor.observe_routing(decision, log.request_id)
-        execution_started = time.perf_counter()
-        outputs = await self._dispatch(decision, question, understanding, state, risk, skill_snapshot, tool_budget)
-        remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
-        answer, refs, routing_degraded = await compose(decision, outputs, understanding,
-            self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
-        degraded = degraded or routing_degraded
-        agent_results = [outputs[assignment.role].execution for assignment in decision.assignments if assignment.role in outputs]
+        if self.single:
+            decision, answer, refs, agent_results, outputs = await self._single_agent(
+                question, understanding, state, risk, skill_snapshot, tool_budget, log)
+            degraded = degraded or decision.collaboration_status == "failed"
+        else:
+            decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need[0])
+            event("routing", **self.planner.trace(decision))
+            self.monitor.observe_routing(decision, log.request_id)
+            execution_started = time.perf_counter()
+            outputs = await self._dispatch(decision, question, understanding, state, risk, skill_snapshot, tool_budget)
+            remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
+            answer, refs, routing_degraded = await compose(decision, outputs, understanding,
+                self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
+            degraded = degraded or routing_degraded
+            agent_results = [outputs[assignment.role].execution for assignment in decision.assignments if assignment.role in outputs]
         if decision.primary_agent in outputs:
             understanding.missing_fields = outputs[decision.primary_agent].execution.missing_fields
         if risk.level == "CAUTION":
@@ -236,6 +248,39 @@ class MedicalRuntime:
             degraded, storage = True, "degraded"
             event("memory_error", stage="write", error=type(exc).__name__)
         return understanding, decision, answer, refs, agent_results, degraded, storage
+
+    async def _single_agent(self, question, understanding, state, risk, skill_snapshot, tool_budget, log):
+        """Comparison baseline: one agent answers the whole turn; no routing, role contracts or merge."""
+        assignment = AgentAssignment(task_id="task:single", role=SINGLE_AGENT, intent=understanding.primary,
+            goal="单个 Agent 完成本轮全部信息任务。", input_text=question.text,
+            instances=[InstanceChoice(instance=SINGLE_INSTANCE, health=1, samples=0)])
+        decision = RoutingDecision(primary_agent=SINGLE_AGENT, routing_reason="single_agent_baseline", routing_confidence=1,
+                                   assignments=[assignment], collaboration_status="single")
+        event("routing", primary=SINGLE_AGENT, support=[], reason=decision.routing_reason, confidence=1,
+              monitor_fallback=[], confidence_kind="engineering_score", candidates=[])
+        started = time.perf_counter()
+        try:
+            answer, refs, execution = await asyncio.wait_for(self.single.run(question, understanding, state, risk,
+                skill_snapshot, tool_budget), self.settings.agent_timeout)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            status = "timeout" if isinstance(exc, TimeoutError) else "failed"
+            diagnostic = {"error_code":exc.code, "error_stage":exc.stage} if isinstance(exc, AgentOutputError) else {}
+            assignment.status = "failed"
+            assignment.attempts.append(ExecutionAttempt(instance=SINGLE_INSTANCE, status=status, error=type(exc).__name__, **diagnostic))
+            self.monitor.record(SINGLE_INSTANCE, False, (time.perf_counter()-started)*1000, status=status, error=type(exc).__name__)
+            event("agent", instance=SINGLE_INSTANCE, task_id=assignment.task_id, status=status, error=type(exc).__name__, **diagnostic)
+            decision.collaboration_status = "failed"
+            decision.fallbacks.append(RoutingFallback(role=SINGLE_AGENT, reason=status, action="transparent_guidance"))
+            answer = Answer(text="当前未能完成可靠回答。请稍后重试，或携带问题和相关资料咨询医护人员。",
+                            limitations=["未作医学判断，也未执行医院操作或人工连接。"])
+            return decision, answer, [], [], {}
+        assignment.selected_instance, assignment.status = SINGLE_INSTANCE, execution.status
+        assignment.attempts.append(ExecutionAttempt(instance=SINGLE_INSTANCE, status="ok"))
+        self.monitor.record(SINGLE_INSTANCE, True, (time.perf_counter()-started)*1000)
+        event("agent", instance=SINGLE_INSTANCE, task_id=assignment.task_id, status="ok")
+        return decision, answer, refs, [execution], {}
 
     async def _read_state(self, scope, text, ambiguous):
         """Session state for this scope; a storage failure degrades to an empty state instead of failing the turn."""

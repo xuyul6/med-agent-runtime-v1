@@ -24,6 +24,8 @@ class Settings:
     memory_timeout: float = 20
     episode_ttl: float = 7*86400
     supporting_agent_limit: int = 2
+    # "single_agent" is the comparison baseline only; the workbench and default runs use "multi_agent".
+    architecture: str = "multi_agent"
     agent_concurrency: int = 2
     collaboration_timeout: float = 120
     monitor_interval: float = 10
@@ -66,6 +68,7 @@ class Settings:
             memory_timeout=float(env.get("MAR_MEMORY_TIMEOUT", "20")),
             episode_ttl=float(env.get("MAR_EPISODE_TTL_SECONDS", str(7*86400))),
             supporting_agent_limit=int(env.get("MAR_SUPPORTING_AGENT_LIMIT", "2")),
+            architecture=env.get("MAR_ARCHITECTURE", "multi_agent"),
             agent_concurrency=int(env.get("MAR_AGENT_CONCURRENCY", "2")),
             collaboration_timeout=float(env.get("MAR_COLLABORATION_TIMEOUT", "120")),
             **{field.name:(int if field.name in {"monitor_window_size", "monitor_min_samples", "monitor_bad_ticks", "monitor_recovery_successes", "monitor_recovery_ticks"} else float)

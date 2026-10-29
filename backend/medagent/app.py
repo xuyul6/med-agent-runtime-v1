@@ -8,6 +8,8 @@ from .core.config import ROOT, Settings
 from .core.contracts import DocumentBatch, Question, Reference, Reply
 from .benchmark.contracts import BenchmarkRequest
 from .benchmark.runner import run_benchmark
+from .comparison.contracts import ComparisonRequest
+from .comparison.runner import run_comparison
 from .evaluation.runner import evaluate
 from .evaluation.isolation import ReferenceSnapshotError
 from .evaluation.contracts import EvaluationRequest
@@ -165,6 +167,15 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
         if app.state.evaluation_lock.locked(): raise HTTPException(409,"evaluation_already_running")
         async with app.state.evaluation_lock:
             return await run_benchmark(app.state.runtime,request)
+
+    @app.post("/comparison/run")
+    async def run_architecture_comparison(request: ComparisonRequest | None = None):
+        request = request or ComparisonRequest()
+        if settings.preview and request.judge:
+            raise HTTPException(409,"online_comparison_requires_model")
+        if app.state.evaluation_lock.locked(): raise HTTPException(409,"evaluation_already_running")
+        async with app.state.evaluation_lock:
+            return await run_comparison(app.state.runtime,request)
 
     @app.get("/metrics")
     async def metrics():

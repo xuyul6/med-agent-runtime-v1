@@ -54,7 +54,8 @@ class SubjectTracker:
                 matches.append(subject)
             elif re.search(r"(?:^|[，,。；])(?:"+pattern+r")(?:有|咳嗽|今年|正在|的报告|的体检)", text):
                 matches.append(subject)
-        if re.search(r"(?:换回|改回|现在问|这次问).{0,5}(?:我自己|我本人|本人)", text):
+        # "不对，是我自己想查" corrects the subject back to the user just like "换回我自己".
+        if re.search(r"(?:换回|改回|现在问|这次问).{0,5}(?:我自己|我本人|本人)|(?:不对|不是).{0,8}[，,。]\s*是我(?:自己|本人)|现在是我(?:自己|本人)", text):
             matches.append("self")
         self_statement = bool(re.search(r"(?:^|[，,。；])(?:之前|以前|刚才)?我(?:自己|本人)?(?:曾经|以前|之前)?(?:有|正在|服用|吃|咳嗽|头痛|今年|是\d)", text))
         unknown_switch = not matches and bool(re.search(r"换个对象|换一位|换个人|(?:换成|改为).{0,5}(?:对象|患者|朋友|家属)|(?:现在|这次).{0,3}(?:给|替|帮).{1,8}(?:问|咨询)", text))
