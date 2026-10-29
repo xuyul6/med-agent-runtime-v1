@@ -6,10 +6,10 @@
 
 ## 当前状态
 
-- 离线测试：后端 916 项通过、1 项跳过；前端 40 项通过，生产构建通过。离线测试不能证明真实模型回答质量。
+- 本地离线测试（测试文件不随仓库发布）：后端 916 项通过、1 项跳过；前端 40 项通过，生产构建通过。离线测试不能证明真实模型回答质量。
 - 真实模型验证只做过小范围定向回归；当前版本没有重跑历史上的 39 项完整回归。
 - 还没有做公平的多 Agent 对单 Agent、知识库对无检索的对照实验，不能宣称这两项效果更好；也没有证据支持任何整体 Token 节省率。
-- `.github/workflows/ci.yml` 只运行离线检查，远端 CI 结果以 GitHub 上的实际运行为准。
+- `.github/workflows/ci.yml` 只做后端导入检查和前端构建，远端 CI 结果以 GitHub 上的实际运行为准。
 
 ## 请求链路
 
@@ -48,12 +48,11 @@ backend/
     benchmark/              预注册的上下文配对实验（默认只生成计划）
     smoke/                  对运行中后端的联网冒烟检查
   resources/                资料摘要、角色 Skills、合成评测与回归数据集
-  tests/                    按模块与场景分目录的离线测试；support/ 为共用辅助
 frontend/src/               Vue 工作台：api/ 客户端、components/、utils/、styles/
 monitoring/prometheus.yml   可选 Prometheus 抓取配置
 ```
 
-`docs/`（设计、计划与验收记录）、`backend/artifacts/`（合成评测报告）只保留在本地，不纳入版本库。
+`docs/`（设计、计划与验收记录）、`backend/artifacts/`（合成评测报告）以及 `backend/tests/`、`frontend/tests/`（离线测试）只保留在本地，不纳入版本库；CI 只做导入检查和前端构建。
 
 ## 本地启动
 
