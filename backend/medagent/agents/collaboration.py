@@ -1,6 +1,6 @@
 """Merge validated sections without permitting a synthesis model to invent facts."""
 from ..core.contracts import Answer, RoutingFallback
-from .execution import VISIT_URGENCY_ATTRIBUTION_NOTICE, checked_answer
+from .checks import VISIT_URGENCY_ATTRIBUTION_NOTICE, checked_answer
 from ..core.observability import CURRENT, event
 from ..understanding.routing import LABELS
 

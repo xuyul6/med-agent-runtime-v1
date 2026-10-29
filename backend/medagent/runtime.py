@@ -4,7 +4,10 @@ import time
 import uuid
 from .understanding.classification import IntentRouter
 from .core.contracts import ExecutionAttempt, Intent, Question, Reply, RoutingFallback, TaskUnderstanding, Understanding
-from .agents.execution import RoleAgent, RiskHandoffAgent, Skills, ToolExecutor, checked_role_output
+from .agents.execution import RoleAgent, RiskHandoffAgent
+from .agents.checks import checked_role_output
+from .agents.skills import Skills
+from .tools.registry import ToolExecutor
 from .memory import scope_key
 from .core.observability import CURRENT, RunLog, event
 from .understanding.risk import RiskGate

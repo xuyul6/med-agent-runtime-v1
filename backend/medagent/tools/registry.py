@@ -13,7 +13,8 @@ from ..core.contracts import Intent, Reference
 from ..understanding.conversation import institution_request
 from ..core.observability import event
 from ..knowledge.medication_evidence import rejection_reason
-from ..knowledge.retrieval import ReferenceIndex, has_query_overlap, visit_query_has_context, visit_scope_rejection
+from ..knowledge.retrieval import ReferenceIndex, has_query_overlap, visit_scope_rejection
+from ..understanding.conversation import visit_query_has_context
 from .contracts import (
     ChecklistResult, ContextResult, EmptyArguments, FieldCheck, HandoffSummary, LookupArguments,
     LookupResult, MedicationScopeResult, ReferenceScope, ReferenceSelection,

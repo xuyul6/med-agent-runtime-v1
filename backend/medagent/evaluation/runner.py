@@ -14,7 +14,7 @@ from .contracts import DialogCase, EvaluationRequest, IntentCase, JudgeScore
 from .isolation import EvaluationIsolation, ReferenceSnapshotError, injected_faults
 from .metrics import (BaselineError, BaselineStore, CLASSIFIER_LABELS, GATED_LABELS, METRIC_VERSION,
                                 POLICY, classification_metrics, compare_baseline, digest, exceeds_drop)
-from ..agents.execution import check_boundaries
+from ..agents.checks import check_boundaries
 from .judging import JUDGE_INSTRUCTIONS, judge_audit, judge_input
 from ..core.observability import CURRENT, RunLog
 
