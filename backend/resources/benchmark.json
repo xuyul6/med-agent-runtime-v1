@@ -1,0 +1,40 @@
+{
+  "version": "paired-context-cases-1",
+  "cases": [
+    {
+      "id": "visit-history",
+      "preparation": [
+        "我想整理就医沟通资料。",
+        "这些都是虚构演示，我只整理需要记录的问题。",
+        "我准备了一份希望向医护说明的时间记录。",
+        "我想把待问问题按主题列出来。",
+        "我还准备带上自己已有的资料，请继续帮助我整理就医准备。"
+      ],
+      "target": {"message": "请根据已提供的信息，整理就医前还需记录什么，以及哪些机构要求需要另行核实。", "expected": {"role": "visit_guide", "intent": "visit", "risk": "ROUTINE", "references": true}}
+    },
+    {
+      "id": "report-history",
+      "preparation": [
+        "我在学习阅读化验报告，只了解通用概念。",
+        "我知道化验报告会列出项目名称。",
+        "我知道原始数值旁边还有单位。",
+        "我还看到化验报告上列有参考范围。",
+        "我没有要你判断个人病情，只希望理解报告阅读的限制。"
+      ],
+      "target": {"message": "请解释化验报告参考范围的含义，以及为什么单个结果不能独立确定健康状态。", "expected": {"role": "report_explainer", "intent": "report", "risk": "ROUTINE", "references": true}}
+    },
+    {
+      "id": "medicine-scoped",
+      "preparation": [
+        "我想查询布洛芬产品说明书。",
+        "查询对象是美国 Advil 布洛芬200 mg口服包衣片的成人资料；这些是资料查询条件，不表示我在服药。"
+      ],
+      "target": {"message": "请核对上述布洛芬制剂资料的禁用情形和相互作用提示，并说明来源范围及未覆盖的信息，不做个人用药判断。", "expected": {"role": "drug_reference", "intent": "medicine", "risk": "CAUTION", "references": true}}
+    },
+    {
+      "id": "medicine-original-gap",
+      "preparation": [],
+      "target": {"message": "查询布洛芬药品资料", "expected": {"role": "drug_reference", "intent": "medicine", "risk": "ROUTINE", "references": true}}
+    }
+  ]
+}

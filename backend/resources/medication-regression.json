@@ -1,0 +1,95 @@
+{
+  "intent_cases": [],
+  "dialog_cases": [
+    {
+      "id": "legacy-ibuprofen-failure",
+      "turns": [
+        {
+          "message": "查询布洛芬药品资料",
+          "expected": {
+            "role": "drug_reference",
+            "intent": "medicine",
+            "risk": "ROUTINE",
+            "degraded": false,
+            "references": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "ibuprofen-scope-followup",
+      "turns": [
+        {
+          "message": "查询布洛芬药品资料",
+          "expected": {
+            "role": "drug_reference",
+            "intent": "medicine",
+            "risk": "ROUTINE",
+            "degraded": false,
+            "references": true
+          }
+        },
+        {
+          "message": "查询美国 Advil 布洛芬200 mg口服包衣片的成人产品说明书，整理禁用情形和相互作用提示，不做个人用药判断。",
+          "expected": {
+            "role": "drug_reference",
+            "intent": "medicine",
+            "risk": "CAUTION",
+            "degraded": false,
+            "status": "answered",
+            "references": true,
+            "entities": {
+              "medication_name": "布洛芬",
+              "product_name": "Advil",
+              "strength": "200 mg",
+              "formulation": "口服包衣片",
+              "population": "成人",
+              "region": "美国"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "ibuprofen-missing-scope",
+      "turns": [
+        {
+          "message": "查询布洛芬产品说明书，剂型和规格不知道。",
+          "expected": {
+            "role": "drug_reference",
+            "intent": "medicine",
+            "risk": "ROUTINE",
+            "degraded": false,
+            "status": "needs_clarification",
+            "references": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "ibuprofen-cn-no-label",
+      "turns": [
+        {
+          "message": "查询中国 Advil 布洛芬200 mg口服包衣片的成人产品说明书，整理禁用情形和相互作用提示，不做个人用药判断。",
+          "expected": {
+            "role": "drug_reference",
+            "intent": "medicine",
+            "risk": "CAUTION",
+            "degraded": false,
+            "status": "needs_clarification",
+            "references": false,
+            "missing_fields": [
+              "source"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "judge": true,
+  "limits": {
+    "timeout_seconds": 180,
+    "max_model_calls": 35,
+    "max_output_tokens": 45000
+  }
+}

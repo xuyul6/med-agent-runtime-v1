@@ -1,0 +1,268 @@
+{
+  "version": "source-relevance-expanded-1",
+  "description": "仅用于离线测试的虚构资料与人工期望；机构名称、资料和网址均非真实来源。",
+  "label_note": "expected_keys 仅标注话题关联，不代表资料真实、官方、可用作机构事实或医学证据。",
+  "source_purposes": {
+    "syn-report-range": "report_context",
+    "syn-report-imaging": "report_context",
+    "syn-report-glucose": "report_context",
+    "syn-visit-general": "general_preparation_only",
+    "syn-visit-morning": "synthetic_institution_unverified",
+    "syn-visit-starlight": "synthetic_institution_unverified",
+    "syn-visit-noise": "out_of_domain_negative"
+  },
+  "references": [
+    {
+      "key": "syn-report-range",
+      "title": "化验报告参考范围导读",
+      "domain": "report",
+      "text": "虚构的参考范围与报告阅读材料，用于检索测试，不含医学建议。",
+      "url": "https://example.org/report-range",
+      "version": "synthetic-1",
+      "scope": "仅用于离线测试",
+      "approved": true
+    },
+    {
+      "key": "syn-report-imaging",
+      "title": "影像报告术语整理",
+      "domain": "report",
+      "text": "虚构的影像报告及术语整理材料，仅用于检索测试。",
+      "url": "https://example.org/report-imaging",
+      "version": "synthetic-1",
+      "scope": "仅用于离线测试",
+      "approved": true
+    },
+    {
+      "key": "syn-report-glucose",
+      "title": "血糖报告项目整理",
+      "domain": "report",
+      "text": "虚构的血糖报告项目记录示例，不含医学事实或个人结论。",
+      "url": "https://example.org/report-glucose",
+      "version": "synthetic-1",
+      "scope": "仅用于离线测试",
+      "approved": true
+    },
+    {
+      "key": "syn-visit-general",
+      "title": "就医准备通用清单",
+      "domain": "visit",
+      "text": "虚构模板：整理已有报告和待问问题，证件、挂号、收费应由用户自行核对。",
+      "url": "https://example.org/visit-general",
+      "version": "synthetic-1",
+      "scope": "虚构通用模板，不是医院规则",
+      "approved": true
+    },
+    {
+      "key": "syn-visit-morning",
+      "title": "虚构晨光医院挂号入口",
+      "domain": "visit",
+      "text": "虚构机构占位资料，仅用于检索测试，没有真实机构信息。",
+      "url": "https://example.org/morning",
+      "version": "synthetic-1",
+      "scope": "虚构占位资料，非官方来源",
+      "approved": true
+    },
+    {
+      "key": "syn-visit-starlight",
+      "title": "虚构星海医院挂号入口",
+      "domain": "visit",
+      "text": "虚构机构占位资料，仅用于检索测试，没有真实机构信息。",
+      "url": "https://example.org/starlight",
+      "version": "synthetic-1",
+      "scope": "虚构占位资料，非官方来源",
+      "approved": true
+    },
+    {
+      "key": "syn-visit-noise",
+      "title": "火星游客证件的虚构说明",
+      "domain": "visit",
+      "text": "特意设置为就医域的无关虚构资料，用于检索反例。",
+      "url": "https://example.org/noise",
+      "version": "synthetic-1",
+      "scope": "虚构反例，非就医资料",
+      "approved": true
+    }
+  ],
+  "snapshots": {
+    "report": {
+      "keys": [
+        "syn-report-glucose",
+        "syn-report-imaging",
+        "syn-report-range"
+      ],
+      "sha256": "d192fd66e2fdf5397df8867b69e3b28a1840f9fbeccea631951d00c25b8975a2"
+    },
+    "visit": {
+      "keys": [
+        "syn-visit-general",
+        "syn-visit-morning",
+        "syn-visit-noise",
+        "syn-visit-starlight"
+      ],
+      "sha256": "eb0d893e9df7f304f5b200d0a5ab1f5738ed92c6baae18b0d551ff721edf269c"
+    }
+  },
+  "retrieval_cases": [
+    {
+      "id": "range-zh",
+      "domain": "report",
+      "query": "参考范围是什么意思？",
+      "expected_keys": [
+        "syn-report-range"
+      ]
+    },
+    {
+      "id": "range-en",
+      "domain": "report",
+      "query": "reference range",
+      "expected_keys": [
+        "syn-report-range"
+      ]
+    },
+    {
+      "id": "interval-en",
+      "domain": "report",
+      "query": "reference interval",
+      "expected_keys": [
+        "syn-report-range"
+      ]
+    },
+    {
+      "id": "imaging-topic",
+      "domain": "report",
+      "query": "影像报告术语",
+      "expected_keys": [
+        "syn-report-imaging"
+      ]
+    },
+    {
+      "id": "glucose-topic",
+      "domain": "report",
+      "query": "血糖报告项目",
+      "expected_keys": [
+        "syn-report-glucose"
+      ]
+    },
+    {
+      "id": "report-unrelated",
+      "domain": "report",
+      "query": "结婚证",
+      "expected_keys": []
+    },
+    {
+      "id": "mixed-report",
+      "domain": "report",
+      "query": "参考范围和影像报告术语",
+      "expected_keys": [
+        "syn-report-imaging",
+        "syn-report-range"
+      ]
+    },
+    {
+      "id": "general-preparation",
+      "domain": "visit",
+      "query": "看医生前要准备什么？",
+      "expected_keys": [
+        "syn-visit-general"
+      ]
+    },
+    {
+      "id": "morning-specific",
+      "domain": "visit",
+      "query": "虚构晨光医院挂号入口",
+      "expected_keys": [
+        "syn-visit-morning"
+      ]
+    },
+    {
+      "id": "starlight-specific",
+      "domain": "visit",
+      "query": "虚构星海医院挂号入口",
+      "expected_keys": [
+        "syn-visit-starlight"
+      ]
+    },
+    {
+      "id": "space-certificate",
+      "domain": "visit",
+      "query": "火星旅行证件",
+      "expected_keys": []
+    },
+    {
+      "id": "generic-checklist",
+      "domain": "visit",
+      "query": "挂号前的通用准备清单",
+      "expected_keys": [
+        "syn-visit-general"
+      ]
+    },
+    {
+      "id": "missing-address",
+      "domain": "visit",
+      "query": "虚构晨光医院诊疗地址",
+      "expected_keys": []
+    }
+  ],
+  "institution_cases": [
+    {
+      "id": "institution-entry",
+      "query": "虚构晨光医院挂号入口在哪里？",
+      "expected_guard": true
+    },
+    {
+      "id": "institution-insurance",
+      "query": "虚构星海医院的医保政策是什么？",
+      "expected_guard": true
+    },
+    {
+      "id": "institution-hours",
+      "query": "虚构晨光医院周末几点接诊？",
+      "expected_guard": true
+    },
+    {
+      "id": "institution-address",
+      "query": "虚构星海医院地址在哪？",
+      "expected_guard": true
+    },
+    {
+      "id": "institution-cost",
+      "query": "医院收费金额是多少？",
+      "expected_guard": true
+    },
+    {
+      "id": "institution-doctor-hours",
+      "query": "虚构晨光医院的医生出诊时间？",
+      "expected_guard": true
+    },
+    {
+      "id": "institution-clinic",
+      "query": "虚构晨光诊所如何预约？",
+      "expected_guard": true
+    },
+    {
+      "id": "institution-demonstrative",
+      "query": "这家医院能否网上缴费？",
+      "expected_guard": true
+    },
+    {
+      "id": "general-preparation",
+      "query": "看医生前要准备什么？",
+      "expected_guard": false
+    },
+    {
+      "id": "negated-institution",
+      "query": "不查这家医院，只整理通用准备清单",
+      "expected_guard": false
+    },
+    {
+      "id": "general-visit",
+      "query": "介绍一下医院就诊要怎么准备",
+      "expected_guard": false
+    },
+    {
+      "id": "past-hospital-general",
+      "query": "上次带报告去了医院，现在只要通用准备清单。",
+      "expected_guard": false
+    }
+  ]
+}

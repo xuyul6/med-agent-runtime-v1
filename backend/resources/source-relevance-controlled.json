@@ -1,0 +1,18 @@
+{
+  "version": "source-relevance-controlled-1",
+  "description": "合成的强制领域检索案例，用于观察最低词项门槛；不是临床评测。",
+  "cases": [
+    {"id":"report-zh", "domain":"report", "query":"参考范围是什么？", "expected_recall":true,
+     "reference_snapshot":{"keys":["lab-context"],"sha256":"bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"}},
+    {"id":"report-en", "domain":"report", "query":"reference range", "expected_recall":true,
+     "reference_snapshot":{"keys":["lab-context"],"sha256":"bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"}},
+    {"id":"report-unrelated-overlap", "domain":"report", "query":"结婚证", "expected_recall":false,
+     "reference_snapshot":{"keys":["lab-context"],"sha256":"bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"}},
+    {"id":"report-unrelated-zero", "domain":"report", "query":"zzzzsyntheticirrelevant", "expected_recall":false,
+     "reference_snapshot":{"keys":["lab-context"],"sha256":"bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"}},
+    {"id":"visit-preparation", "domain":"visit", "query":"看医生前需要准备什么？", "expected_recall":true,
+     "reference_snapshot":{"keys":["consultation-record"],"sha256":"4dd3686215bc5e7a92f82ebb672298af0f401f2bc43e6687aecc91b475d648ca"}},
+    {"id":"visit-unrelated-overlap", "domain":"visit", "query":"火星旅行签证", "expected_recall":false,
+     "reference_snapshot":{"keys":["consultation-record"],"sha256":"4dd3686215bc5e7a92f82ebb672298af0f401f2bc43e6687aecc91b475d648ca"}}
+  ]
+}

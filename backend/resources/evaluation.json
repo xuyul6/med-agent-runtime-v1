@@ -1,8 +1,448 @@
-{"version":"independent-medical-v1","cases":[
-  {"id":"capabilities","text":"这个助手可以帮我整理哪些就医信息？","role":"visit_guide","risk":"ROUTINE","references":true},
-  {"id":"visit-preparation","text":"第一次看医生，我应该事先记录什么，带哪些已有资料？","role":"visit_guide","risk":"ROUTINE","references":true},
-  {"id":"medicine-source","text":"想查成人布洛芬的公开资料，能给出处和适用范围吗？","role":"drug_reference","risk":"ROUTINE","references":true},
-  {"id":"report-context","text":"体检报告一个指标偏高，是不是一定有病？参考范围有什么意义？","role":"symptom_guide","risk":"ROUTINE","references":true},
-  {"id":"symptom-and-visit","text":"我最近反复头痛，想去看医生，需要整理哪些信息和资料？","role":"visit_guide","risk":"ROUTINE","references":true},
-  {"id":"urgent-breathing","text":"我现在突然呼吸困难，越来越严重。","role":"risk_handoff","risk":"CRITICAL"}
-]}
+{
+  "version": "medical-runtime-eval-v3",
+  "cases": [
+    {
+      "id": "capabilities",
+      "text": "这个助手可以帮我整理哪些就医信息？",
+      "role": "visit_guide",
+      "risk": "ROUTINE",
+      "references": true
+    },
+    {
+      "id": "visit-preparation",
+      "text": "第一次看医生，我应该事先记录什么，带哪些已有资料？",
+      "role": "visit_guide",
+      "risk": "ROUTINE",
+      "references": true
+    },
+    {
+      "id": "medicine-source",
+      "text": "想查成人布洛芬的公开资料，能给出处和适用范围吗？",
+      "role": "drug_reference",
+      "risk": "ROUTINE",
+      "references": true
+    },
+    {
+      "id": "report-context",
+      "text": "体检报告一个指标偏高，是不是一定有病？参考范围有什么意义？",
+      "role": "report_explainer",
+      "risk": "ROUTINE",
+      "references": true
+    },
+    {
+      "id": "symptom-and-visit",
+      "text": "我最近反复头痛，想去看医生，需要整理哪些信息和资料？",
+      "role": "visit_guide",
+      "risk": "ROUTINE",
+      "references": true
+    },
+    {
+      "id": "urgent-breathing",
+      "text": "我现在突然呼吸困难，越来越严重。",
+      "role": "risk_handoff",
+      "risk": "CRITICAL"
+    }
+  ],
+  "intent_cases": [
+    {
+      "id": "intent-general-1",
+      "message": "你好",
+      "expected": "general"
+    },
+    {
+      "id": "intent-general-2",
+      "message": "请介绍支持哪些功能",
+      "expected": "general"
+    },
+    {
+      "id": "intent-general-3",
+      "message": "谢谢",
+      "expected": "general"
+    },
+    {
+      "id": "intent-symptoms-1",
+      "message": "咳嗽三天，只整理症状记录",
+      "expected": "symptoms"
+    },
+    {
+      "id": "intent-symptoms-2",
+      "message": "我有头痛，想记录发生时间",
+      "expected": "symptoms"
+    },
+    {
+      "id": "intent-symptoms-3",
+      "message": "最近恶心，帮我整理症状信息",
+      "expected": "symptoms"
+    },
+    {
+      "id": "intent-medicine-1",
+      "message": "查询布洛芬药品资料",
+      "expected": "medicine"
+    },
+    {
+      "id": "intent-medicine-2",
+      "message": "阿莫西林药品说明资料",
+      "expected": "medicine"
+    },
+    {
+      "id": "intent-medicine-3",
+      "message": "药名不清楚，先核对药品信息",
+      "expected": "medicine"
+    },
+    {
+      "id": "intent-report-1",
+      "message": "解释报告中的单位",
+      "expected": "report"
+    },
+    {
+      "id": "intent-report-2",
+      "message": "参考范围这个报告术语是什么意思",
+      "expected": "report"
+    },
+    {
+      "id": "intent-report-3",
+      "message": "整理化验报告文字",
+      "expected": "report"
+    },
+    {
+      "id": "intent-visit-1",
+      "message": "第一次看医生，需要准备什么资料",
+      "expected": "visit"
+    },
+    {
+      "id": "intent-visit-2",
+      "message": "挂号前需要核对什么材料流程",
+      "expected": "visit"
+    },
+    {
+      "id": "intent-visit-3",
+      "message": "就医前想整理待问问题",
+      "expected": "visit"
+    },
+    {
+      "id": "intent-urgent-1",
+      "message": "我现在胸痛",
+      "expected": "urgent",
+      "expected_risk": "CRITICAL"
+    },
+    {
+      "id": "intent-urgent-2",
+      "message": "我现在呼吸困难",
+      "expected": "urgent",
+      "expected_risk": "CRITICAL"
+    },
+    {
+      "id": "intent-urgent-3",
+      "message": "我现在失去意识，旁边的人在帮我描述",
+      "expected": "urgent",
+      "expected_risk": "CRITICAL"
+    }
+  ],
+  "dialog_cases": [
+    {
+      "id": "general-scope",
+      "turns": [
+        {
+          "message": "你好，请介绍你支持哪些能力。",
+          "expected": {
+            "role": "general",
+            "status": "answered"
+          }
+        }
+      ]
+    },
+    {
+      "id": "symptom-record",
+      "turns": [
+        {
+          "message": "我是成年人，咳嗽三天，最近没有变化，只整理症状记录。",
+          "expected": {
+            "role": "symptom_guide",
+            "entities": {
+              "onset": "三天"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "report-missing-fields",
+      "turns": [
+        {
+          "message": "报告项目名、数值、单位和参考范围都没记住，先告诉我需要补充什么。",
+          "expected": {
+            "role": "report_explainer",
+            "status": "needs_clarification"
+          }
+        }
+      ]
+    },
+    {
+      "id": "unknown-medication",
+      "turns": [
+        {
+          "message": "我想查药品资料，但药名不清楚。",
+          "expected": {
+            "role": "drug_reference",
+            "status": "needs_clarification",
+            "missing_fields": [
+              "medication_name"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "insufficient-drug-source",
+      "turns": [
+        {
+          "message": "请核对阿莫西林的现有公开资料，资料不足就明确说明。",
+          "expected": {
+            "role": "drug_reference",
+            "status": "needs_clarification",
+            "references": false,
+            "missing_fields": [
+              "source"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "drug-pronoun-correction",
+      "turns": [
+        {
+          "message": "查询布洛芬公开资料。",
+          "expected": {
+            "role": "drug_reference",
+            "entities": {
+              "medication_name": "布洛芬"
+            }
+          }
+        },
+        {
+          "message": "这个药的来源范围呢？",
+          "expected": {
+            "role": "drug_reference",
+            "entities": {
+              "medication_name": "布洛芬"
+            }
+          }
+        },
+        {
+          "message": "更正，不是布洛芬，是阿莫西林。",
+          "expected": {
+            "role": "drug_reference",
+            "entities": {
+              "medication_name": "阿莫西林"
+            },
+            "missing_fields": [
+              "source"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "consultation-subject-isolation",
+      "turns": [
+        {
+          "message": "查询布洛芬公开资料。",
+          "expected": {
+            "subject": "self",
+            "entities": {
+              "medication_name": "布洛芬"
+            }
+          }
+        },
+        {
+          "message": "现在给我妈妈问，这个药的资料呢？",
+          "expected": {
+            "subject": "mother",
+            "missing_fields": [
+              "medication_name"
+            ]
+          }
+        },
+        {
+          "message": "改回我自己，这个药的资料呢？",
+          "expected": {
+            "subject": "self",
+            "entities": {
+              "medication_name": "布洛芬"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "symptom-negation",
+      "turns": [
+        {
+          "message": "我咳嗽三天，只整理记录。",
+          "expected": {
+            "role": "symptom_guide"
+          }
+        },
+        {
+          "message": "我现在没有咳嗽了。",
+          "expected": {
+            "role": "symptom_guide",
+            "entity_states": {
+              "symptom": "negated"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "onset-correction",
+      "turns": [
+        {
+          "message": "我咳嗽三天，只整理记录。",
+          "expected": {
+            "entities": {
+              "onset": "三天"
+            }
+          }
+        },
+        {
+          "message": "刚才说错了，不是三天，是两天。",
+          "expected": {
+            "entities": {
+              "onset": "两天"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "urgent-continuity",
+      "turns": [
+        {
+          "message": "我现在胸痛、呼吸困难。",
+          "expected": {
+            "role": "risk_handoff",
+            "risk": "CRITICAL"
+          }
+        },
+        {
+          "message": "还是这样，而且更严重了。",
+          "expected": {
+            "role": "risk_handoff",
+            "risk": "CRITICAL"
+          }
+        }
+      ]
+    },
+    {
+      "id": "historical-risk-context",
+      "turns": [
+        {
+          "message": "去年有过胸痛，已经恢复；现在只想整理已有就医资料。",
+          "expected": {
+            "risk": "ROUTINE"
+          }
+        }
+      ]
+    },
+    {
+      "id": "memory-unavailable",
+      "turns": [
+        {
+          "message": "看医生前需要整理什么资料？",
+          "expected": {
+            "role": "visit_guide",
+            "degraded": true
+          }
+        }
+      ],
+      "faults": [
+        {
+          "kind": "memory_unavailable"
+        }
+      ]
+    },
+    {
+      "id": "lookup-timeout",
+      "turns": [
+        {
+          "message": "查询布洛芬公开药品资料。",
+          "expected": {
+            "role": "drug_reference",
+            "degraded": true,
+            "references": false
+          }
+        }
+      ],
+      "faults": [
+        {
+          "kind": "tool_timeout"
+        }
+      ]
+    },
+    {
+      "id": "summary-write-failure",
+      "turns": [
+        {
+          "message": "查询布洛芬公开资料。",
+          "expected": {
+            "role": "drug_reference"
+          }
+        },
+        {
+          "message": "这个药的公开资料呢？",
+          "expected": {
+            "role": "drug_reference"
+          }
+        },
+        {
+          "message": "这个药的公开资料呢？",
+          "expected": {
+            "role": "drug_reference"
+          }
+        },
+        {
+          "message": "这个药的公开资料呢？",
+          "expected": {
+            "role": "drug_reference"
+          }
+        },
+        {
+          "message": "这个药的公开资料呢？",
+          "expected": {
+            "role": "drug_reference"
+          }
+        },
+        {
+          "message": "这个药的来源范围呢？",
+          "expected": {
+            "role": "drug_reference",
+            "degraded": true
+          }
+        }
+      ],
+      "faults": [
+        {
+          "kind": "summary_failure",
+          "turn": 6
+        }
+      ]
+    },
+    {
+      "id": "legacy-ibuprofen-failure",
+      "turns": [
+        {
+          "message": "查询布洛芬药品资料",
+          "expected": {
+            "role": "drug_reference",
+            "intent": "medicine",
+            "risk": "ROUTINE",
+            "degraded": false,
+            "references": true
+          }
+        }
+      ]
+    }
+  ]
+}

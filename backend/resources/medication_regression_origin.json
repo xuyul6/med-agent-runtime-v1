@@ -1,0 +1,94 @@
+{
+  "version": "medication-failure-origin-1",
+  "recovered_on": "2026-10-27",
+  "question": "查询布洛芬药品资料",
+  "old_case_id": "dialog_1",
+  "quality_policy": {
+    "dimensions": [
+      "relevance",
+      "accuracy",
+      "completeness",
+      "helpfulness"
+    ],
+    "aggregation": "unweighted_mean",
+    "pass_threshold": 0.75,
+    "requires_rule_checks": true,
+    "judge_error_is_failure_not_quality_zero": true
+  },
+  "historical_runs": [
+    {
+      "file": "live-eval-2026-10-26-initial.json",
+      "sha256": "df29aa7ff2c576ebb9a7c0d388eba9bfa30d17821c531fad5832beb4173c0a50",
+      "case_id": "dialog_1",
+      "passed": false,
+      "scores_as_recorded": {
+        "relevance": 0.0,
+        "accuracy": 0.0,
+        "completeness": 0.0,
+        "helpfulness": 0.0,
+        "overall": 0.0
+      },
+      "judge_failed": true,
+      "judge_error": "Expecting value: line 1 column 1 (char 0)",
+      "failure_stage": "judge",
+      "response": "已找到药品科普资料，尚未收录与当前药品及规格匹配的正式说明书；无法据此核实个体用药、剂量或相互作用。\n\n还需补充：规格与剂型",
+      "checks": {
+        "output_schema": true,
+        "runtime_healthy": true,
+        "routing": true,
+        "collaboration": true,
+        "risk": true,
+        "risk_handoff": true,
+        "citations": true,
+        "required_sources": true,
+        "no_false_hospital_action": true
+      }
+    },
+    {
+      "file": "live-eval-2026-10-26.json",
+      "sha256": "a4ecf58cbe98be4e7e16879921bb2672617bd1cd620782c0f1338da6ff559849",
+      "case_id": "dialog_1",
+      "passed": false,
+      "scores_as_recorded": {
+        "relevance": 0.85,
+        "accuracy": 0.95,
+        "completeness": 0.45,
+        "helpfulness": 0.55,
+        "overall": 0.7
+      },
+      "judge_failed": false,
+      "judge_error": null,
+      "failure_stage": "quality",
+      "response": "检索到的公开药品资料摘要：\n布洛芬属于非甾体抗炎药。该网页为成人药品科普，不替代用户手中制剂的说明书。使用前需核实具体制剂、规格和适用人群，本项目摘要未包含完整禁忌、剂量或药物相互作用资料，不能据此判断个体是否适用或给出剂量。\n目前仅有科普概览，尚未收录当前制剂的正式说明书，无法据此核实个体用药、剂量或相互作用。\n\n还需补充：规格与剂型",
+      "checks": {
+        "output_schema": true,
+        "runtime_healthy": true,
+        "routing": true,
+        "collaboration": true,
+        "risk": true,
+        "risk_handoff": true,
+        "citations": true,
+        "required_sources": true,
+        "no_false_hospital_action": true
+      }
+    }
+  ],
+  "failure_explanation": "最终旧报告所有规则检查通过，四维均值0.700低于0.75；完整性0.45、有用性0.55。旧报告未保存逐维自然语言判词；资料缺口依据原答及旧验证文档恢复，不能冒充 Judge 原始评语。",
+  "evidence_gap": "仅有成人公开概览，缺少具体制剂禁用/联合用药资料；未提供制剂身份、人群及地区。",
+  "current_online_status": "not_run",
+  "current_quality_status": "unresolved_pending_real_model_regression",
+  "supporting_files": [
+    {
+      "file": "evaluation/medical_cases.json",
+      "sha256": "168d00a918c28f6eb2fa27162fdced51e819307e70f9976a35130fc12b413210"
+    },
+    {
+      "file": "evaluation/evaluator.py",
+      "sha256": "05bfe9c43a180151c560cbb64e58ce642d108e191ab57a7d6141b10c50a25ed8"
+    },
+    {
+      "file": "docs/医疗改造验证.md",
+      "sha256": "4079045daae01196bcb47ce92fb5b1bdf5e3428149b1f171c162c44820ab84bd"
+    }
+  ]
+}

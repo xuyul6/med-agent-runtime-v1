@@ -1,0 +1,140 @@
+{
+  "dataset_version": "failure-contract-v1-20261029",
+  "intent_cases": [],
+  "dialog_cases": [
+    {
+      "id": "report-context-structured-v1",
+      "turns": [
+        {
+          "message": "体检报告一个指标偏高，是不是一定有病？参考范围有什么意义？",
+          "expected": {
+            "role": "report_explainer",
+            "risk": "ROUTINE",
+            "references": true,
+            "degraded": false,
+            "entities": {},
+            "entity_states": {},
+            "missing_fields": [
+              "value",
+              "unit",
+              "reference_range"
+            ],
+            "supporting_agents": [],
+            "status": "needs_clarification"
+          }
+        }
+      ],
+      "faults": [],
+      "reference_snapshot": {
+        "keys": [
+          "advil-us-200mg-tablet-label",
+          "consultation-record",
+          "ibuprofen-overview",
+          "lab-context",
+          "symptom-record"
+        ],
+        "sha256": "e8c4178cef1d43d639fd7cd52758d7c49788c702850164c496150bf0372fcc74"
+      }
+    },
+    {
+      "id": "report-context-no-source-v1",
+      "turns": [
+        {
+          "message": "体检报告一个指标偏高，是不是一定有病？参考范围有什么意义？",
+          "expected": {
+            "role": "report_explainer",
+            "risk": "ROUTINE",
+            "references": false,
+            "degraded": false,
+            "entities": {},
+            "entity_states": {},
+            "missing_fields": [
+              "value",
+              "unit",
+              "reference_range",
+              "source"
+            ],
+            "supporting_agents": [],
+            "status": "needs_clarification"
+          }
+        }
+      ],
+      "faults": [],
+      "reference_snapshot": {
+        "keys": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    {
+      "id": "symptom-visit-support-v1",
+      "turns": [
+        {
+          "message": "我最近反复头痛，想去看医生，需要整理哪些信息和资料？",
+          "expected": {
+            "role": "visit_guide",
+            "risk": "ROUTINE",
+            "references": true,
+            "degraded": false,
+            "entities": {},
+            "entity_states": {},
+            "missing_fields": [],
+            "supporting_agents": [
+              "symptom_guide"
+            ]
+          }
+        }
+      ],
+      "faults": [],
+      "reference_snapshot": {
+        "keys": [
+          "advil-us-200mg-tablet-label",
+          "consultation-record",
+          "ibuprofen-overview",
+          "lab-context",
+          "symptom-record"
+        ],
+        "sha256": "e8c4178cef1d43d639fd7cd52758d7c49788c702850164c496150bf0372fcc74"
+      }
+    },
+    {
+      "id": "drug-lookup-timeout-v1",
+      "turns": [
+        {
+          "message": "查询布洛芬公开药品资料。",
+          "expected": {
+            "role": "drug_reference",
+            "references": false,
+            "degraded": true,
+            "entities": {},
+            "entity_states": {},
+            "missing_fields": [],
+            "supporting_agents": []
+          }
+        }
+      ],
+      "faults": [
+        {
+          "kind": "tool_timeout"
+        }
+      ],
+      "reference_snapshot": {
+        "keys": [
+          "advil-us-200mg-tablet-label",
+          "consultation-record",
+          "ibuprofen-overview",
+          "lab-context",
+          "symptom-record"
+        ],
+        "sha256": "e8c4178cef1d43d639fd7cd52758d7c49788c702850164c496150bf0372fcc74"
+      }
+    }
+  ],
+  "judge": true,
+  "limits": {
+    "timeout_seconds": 180,
+    "max_model_calls": 25,
+    "max_output_tokens": 35000,
+    "per_call_output_tokens": 2500,
+    "concurrency": 1
+  }
+}

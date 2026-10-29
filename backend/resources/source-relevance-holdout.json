@@ -1,0 +1,22 @@
+{
+  "version": "source-relevance-holdout-1",
+  "description": "额外合成强制领域检索案例，专门观察同义表达和来源边界；不是临床评测。",
+  "cases": [
+    {"id":"report-range-paraphrase", "domain":"report", "query":"化验结果的参考区间如何理解？", "expected_recall":true,
+     "reference_snapshot":{"keys":["lab-context"],"sha256":"bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"}},
+    {"id":"report-english-interval", "domain":"report", "query":"reference interval", "expected_recall":true,
+     "reference_snapshot":{"keys":["lab-context"],"sha256":"bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"}},
+    {"id":"report-unrelated-certificate", "domain":"report", "query":"结婚证件补办", "expected_recall":false,
+     "reference_snapshot":{"keys":["lab-context"],"sha256":"bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"}},
+    {"id":"report-specific-medical-item", "domain":"report", "query":"甲状腺功能", "expected_recall":false,
+     "reference_snapshot":{"keys":["lab-context"],"sha256":"bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"}},
+    {"id":"visit-institution-fee", "domain":"visit", "query":"医院收费金额是多少？", "expected_recall":false,
+     "reference_snapshot":{"keys":["consultation-record"],"sha256":"4dd3686215bc5e7a92f82ebb672298af0f401f2bc43e6687aecc91b475d648ca"}},
+    {"id":"visit-look-after", "domain":"visit", "query":"看病前需要整理什么？", "expected_recall":true,
+     "reference_snapshot":{"keys":["consultation-record"],"sha256":"4dd3686215bc5e7a92f82ebb672298af0f401f2bc43e6687aecc91b475d648ca"}},
+    {"id":"visit-space-certificate", "domain":"visit", "query":"火星旅行证件", "expected_recall":false,
+     "reference_snapshot":{"keys":["consultation-record"],"sha256":"4dd3686215bc5e7a92f82ebb672298af0f401f2bc43e6687aecc91b475d648ca"}},
+    {"id":"visit-unrelated-transport", "domain":"visit", "query":"宠物航空运输", "expected_recall":false,
+     "reference_snapshot":{"keys":["consultation-record"],"sha256":"4dd3686215bc5e7a92f82ebb672298af0f401f2bc43e6687aecc91b475d648ca"}}
+  ]
+}
