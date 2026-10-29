@@ -369,8 +369,8 @@ class Monitor:
             lines.append(metric+"{"+suffix+"} "+str(value))
         for kind, series, stats in [("agent",self.agent_series,snapshot["agent_stats"]),("tool",self.tool_series,snapshot["tool_stats"])]:
             lines += ["# TYPE mar_"+kind+"_calls_total counter", "# TYPE mar_"+kind+"_latency_seconds summary"]
-            for field in ["window_samples", "success_rate", "avg_seconds", "p95_seconds"]:
-                lines.append("# TYPE mar_"+kind+"_"+field+" gauge")
+            for metric in ["window_samples", "success_rate", "avg_seconds", "p95_seconds"]:
+                lines.append("# TYPE mar_"+kind+"_"+metric+" gauge")
             lines += ["# TYPE mar_agent_monitor_penalty gauge", "# TYPE mar_agent_excluded gauge",
                       "# TYPE mar_agent_routing_rejections_total counter"] if kind == "agent" else [
                       "# TYPE mar_tool_quality_success_rate gauge", "# TYPE mar_tool_scope_filtered_total counter",
@@ -382,9 +382,9 @@ class Monitor:
                 emit("mar_"+kind+"_latency_seconds_count",state.latency_count,**labels)
                 emit("mar_"+kind+"_window_samples",stats[name]["samples"],**labels)
                 emit("mar_"+kind+"_success_rate",stats[name]["success_rate"],**labels)
-                for field in ["avg_ms", "p95_ms"]:
-                    value = stats[name][field]
-                    emit("mar_"+kind+"_"+field.removesuffix("_ms")+"_seconds",value/1000 if value is not None else None,**labels)
+                for metric in ["avg_ms", "p95_ms"]:
+                    value = stats[name][metric]
+                    emit("mar_"+kind+"_"+metric.removesuffix("_ms")+"_seconds",value/1000 if value is not None else None,**labels)
                 if kind == "agent":
                     emit("mar_agent_monitor_penalty",state.penalty,**labels)
                     emit("mar_agent_excluded",int(stats[name]["excluded"]),**labels)

@@ -263,7 +263,6 @@ class ToolExecutor:
                 if not ref.approved or ref.domain not in context.profile.knowledge_domains or ref.domain != context.request.intent:
                     raise ToolResultError("reference_outside_tool_scope")
                 if ref.domain == Intent.MEDICINE:
-                    target = getattr(context.request, "medication_name", None)
                     if rejection_reason(ref, context.request):
                         raise ToolResultError("reference_outside_medication_scope")
                 else:

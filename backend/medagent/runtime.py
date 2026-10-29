@@ -7,18 +7,46 @@ from .core.contracts import ExecutionAttempt, Intent, Question, Reply, RoutingFa
 from .agents.execution import RoleAgent, RiskHandoffAgent
 from .agents.checks import checked_role_output
 from .agents.skills import Skills
-from .tools.registry import ToolExecutor
+from .tools.registry import ToolBudget, ToolExecutor
 from .memory import scope_key
 from .core.observability import CURRENT, RunLog, event
 from .understanding.risk import RiskGate
 from .agents.profiles import DEFAULT_REGISTRY, ProfileRegistry
-from .tools.registry import ToolBudget
 from .understanding.conversation import SubjectTracker, institution_request, recover_visit_followup, role_details
 from .understanding.consultation_needs import consultation_need
 from .understanding.routing import RoutingPlanner
 from .agents.collaboration import compose
 from .monitoring import Monitor, MonitorExcluded, MonitorPolicy
 from .agents.output_validation import AgentOutputError
+
+
+def role_input(assignment, understanding, question, context, clock):
+    """Input for one assignment: only the fields routing granted to the role, plus role-specific flags."""
+    role = assignment.role
+    scoped = understanding.model_copy(update={"primary":assignment.intent,
+        "tasks":[TaskUnderstanding(intent=assignment.intent, goal=assignment.input_text[:300])],
+        "entities":{name:understanding.entities[name] for name in assignment.context_fields}})
+    if role == "drug_reference" and not any(name == "medication_name" and fact.state in {"provided", "topic"}
+                                           for name,fact in scoped.entities.items()):
+        scoped.missing_fields = ["medication_name"]
+    details = role_details(scoped, role)
+    if role == "symptom_guide" and context.get("consultation_need") in {"clarify", "clarify_followup", "food", "medicine"}:
+        details["consultation_need"] = context["consultation_need"]
+    # The assignment excerpt is bounded; do not lose a later institution question.
+    if role == "visit_guide" and institution_request(question.text):
+        details["institution_specific"] = True
+    context = {**context, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in scoped.entities.items()}}
+    visit_followup = None
+    if role == "visit_guide" and understanding.primary == Intent.VISIT and not understanding.subject_ambiguous:
+        try:
+            visit_followup = recover_visit_followup(question.text, context,
+                subject_changed=understanding.subject_changed, now=clock())
+        except (TypeError, ValueError, OverflowError):
+            visit_followup = None
+    target = scoped.entities.get("medication_name")
+    query = (target.value+" 药品公开资料 "+assignment.input_text if role == "drug_reference" and target and target.state in {"provided", "topic"}
+             else assignment.input_text)
+    return details, context, visit_followup, query[:6000]
 
 
 class MedicalRuntime:
@@ -32,7 +60,8 @@ class MedicalRuntime:
         self.tools = ToolExecutor(timeout=settings.tool_timeout, monitor=self.monitor)
         self.monitor.circuits = self.tools.circuit_snapshot
         for name,spec in self.tools.registry.specs.items(): self.monitor.register_tool(name, spec.dependency)
-        ToolBudget(settings.tool_call_limit)
+        if not 1 <= settings.tool_call_limit <= 100:
+            raise ValueError("invalid_tool_budget")
         if not 1 <= settings.agent_concurrency <= 4 or not math.isfinite(settings.collaboration_timeout) or not 0 < settings.collaboration_timeout <= 600:
             raise ValueError("invalid_collaboration_budget")
         self.planner = RoutingPlanner(self.registry, self.tools.registry, settings.supporting_agent_limit)
@@ -46,28 +75,8 @@ class MedicalRuntime:
     async def _execute(self, assignment, decision, question, understanding, context, risk, skill_snapshot, tool_budget):
         role = assignment.role
         instances = {agent.instance:agent for agent in self.agents.get(role, [])}
-        scoped = understanding.model_copy(update={"primary":assignment.intent,
-            "tasks":[TaskUnderstanding(intent=assignment.intent, goal=assignment.input_text[:300])],
-            "entities":{name:understanding.entities[name] for name in assignment.context_fields}})
-        if role == "drug_reference" and not any(name == "medication_name" and fact.state in {"provided", "topic"}
-                                               for name,fact in scoped.entities.items()):
-            scoped.missing_fields = ["medication_name"]
-        details = role_details(scoped, role)
-        if role == "symptom_guide" and context.get("consultation_need") in {"clarify", "clarify_followup", "food", "medicine"}:
-            details["consultation_need"] = context["consultation_need"]
-        # The assignment excerpt is bounded; do not lose a later institution question.
-        if role == "visit_guide" and institution_request(question.text):
-            details["institution_specific"] = True
-        context = {**context, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in scoped.entities.items()}}
-        visit_followup = None
-        if role == "visit_guide" and understanding.primary == Intent.VISIT and not understanding.subject_ambiguous:
-            try:
-                visit_followup = recover_visit_followup(question.text, context,
-                    subject_changed=understanding.subject_changed, now=getattr(self.memory, "context_clock", time.time)())
-            except (TypeError, ValueError, OverflowError):
-                visit_followup = None
-        target = scoped.entities.get("medication_name")
-        query = target.value+" 药品公开资料 "+assignment.input_text if role == "drug_reference" and target and target.state in {"provided", "topic"} else assignment.input_text
+        details, context, visit_followup, query = role_input(assignment, understanding, question, context,
+                                                             lambda: getattr(self.memory, "context_clock", time.time)())
         for index, choice in enumerate(assignment.instances):
             started = time.perf_counter()
             probe = None
@@ -79,7 +88,7 @@ class MedicalRuntime:
                 result = await asyncio.wait_for(agent.run(assignment.input_text, assignment.intent, context, question.context,
                     subject=question.subject, subject_changed=understanding.subject_changed, risk=risk,
                     skill_snapshot=skill_snapshot, tool_budget=tool_budget,
-                    details=details, reference_query=query[:6000], assignment=assignment, original_request=question.text,
+                    details=details, reference_query=query, assignment=assignment, original_request=question.text,
                     visit_followup=visit_followup),
                     min(self.settings.agent_timeout, self.monitor.policy.probe_timeout) if probe is not None else self.settings.agent_timeout)
                 if result.execution.role != role or result.instance != choice.instance or result.execution.instance != choice.instance:
@@ -146,7 +155,6 @@ class MedicalRuntime:
     async def chat(self, question: Question) -> Reply:
         log = RunLog()
         token = CURRENT.set(log)
-        degraded, storage = False, "skipped"
         session = question.session or str(uuid.uuid4())
         resolution = self.subjects.resolve(question, session)
         question = question.model_copy(update={"subject":resolution.subject})
@@ -158,97 +166,11 @@ class MedicalRuntime:
             risk = self.risk.screen(question.text, scope)
             event("risk", level=risk.level, reasons=risk.reasons, version=risk.rule_version)
             if risk.level == "CRITICAL":
-                document = skill_snapshot.documents["risk_handoff"]
-                event("skill_binding", role="risk_handoff", version=document.version, sha256=document.sha256,
-                      snapshot_id=skill_snapshot.snapshot_id, deterministic=True, injected=False)
-                risk_started = time.perf_counter()
-                result = self.risk_agent.run(question.text, risk, self.settings.emergency_phone, question.subject, tool_budget)
-                self.monitor.record(result.instance, True, (time.perf_counter()-risk_started)*1000)
-                answer, agent_results = result.answer, [result.execution]
-                understanding = Understanding(primary=Intent.URGENT, confidence=1, subject=question.subject, turn_id=log.request_id)
-                decision = self.planner.plan(question.text, understanding, self.agents, self.monitor)
-                event("routing", **self.planner.trace(decision))
-                self.monitor.observe_routing(decision, log.request_id)
-                assignment = decision.assignments[0]
-                assignment.selected_instance, assignment.status = result.instance, result.execution.status
-                assignment.attempts.append(ExecutionAttempt(instance=result.instance, status="ok"))
-                result.execution.task_id = assignment.task_id
-                decision.collaboration_status = "single"
-                refs = []
+                understanding, decision, answer, refs, agent_results = self._urgent(question, risk, skill_snapshot, tool_budget, log)
+                degraded, storage = False, "skipped"
             else:
-                state = {"messages":[],"summary":""}
-                need_action, previous_need, need_now = None, None, None
-                try:
-                    if resolution.ambiguous:
-                        storage = "skipped"
-                    elif not self.memory.available:
-                        raise ConnectionError("memory_unavailable")
-                    else:
-                        state = await asyncio.wait_for(self.memory.read(scope), timeout=3)
-                        if state.get("summary"):
-                            state["episodes"] = await asyncio.wait_for(self.memory.recall(scope, question.text), timeout=3)
-                        storage = "memory_preview" if self.settings.preview else "available"
-                except Exception as exc:
-                    state = {"messages":[], "summary":""}
-                    degraded, storage = True, "degraded"
-                    event("memory_error", stage="read", error=type(exc).__name__)
-                if not self.settings.preview and self.index.collection is None:
-                    degraded = True
-                    event("storage_fallback", service="reference_index")
-                if resolution.ambiguous:
-                    understanding = Understanding(primary=Intent.GENERAL, confidence=1, subject=question.subject,
-                        subject_ambiguous=True, missing_fields=["subject"], turn_id=log.request_id)
-                else:
-                    understanding = await self.router.understand(question.text, state, subject=question.subject, turn_id=log.request_id)
-                    if storage == "degraded": understanding.fallbacks.append("memory_unavailable")
-                understanding.subject_resolution, understanding.subject_changed = resolution.method, resolution.changed
-                if not resolution.ambiguous:
-                    try:
-                        need_now = getattr(self.memory, "context_clock", time.time)()
-                        need_action, previous_need = consultation_need(question.text, state, subject=question.subject,
-                            subject_changed=resolution.changed, now=need_now, recent_critical=scope in self.risk.hints)
-                    except (TypeError, ValueError, OverflowError):
-                        need_action, previous_need = None, None
-                if need_action:
-                    understanding.primary = Intent.SYMPTOMS
-                    understanding.confidence = understanding.scores.get(Intent.SYMPTOMS.value, 0)
-                    understanding.tasks = [TaskUnderstanding(intent=Intent.SYMPTOMS, goal=question.text[:300], confidence=understanding.confidence)]
-                    event("classification_rule", rule="bounded_consultation_focus")
-                state = {**state, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in understanding.entities.items()}}
-                state["consultation_need"] = need_action
-                decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need_action)
-                event("routing", **self.planner.trace(decision))
-                self.monitor.observe_routing(decision, log.request_id)
-                execution_started = time.perf_counter()
-                outputs = await self._dispatch(decision, question, understanding, state, risk, skill_snapshot, tool_budget)
-                remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
-                answer, refs, routing_degraded = await compose(decision, outputs, understanding,
-                    self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
-                degraded = degraded or routing_degraded
-                agent_results = [outputs[assignment.role].execution for assignment in decision.assignments if assignment.role in outputs]
-                if decision.primary_agent in outputs:
-                    understanding.missing_fields = outputs[decision.primary_agent].execution.missing_fields
-                if risk.level == "CAUTION":
-                    answer.limitations = (answer.limitations+["涉及特殊人群或用药风险，需医师或药师结合具体情况核实。"])[:6]
-                try:
-                    if resolution.ambiguous:
-                        pass
-                    elif not self.memory.available:
-                        raise ConnectionError("memory_unavailable")
-                    else:
-                        pending = None
-                        if (need_action in {"clarify", "clarify_followup"} and decision.primary_agent == "symptom_guide"
-                            and "symptom_guide" in outputs and outputs["symptom_guide"].execution.status == "needs_clarification"
-                            and "consultation_focus" in outputs["symptom_guide"].execution.missing_fields):
-                            pending = {"kind":"food_or_medicine", "subject":question.subject,
-                                "created_at":previous_need["created_at"] if previous_need else need_now,
-                                "source_turn_id":previous_need["source_turn_id"] if previous_need else log.request_id,
-                                "continuations":previous_need["continuations"]+1 if previous_need else 0}
-                        await asyncio.wait_for(self.memory.remember(scope, question.text, answer.text, understanding,
-                            pending, state.get("last_intent_turn_id")), timeout=self.settings.memory_timeout)
-                except Exception as exc:
-                    degraded, storage = True, "degraded"
-                    event("memory_error", stage="write", error=type(exc).__name__)
+                understanding, decision, answer, refs, agent_results, degraded, storage = await self._consult(
+                    question, resolution, scope, risk, skill_snapshot, tool_budget, log)
             self.monitor.observe_execution(decision, log.request_id)
             event("routing_execution", primary=decision.primary_agent, status=decision.collaboration_status, monitor_fallback=decision.monitor_fallback,
                 assignments=[{"task_id":assignment.task_id, "role":assignment.role, "status":assignment.status,
@@ -262,3 +184,108 @@ class MedicalRuntime:
             return reply
         finally:
             CURRENT.reset(token)
+
+    def _urgent(self, question, risk, skill_snapshot, tool_budget, log):
+        """A critical risk is answered by the deterministic handoff role before any model, retrieval or storage."""
+        document = skill_snapshot.documents["risk_handoff"]
+        event("skill_binding", role="risk_handoff", version=document.version, sha256=document.sha256,
+              snapshot_id=skill_snapshot.snapshot_id, deterministic=True, injected=False)
+        risk_started = time.perf_counter()
+        result = self.risk_agent.run(question.text, risk, self.settings.emergency_phone, question.subject, tool_budget)
+        self.monitor.record(result.instance, True, (time.perf_counter()-risk_started)*1000)
+        understanding = Understanding(primary=Intent.URGENT, confidence=1, subject=question.subject, turn_id=log.request_id)
+        decision = self.planner.plan(question.text, understanding, self.agents, self.monitor)
+        event("routing", **self.planner.trace(decision))
+        self.monitor.observe_routing(decision, log.request_id)
+        assignment = decision.assignments[0]
+        assignment.selected_instance, assignment.status = result.instance, result.execution.status
+        assignment.attempts.append(ExecutionAttempt(instance=result.instance, status="ok"))
+        result.execution.task_id = assignment.task_id
+        decision.collaboration_status = "single"
+        return understanding, decision, result.answer, [], [result.execution]
+
+    async def _consult(self, question, resolution, scope, risk, skill_snapshot, tool_budget, log):
+        """Memory read, understanding, routing, role execution, merge and memory write for a non-critical turn."""
+        state, storage, degraded = await self._read_state(scope, question.text, resolution.ambiguous)
+        if not self.settings.preview and self.index.collection is None:
+            degraded = True
+            event("storage_fallback", service="reference_index")
+        understanding, need = await self._understand(question, resolution, state, storage, scope, log)
+        state = {**state, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in understanding.entities.items()}}
+        state["consultation_need"] = need[0]
+        decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need[0])
+        event("routing", **self.planner.trace(decision))
+        self.monitor.observe_routing(decision, log.request_id)
+        execution_started = time.perf_counter()
+        outputs = await self._dispatch(decision, question, understanding, state, risk, skill_snapshot, tool_budget)
+        remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
+        answer, refs, routing_degraded = await compose(decision, outputs, understanding,
+            self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
+        degraded = degraded or routing_degraded
+        agent_results = [outputs[assignment.role].execution for assignment in decision.assignments if assignment.role in outputs]
+        if decision.primary_agent in outputs:
+            understanding.missing_fields = outputs[decision.primary_agent].execution.missing_fields
+        if risk.level == "CAUTION":
+            answer.limitations = (answer.limitations+["涉及特殊人群或用药风险，需医师或药师结合具体情况核实。"])[:6]
+        try:
+            if not resolution.ambiguous:
+                if not self.memory.available:
+                    raise ConnectionError("memory_unavailable")
+                await self._remember(scope, question, answer, understanding, decision, outputs, need, state, log.request_id)
+        except Exception as exc:
+            degraded, storage = True, "degraded"
+            event("memory_error", stage="write", error=type(exc).__name__)
+        return understanding, decision, answer, refs, agent_results, degraded, storage
+
+    async def _read_state(self, scope, text, ambiguous):
+        """Session state for this scope; a storage failure degrades to an empty state instead of failing the turn."""
+        if ambiguous:
+            return {"messages":[], "summary":""}, "skipped", False
+        try:
+            if not self.memory.available:
+                raise ConnectionError("memory_unavailable")
+            state = await asyncio.wait_for(self.memory.read(scope), timeout=3)
+            if state.get("summary"):
+                state["episodes"] = await asyncio.wait_for(self.memory.recall(scope, text), timeout=3)
+            return state, "memory_preview" if self.settings.preview else "available", False
+        except Exception as exc:
+            event("memory_error", stage="read", error=type(exc).__name__)
+            return {"messages":[], "summary":""}, "degraded", True
+
+    async def _understand(self, question, resolution, state, storage, scope, log):
+        """Fused intent and grounded fields; an open fever food/medicine question keeps the turn on symptoms."""
+        if resolution.ambiguous:
+            understanding = Understanding(primary=Intent.GENERAL, confidence=1, subject=question.subject,
+                subject_ambiguous=True, missing_fields=["subject"], turn_id=log.request_id)
+        else:
+            understanding = await self.router.understand(question.text, state, subject=question.subject, turn_id=log.request_id)
+            if storage == "degraded": understanding.fallbacks.append("memory_unavailable")
+        understanding.subject_resolution, understanding.subject_changed = resolution.method, resolution.changed
+        need_action, previous_need, need_now = None, None, None
+        if not resolution.ambiguous:
+            try:
+                need_now = getattr(self.memory, "context_clock", time.time)()
+                need_action, previous_need = consultation_need(question.text, state, subject=question.subject,
+                    subject_changed=resolution.changed, now=need_now, recent_critical=scope in self.risk.hints)
+            except (TypeError, ValueError, OverflowError):
+                need_action, previous_need = None, None
+        if need_action:
+            understanding.primary = Intent.SYMPTOMS
+            understanding.confidence = understanding.scores.get(Intent.SYMPTOMS.value, 0)
+            understanding.tasks = [TaskUnderstanding(intent=Intent.SYMPTOMS, goal=question.text[:300], confidence=understanding.confidence)]
+            event("classification_rule", rule="bounded_consultation_focus")
+        return understanding, (need_action, previous_need, need_now)
+
+    async def _remember(self, scope, question, answer, understanding, decision, outputs, need, state, request_id):
+        need_action, previous_need, need_now = need
+        pending = None
+        if (need_action in {"clarify", "clarify_followup"} and decision.primary_agent == "symptom_guide"
+            and "symptom_guide" in outputs and outputs["symptom_guide"].execution.status == "needs_clarification"
+            and "consultation_focus" in outputs["symptom_guide"].execution.missing_fields):
+            # The clarification stays open so the next short answer ("吃的") continues it.
+            pending = {"kind":"food_or_medicine", "subject":question.subject,
+                "created_at":previous_need["created_at"] if previous_need else need_now,
+                "source_turn_id":previous_need["source_turn_id"] if previous_need else request_id,
+                "continuations":previous_need["continuations"]+1 if previous_need else 0}
+        await asyncio.wait_for(self.memory.remember(scope, question.text, answer.text, understanding,
+            pending, state.get("last_intent_turn_id")), timeout=self.settings.memory_timeout)

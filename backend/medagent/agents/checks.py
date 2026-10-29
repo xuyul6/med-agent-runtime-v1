@@ -4,87 +4,20 @@ import re
 from pydantic import ValidationError
 from .contracts import AgentOutput, FIELD_QUESTIONS, ReportInput
 from ..core.contracts import Answer, Intent
-from ..understanding.conversation import clauses, positive_request
 from ..core.observability import event
 from ..knowledge.medication_evidence import validate_output_identity
 from .output_validation import AgentOutputError, schema_error
-from .profiles import AgentProfile, DEFAULT_REGISTRY
+from .profiles import AgentProfile
 from ..core.provider import object_from_text
 
 
-ROLE_DOMAINS = {role:profile.knowledge_domains for role, profile in DEFAULT_REGISTRY.profiles.items()}
-ROLE_FOR_INTENT = DEFAULT_REGISTRY.role_for_intent
 SOURCE_GAP_QUESTIONS = {
     "drug_reference":"是否方便自行查找与药名和地区匹配的公开药品概览或具体产品说明书，并向药师核对？",
     "report_explainer":"是否方便带原报告向医护人员核对相关问题？",
     "visit_guide":"是否方便通过目标机构的官方渠道自行核对就医流程？",
 }
 
-# The deterministic mixed-report path quotes only this reviewed summary, unchanged.
-REPORT_RANGE_SOURCE_HASH = "bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"
-REPORT_RANGE_DEFINITION_HASH = "f506943119c77e64b1f33de9bf953309203f9516a666fca18b427d8324475f06"
-REPORT_UNIT_SOURCE_HASH = "2f54021e88977383e66d6c25af8df122085d16381c842bd13104d0f4eb116758"
-REPORT_STRUCTURE_SOURCE_HASH = "2be3b39f9eed112c4abb3293d3fbeab0559e704ad2907c86756af028adf33043"
-REPORT_RANGE_QUESTION = r"参考范围(?:的)?(?:有什么意义|有何意义|是什么意思|是什么|什么含义|含义|定义)"
 VISIT_URGENCY_ATTRIBUTION_NOTICE = "部分具体风险提示未能与本次引用资料逐句核对；如情况紧急，请立即联系当地急救或就近急诊。"
-
-
-def general_report_source_request(text: str) -> str | None:
-    """Recognize only complete, generic requests covered by the reviewed summary."""
-    value = re.sub(r"\s+", "", text).rstrip("。！？!?")
-    prefix = r"(?:(?:我)?(?:想|在)|请|麻烦|能否|可以)?(?:解释|说明|介绍|了解|说说|学习)?"
-    report = r"(?:(?:化验|检验|体检|检查)?报告(?:里面的|里的|中的|上的|的|里|中|上)?)?"
-    meaning = r"参考范围(?:的)?(?:有什么意义|有何意义|是什么意思|是什么|什么含义|含义|定义|代表什么)"
-    followup = (r"(?:[,，](?:以及|和|并且)?(?:请)?(?:解释)?(?:为什么|为何)"
-                r"(?:单个|单项|一个)(?:结果|指标)(?:不能|无法)(?:独立|单独|直接)?"
-                r"(?:确定|判断|说明|反映)(?:健康状态|健康状况|健康情况|健康|病情))?")
-    if re.fullmatch(prefix+report+meaning+followup, value): return "reference_range"
-    combined = (r"(?:(?:请|我想|我希望)(?:说明|介绍|了解)?)?"
-                r"(?:化验|检验|体检|检查)?报告(?:的)?(?:结果|项目|数值)?(?:如何|怎么)(?:整理|记录)"
-                r"[？?，,；;。]+"
-                r"(?:(?:不要|不需要|无需)(?:你|做|进行)?(?:分析|判断|解读|解释|诊断)(?:我的|个人)?病情[，,；;。]+)?"
-                r"(?:也|再|并|同时)?(?:请)?(?:解释|说明|介绍)(?:一下)?参考范围(?:的含义|的意义|是什么意思)?")
-    if re.fullmatch(combined, value): return "report_structure_and_range"
-    mention = (r"(?:我)?(?:还|也)?(?:看到|注意到|发现)(?:了)?"
-               r"(?:化验|检验|体检|检查)?报告(?:里面|里|中|上)?"
-               r"(?:列有|列出了?|有|包含)(?:了)?参考范围")
-    if re.fullmatch(mention, value): return "reference_range_mention"
-    limitations = (r"(?:(?:我)?(?:没有要你|不需要你|不想让你)(?:判断|分析|解读)(?:个人病情|我的病情|个人结果)"
-                   r"[,，](?:只|仅)(?:是)?(?:希望|想|要))?"
-                   r"(?:请|我想|我希望)?(?:理解|了解|解释|说明)(?:化验|检验|体检|检查)?"
-                   r"报告(?:阅读|解读)(?:的)?(?:限制|局限|局限性)")
-    if re.fullmatch(limitations, value): return "report_reading_limitations"
-    structure = (r"(?:我)?(?:知道|了解|注意到)(?:了)?(?:化验|检验|体检|检查)?报告"
-                 r"(?:通常|一般|会|也会|都)?(?:列出|列有|包含|有)(?:了)?(?:项目名称|检查项目|检验项目)")
-    if re.fullmatch(structure, value): return "report_structure_mention"
-    unit_followup = (r"(?:我)?(?:知道|了解|注意到)(?:了)?(?:报告(?:上的|中的|里的)?)?"
-                     r"(?:原始)?(?:结果|数值)(?:的)?(?:旁边|后面|附近)(?:还|也)?(?:有|写有|标有)(?:了)?单位")
-    if re.fullmatch(unit_followup, value): return "report_unit_followup"
-    learning = (r"(?:我在|我想|我)?(?:学习|了解)(?:阅读|理解|查看)?(?:化验|检验|体检|检查)?报告"
-                r"(?:[,，](?:只|仅)(?:想)?(?:了解|学习)(?:通用|一般|基础)(?:概念|知识))?")
-    if re.fullmatch(learning, value): return "report_learning"
-    return None
-
-
-def mixed_personal_report_without_item(text: str) -> bool:
-    """Recognize a narrow mixed question without converting user text into a report item."""
-    if not positive_request(text, REPORT_RANGE_QUESTION):
-        return False
-    return personal_report_without_item(text, require_judgment=False)
-
-
-def personal_report_without_item(text: str, *, require_judgment: bool = True) -> bool:
-    """Identify a bounded request to interpret an unspecified abnormal personal result."""
-    if require_judgment and not re.search(r"判断|诊断|生病|有病|什么病|严重|怎么办|怎么看|意味|是不是|解读|分析", text):
-        return False
-    if re.search(r"(?:不要|不需要|不用|无需|不必|不想).{0,12}(?:解读|分析|判断|看|解释).{0,8}(?:个人|指标|报告|结果|它)", text):
-        return False
-    for clause in clauses(text):
-        if re.search(r"如果|假如|假设|例如|举例|科普|并非|不是|没有|未出现|未发现", clause):
-            continue
-        if re.search(r"(?:报告|体检|化验|检验).{0,24}(?:指标|项目|结果).{0,12}(?:偏高|偏低|异常|升高|降低|超出)", clause):
-            return True
-    return False
 
 
 def explicit_reference_request(text: str) -> bool:
