@@ -87,6 +87,11 @@ def clauses(text: str):
     yield from (match.group() for match in re.finditer(r"[^，,。！？；\n]+[！？]?", text))
 
 
+# A planned visit; a directly preceding 不/没/别 ("不去医院") is not a plan.
+VISIT_EVENT = r"看医生|就医|就诊|复诊|复查|门诊|(?<![不没别])(?:去|到)医院"
+VISIT_PREPARATION_REQUEST = r"(?:" + VISIT_EVENT + r").*(?:准备|带|整理|记录|资料)|挂号.*(?:材料|流程)"
+
+
 def visit_query_has_context(text: str) -> bool:
     """Recognize limited visit wording; this is not a semantic or identity check."""
     return bool(re.search(r"就医|就诊|医院|诊所|医疗机构|卫生院|社区卫生|挂号|门诊|复诊|问诊|"
@@ -196,11 +201,16 @@ def medication_mentions(text: str) -> list[tuple[str, str, str]]:
     return found
 
 
+def topic_medications(text: str) -> list[str]:
+    """Distinct drugs the turn asks about, negated mentions excluded, in order of appearance."""
+    return list(dict.fromkeys(canonical(name) for _, name, state in medication_mentions(text) if state == "topic"))
+
+
 def local_updates(source: dict, prior_intent: str = "") -> list[dict]:
     result = []
     mentions = medication_mentions(source["text"])
     # Two different drugs in one turn (e.g. an interaction question) cannot be reduced to one lookup target.
-    single_topic = len({canonical(name) for _, name, state in mentions if state == "topic"}) <= 1
+    single_topic = len(topic_medications(source["text"])) <= 1
     for clause in clauses(source["text"]):
         def add(name, value, state="provided"):
             result.append({"name":name, "value":value, "state":state, "quote":clause, "turn_id":source["turn_id"]})

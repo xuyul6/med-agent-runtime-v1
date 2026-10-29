@@ -4,14 +4,15 @@ import math
 import re
 import uuid
 from ..core.contracts import Intent, Understanding, TaskUnderstanding
-from .conversation import FIELD_NAMES, ground_update, institution_request, local_updates, merge_fields, user_sources
+from .conversation import (FIELD_NAMES, VISIT_EVENT, VISIT_PREPARATION_REQUEST, ground_update, institution_request,
+                           local_updates, merge_fields, user_sources)
 from ..core.observability import event
 from .medications import NAMES
 
 LEXICON = {
-    Intent.SYMPTOMS: r"头痛|咳嗽|发热|发烧|腹痛|恶心|不舒服|症状|科室|分诊",
+    Intent.SYMPTOMS: r"头痛|咳嗽|发热|发烧|腹痛|恶心|不舒服|症状|科室|分诊|(?<![心止镇])(?:疼|痛)",
     Intent.MEDICINE: r"药|用量|禁忌|说明书|相互作用|一起吃|" + NAMES,
-    Intent.VISIT: r"挂号|预约|就诊|就医|看医生|带什么|带哪些|准备.*材料",
+    Intent.VISIT: r"挂号|预约|" + VISIT_EVENT + r"|带什么|带哪些|准备.*材料",
     Intent.REPORT: r"报告|化验|检验|指标|参考范围|血常规|升高|偏低",
     Intent.GENERAL: r"你好|功能|能做什么|谢谢",
 }
@@ -110,7 +111,7 @@ class IntentRouter:
             primary = Intent.MEDICINE
             event("classification_rule", rule="explicit_medication_target")
         # Explicit preparation phrasing has stronger task evidence than a generic greeting.
-        if institution_request(text) or re.search(r"(?:看医生|就医|就诊).*(?:准备|带|整理|记录|资料)|挂号.*(?:材料|流程)", text):
+        if institution_request(text) or re.search(VISIT_PREPARATION_REQUEST, text):
             primary = Intent.VISIT
             fused[primary.value] = max(fused.values()) + .25
             fused = distribution(fused)
@@ -130,13 +131,14 @@ class IntentRouter:
             try:
                 kind = Intent(task["intent"])
                 if kind != primary and kind in CLASSES and kind not in {item.intent for item in tasks}:
-                    tasks.append(TaskUnderstanding(intent=kind, goal=task["goal"], priority="support", confidence=fused[kind.value]))
+                    tasks.append(TaskUnderstanding(intent=kind, goal=task["goal"], priority="support", confidence=fused[kind.value], source="model"))
             except (KeyError, TypeError, ValueError):
                 fallbacks.append("invalid_task_ignored")
         if len(tasks) == 1:
             for kind in CLASSES:
                 if kind not in {Intent.GENERAL, primary} and hits[kind.value] and fused[kind.value] >= .12:
-                    tasks.append(TaskUnderstanding(intent=kind, goal="本轮涉及的辅助信息任务", priority="support", confidence=fused[kind.value]))
+                    tasks.append(TaskUnderstanding(intent=kind, goal="本轮涉及的辅助信息任务", priority="support", confidence=fused[kind.value],
+                                                   source="keywords"))
         medication = entities.get("medication_name")
         query = text
         if primary == Intent.MEDICINE and medication and medication.state in {"provided", "topic"}:

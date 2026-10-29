@@ -5,7 +5,7 @@ from .classification import LEXICON
 from .medications import NAMES
 from ..core.contracts import (AgentAssignment, InstanceChoice, Intent, RoutingCandidate, RoutingDecision,
                         RoutingFallback, Understanding)
-from .conversation import clauses, institution_request, positive_request
+from .conversation import VISIT_EVENT, VISIT_PREPARATION_REQUEST, clauses, institution_request, positive_request
 
 
 ROLE_FIELDS = {
@@ -27,7 +27,8 @@ LABELS = {"general":"需求澄清", "symptom_guide":"症状记录", "drug_refere
 TASK_EVIDENCE = {
     Intent.SYMPTOMS: LEXICON[Intent.SYMPTOMS],
     Intent.MEDICINE: r"(?:查|核对|了解|介绍|解释).{0,12}(?:药|" + NAMES + r")|药.{0,8}(?:资料|查询)|说明书|禁忌|相互作用|用量",
-    Intent.REPORT: r"(?:整理|解释|解读|了解|查看|核对).{0,12}(?:报告|化验|指标|参考范围)|报告.{0,12}(?:含义|解释|整理)|参考范围.*(?:含义|术语)",
+    Intent.REPORT: r"(?:整理|解释|解读|了解|查看|核对|理解).{0,12}(?:报告|化验|指标|参考范围)"
+                   r"|(?:报告|化验|指标|参考范围).{0,12}(?:含义|解释|整理|理解|怎么看|什么意思)|参考范围.*(?:含义|术语)",
     Intent.VISIT: LEXICON[Intent.VISIT],
 }
 
@@ -35,7 +36,7 @@ TASK_EVIDENCE = {
 def cross_clause_visit_preparation(text: str) -> bool:
     """Recognize a narrow current-turn visit request split by a comma."""
     parts = re.split(r"([，,。！？；\n])", text)
-    visit = r"(?:想|准备|计划|打算|要|需要|将|即将|马上|去).{0,8}(?:看医生|就医|就诊)|(?:看医生|就医|就诊)(?:前|之前)"
+    visit = r"(?:想|准备|计划|打算|要|需要|将|即将|马上|去).{0,8}(?:" + VISIT_EVENT + r")|(?:" + VISIT_EVENT + r")(?:前|之前)"
     preparation = r"(?:准备|带|整理|记录|携带).{0,18}(?:信息|资料|材料|清单|问题|报告|记录|情况)"
     negatives = r"不(?:去|想|要|需|用|打算|看|再|是)|没(?:有|去|打算|计划|想|必要)|无需|不要|取消|停止|暂停|暂不|先别|别(?:去|看|整理|准备|带)"
     unrelated = r"旅行|旅游|出国|登机|签证|行李|护照|入职|简历|工作|搬家|宠物|兽医"
@@ -76,7 +77,11 @@ class RoutingPlanner:
                     continue
                 pattern = LEXICON[task.intent]
                 negative_only = re.search(pattern, text) and not positive_request(text, pattern)
-                if not negative_only and (task.confidence >= .3 or task.confidence >= .12 and positive_request(text, TASK_EVIDENCE[task.intent])):
+                requested = positive_request(text, TASK_EVIDENCE[task.intent])
+                # Next to a medical primary task, a keyword-only task needs request wording: mentioning a drug
+                # or report is context. When the primary is general, keyword evidence may still replace it.
+                strong = task.confidence >= .3 and (task.source != "keywords" or understanding.primary == Intent.GENERAL)
+                if not negative_only and (strong or task.confidence >= .12 and requested):
                     domains.add(task.intent)
             domains.update(kind for kind, pattern in TASK_EVIDENCE.items() if positive_request(text, pattern)
                            and not (re.search(LEXICON[kind], text) and not positive_request(text, LEXICON[kind])))
@@ -131,7 +136,7 @@ class RoutingPlanner:
                 "task_fit":1.0 if kind == understanding.primary else .85,
                 "entity_fit":min(1.0, known / (2 if role in {"symptom_guide", "report_explainer"} else 1)),
                 "business_rule":1.0 if role == "visit_guide" and (
-                    positive_request(text, r"(?:看医生|就医|就诊).*(?:准备|带|整理|记录|资料)|挂号.*(?:材料|流程)")
+                    positive_request(text, VISIT_PREPARATION_REQUEST)
                     or cross_clause_visit_preparation(text)) else .5,
                 "health":max(choice.health for choice in choices) if choices else 0,
             }

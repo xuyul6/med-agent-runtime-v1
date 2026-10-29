@@ -7,14 +7,19 @@ import weakref
 from .core.observability import event
 
 _UNCHANGED = object()
+EPISODE_TTL_SECONDS = 7*86400
+PURGE_INTERVAL_SECONDS = 3600
 
 def scope_key(user: str, session: str, subject: str) -> str:
     return hashlib.sha256(json.dumps([user, session, subject], ensure_ascii=False).encode()).hexdigest()
 
 
 class SessionMemory:
-    def __init__(self, redis=None, episodes=None, vectors=None, model=None):
+    def __init__(self, redis=None, episodes=None, vectors=None, model=None, episode_ttl: float = EPISODE_TTL_SECONDS):
+        if not episode_ttl > 0:
+            raise ValueError("invalid_episode_ttl")
         self.redis, self.episodes, self.vectors, self.model = redis, episodes, vectors, model
+        self.episode_ttl, self.purged_at = episode_ttl, None
         self.local = {}
         self.locks = weakref.WeakValueDictionary()
         self.available = True
@@ -76,7 +81,8 @@ class SessionMemory:
                 if self.episodes is not None:
                     encoded = await self.vectors.encode([state["summary"]])
                     await asyncio.to_thread(self.episodes.add, ids=[str(uuid.uuid4())],
-                        documents=[state["summary"]], embeddings=encoded, metadatas=[{"scope": scope}])
+                        documents=[state["summary"]], embeddings=encoded, metadatas=[self.episode_metadata(scope)])
+                    await self._purge_if_due()
                 event("memory_compressed", kept=len(state["messages"]))
             if self.redis is None:
                 self.local[scope] = state
@@ -85,6 +91,9 @@ class SessionMemory:
             else:
                 await self.redis.set("mar2:session:"+scope, json.dumps(state, ensure_ascii=False), ex=86400)
 
+    def episode_metadata(self, scope: str) -> dict:
+        return {"scope": scope, "created_at": float(self.context_clock())}
+
     async def recall(self, scope: str, query: str) -> list[str]:
         if self.episodes is None:
             return []
@@ -92,5 +101,31 @@ class SessionMemory:
         if not count:
             return []
         encoded = await self.vectors.encode([query])
-        result = await asyncio.to_thread(self.episodes.query, query_embeddings=encoded, n_results=min(2,count), where={"scope":scope})
+        cutoff = self.context_clock()-self.episode_ttl
+        result = await asyncio.to_thread(self.episodes.query, query_embeddings=encoded, n_results=min(2,count),
+                                         where={"$and":[{"scope":scope}, {"created_at":{"$gte":cutoff}}]})
         return result["documents"][0]
+
+    async def purge_expired_episodes(self) -> int:
+        """Delete summaries past the retention window, including older ones stored without a creation time."""
+        if self.episodes is None:
+            return 0
+        now = self.context_clock()
+        rows = await asyncio.to_thread(self.episodes.get, include=["metadatas"])
+        expired = [identifier for identifier, metadata in zip(rows["ids"], rows.get("metadatas") or [])
+                   if not isinstance((metadata or {}).get("created_at"), (int, float))
+                   or metadata["created_at"] < now-self.episode_ttl]
+        if expired:
+            await asyncio.to_thread(self.episodes.delete, ids=expired)
+            event("memory_episodes_purged", count=len(expired))
+        self.purged_at = now
+        return len(expired)
+
+    async def _purge_if_due(self) -> None:
+        # Cleanup is housekeeping: a failure is recorded but never fails the conversation turn.
+        if self.purged_at is not None and self.context_clock()-self.purged_at < PURGE_INTERVAL_SECONDS:
+            return
+        try:
+            await self.purge_expired_episodes()
+        except Exception as exc:
+            event("memory_error", stage="purge", error=type(exc).__name__)

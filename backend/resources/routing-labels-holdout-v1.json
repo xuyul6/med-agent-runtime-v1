@@ -1,0 +1,411 @@
+{
+ "version": "routing-labels-holdout-1",
+ "created": "2026-10-30",
+ "note": "合成路由标注集：只标注最后一轮的期望主角色（可接受多个）和期望参与角色集合。规则：辅助角色要有本轮明确的任务请求，仅提及（如“在吃某药”）或否定的不算。",
+ "cases": [
+  {
+   "id": "h01",
+   "turns": [
+    "最近总是失眠，想记录一下睡眠情况"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h02",
+   "turns": [
+    "拉肚子两天了，帮我整理一下"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h03",
+   "turns": [
+    "嗓子疼还有点咳嗽，从周一开始的"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h04",
+   "turns": [
+    "想了解一下奥美拉唑这个药"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h05",
+   "turns": [
+    "头孢克肟的说明书在哪看"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h06",
+   "turns": [
+    "维生素D一天吃多少"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h07",
+   "turns": [
+    "尿常规报告里的潜血是什么意思"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h08",
+   "turns": [
+    "体检单上的甘油三酯偏高，想了解这个项目"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h09",
+   "turns": [
+    "化验单上的单位mmol/L怎么理解"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h10",
+   "turns": [
+    "下个月复诊，要整理哪些资料"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h11",
+   "turns": [
+    "去医院复查要带什么"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h12",
+   "turns": [
+    "第一次看专家门诊，要准备些什么"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "h13",
+   "turns": [
+    "怎么学做红烧肉"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "general"
+  },
+  {
+   "id": "h14",
+   "turns": [
+    "推荐一本好看的小说"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "general"
+  },
+  {
+   "id": "h15",
+   "turns": [
+    "你都能帮我做什么"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "general"
+  },
+  {
+   "id": "h16",
+   "turns": [
+    "整理一下我胃疼的情况，再查一下奥美拉唑的资料"
+   ],
+   "primary": [
+    "symptom_guide",
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference",
+    "symptom_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "h17",
+   "turns": [
+    "解释一下体检报告的参考范围，另外复诊前要准备什么"
+   ],
+   "primary": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "h18",
+   "turns": [
+    "查一下氯雷他定的禁忌，再帮我记一下这几天过敏的症状"
+   ],
+   "primary": [
+    "drug_reference",
+    "symptom_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "symptom_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "h19",
+   "turns": [
+    "帮我整理血常规报告，再看看去医院要带哪些材料"
+   ],
+   "primary": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "h20",
+   "turns": [
+    "我咳嗽一周了想记录下来，复诊的时候要准备什么也告诉我"
+   ],
+   "primary": [
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "roles": [
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "h21",
+   "turns": [
+    "不用帮我查药，只想记录一下腰疼"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "negation"
+  },
+  {
+   "id": "h22",
+   "turns": [
+    "不是要解读报告，只是想知道复诊要带什么"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "negation"
+  },
+  {
+   "id": "h23",
+   "turns": [
+    "我在吃阿司匹林，想整理一下最近的头痛"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "context_mention"
+  },
+  {
+   "id": "h24",
+   "turns": [
+    "我妈突然昏倒了叫不醒"
+   ],
+   "primary": [
+    "risk_handoff"
+   ],
+   "roles": [
+    "risk_handoff"
+   ],
+   "category": "urgent"
+  },
+  {
+   "id": "h25",
+   "turns": [
+    "吐了好多血"
+   ],
+   "primary": [
+    "risk_handoff"
+   ],
+   "roles": [
+    "risk_handoff"
+   ],
+   "category": "urgent"
+  },
+  {
+   "id": "h26",
+   "turns": [
+    "吃了海鲜后喉咙发紧喘不过气"
+   ],
+   "primary": [
+    "risk_handoff"
+   ],
+   "roles": [
+    "risk_handoff"
+   ],
+   "category": "urgent"
+  },
+  {
+   "id": "h27",
+   "turns": [
+    "奥美拉唑有什么禁忌",
+    "老人能吃吗"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "followup"
+  },
+  {
+   "id": "h28",
+   "turns": [
+    "帮我解释一下化验报告里的参考范围",
+    "那单位又是什么"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "followup"
+  },
+  {
+   "id": "h29",
+   "turns": [
+    "下周复诊要准备什么",
+    "病历本要带吗"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "followup"
+  },
+  {
+   "id": "h30",
+   "turns": [
+    "帮我记录一下头痛",
+    "换个问题，怎么泡茶好喝"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "followup"
+  }
+ ]
+}

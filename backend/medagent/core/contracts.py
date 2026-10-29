@@ -53,6 +53,8 @@ class TaskUnderstanding(BaseModel):
     goal: str = Field(min_length=1, max_length=300)
     priority: Literal["primary", "support"] = "primary"
     confidence: float = Field(default=0, ge=0, le=1)
+    # "keywords": inferred only from keyword hits, which can be a mention ("在吃布洛芬") rather than a request.
+    source: Literal["classifier", "model", "keywords"] = "classifier"
 
 
 class Understanding(BaseModel):

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .contracts import AgentInput, ReportInput
 from ..core.contracts import AgentAssignment, AgentExecution, Answer, Intent, Risk
 from ..understanding.consultation_needs import is_fever_followup
-from ..understanding.conversation import VisitFollowupEvidence, visit_query_has_context
+from ..understanding.conversation import VisitFollowupEvidence, topic_medications, visit_query_has_context
 from ..core.observability import event
 from ..knowledge.medication_evidence import eligible_references, query_identity
 from .output_validation import AgentOutputError
@@ -202,6 +202,11 @@ class RoleAgent:
                 "你已切换咨询对象。为避免混用不同人的药品信息，请重新确认当前对象要查询的药品名称；不清楚时可以保留未知。",references,
                 next_steps=["请核对当前对象要查询药品的外包装或说明书，照原文提供“通用名称”或“药品名称”。",
                             "拿不到包装或仍不确定时，请保留“药名不清楚”；可先请药师结合实物核对，确认后再查询对应资料。"])
+        if intent == Intent.MEDICINE and "medication_name" in missing and len(named := topic_medications(current)) >= 2:
+            event("clarification", role=self.role, reason="multiple_medication_topics", fields=missing)
+            return self.limited_result(workflow, "needs_clarification", missing,
+                "这次提到了多个药品（" + "、".join(named[:4]) + "）。目前一次只核对一个药品的公开资料，请说明先查哪一个。", references,
+                next_steps=["如需比较或同时使用几种药，可分别查询后向药师或医师核实；本资料库没有药物相互作用数据。"])
         return self.limited_result(workflow, "needs_clarification", missing,
             "已提供的结构化信息尚不完整，请补充必要字段；不清楚的内容可以保留未知。", references,
             payload=report_payload)

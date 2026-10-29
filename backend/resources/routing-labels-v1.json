@@ -1,0 +1,793 @@
+{
+ "version": "routing-labels-1",
+ "created": "2026-10-30",
+ "note": "合成路由标注集：只标注最后一轮的期望主角色（可接受多个）和期望参与角色集合。规则：辅助角色要有本轮明确的任务请求，仅提及（如“在吃某药”）或否定的不算。",
+ "cases": [
+  {
+   "id": "t01",
+   "turns": [
+    "我这两天一直咳嗽，想把症状整理一下"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t02",
+   "turns": [
+    "头痛三天了，帮我记录一下开始时间和变化"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t03",
+   "turns": [
+    "孩子昨晚开始发烧到38度，想记录一下"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t04",
+   "turns": [
+    "最近老是恶心，吃完饭更明显"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t05",
+   "turns": [
+    "肚子疼了一下午，想记下来给医生看"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t06",
+   "turns": [
+    "布洛芬有什么禁忌"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t07",
+   "turns": [
+    "想查一下对乙酰氨基酚的说明书"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t08",
+   "turns": [
+    "阿莫西林和头孢能一起吃吗"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t09",
+   "turns": [
+    "二甲双胍的公开资料有哪些"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t10",
+   "turns": [
+    "这个药的用量怎么看说明书"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t11",
+   "turns": [
+    "氯雷他定是什么药"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t12",
+   "turns": [
+    "化验报告上的参考范围是什么意思"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t13",
+   "turns": [
+    "帮我整理一下血常规报告里的项目"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t14",
+   "turns": [
+    "报告里白细胞计数11.2，单位10^9/L，参考范围3.5-9.5，帮我整理"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t15",
+   "turns": [
+    "体检报告上的ALT是什么指标"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t16",
+   "turns": [
+    "检验报告的单位怎么看"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t17",
+   "turns": [
+    "第一次去看医生要准备什么材料"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t18",
+   "turns": [
+    "下周复诊需要准备什么"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t19",
+   "turns": [
+    "明天去医院就诊，要带哪些东西"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t20",
+   "turns": [
+    "挂号前要准备哪些资料"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t21",
+   "turns": [
+    "复查之前要整理哪些资料"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t22",
+   "turns": [
+    "去门诊之前应该准备些什么"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "single"
+  },
+  {
+   "id": "t23",
+   "turns": [
+    "你好，你能做什么"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "general"
+  },
+  {
+   "id": "t24",
+   "turns": [
+    "今天天气怎么样"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "general"
+  },
+  {
+   "id": "t25",
+   "turns": [
+    "怎么煮米饭比较好吃"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "general"
+  },
+  {
+   "id": "t26",
+   "turns": [
+    "谢谢你的帮助"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "general"
+  },
+  {
+   "id": "t27",
+   "turns": [
+    "请介绍一下你的功能"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "general"
+  },
+  {
+   "id": "t28",
+   "turns": [
+    "我头痛两天了，想整理一下症状，顺便查一下布洛芬的说明书"
+   ],
+   "primary": [
+    "symptom_guide",
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference",
+    "symptom_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t29",
+   "turns": [
+    "帮我解释一下化验报告里的参考范围，再查一下布洛芬的禁忌"
+   ],
+   "primary": [
+    "report_explainer",
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference",
+    "report_explainer"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t30",
+   "turns": [
+    "下周去看医生，帮我准备要带的资料，另外查一下二甲双胍的说明书"
+   ],
+   "primary": [
+    "visit_guide",
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t31",
+   "turns": [
+    "整理一下我的咳嗽症状，然后告诉我看医生要准备什么"
+   ],
+   "primary": [
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "roles": [
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t32",
+   "turns": [
+    "报告里ALT偏高，想了解这个指标，也想查一下布洛芬的资料"
+   ],
+   "primary": [
+    "report_explainer",
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference",
+    "report_explainer"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t33",
+   "turns": [
+    "帮我记录一下发烧的情况，再解释一下血常规报告的项目"
+   ],
+   "primary": [
+    "symptom_guide",
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t34",
+   "turns": [
+    "我想查氯雷他定的资料，顺便整理一下过敏的症状"
+   ],
+   "primary": [
+    "drug_reference",
+    "symptom_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "symptom_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t35",
+   "turns": [
+    "看医生前要准备什么，还有报告里的参考范围怎么理解"
+   ],
+   "primary": [
+    "visit_guide",
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t36",
+   "turns": [
+    "查一下阿司匹林的禁忌，再帮我整理去医院要带的东西"
+   ],
+   "primary": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t37",
+   "turns": [
+    "帮我整理头痛的症状，查一下布洛芬说明书，再告诉我复诊要准备什么"
+   ],
+   "primary": [
+    "symptom_guide",
+    "drug_reference",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t38",
+   "turns": [
+    "帮我解释报告的参考范围，并整理就诊时要问医生的问题"
+   ],
+   "primary": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t39",
+   "turns": [
+    "帮我把报告和症状都整理一下"
+   ],
+   "primary": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "category": "compound"
+  },
+  {
+   "id": "t40",
+   "turns": [
+    "我的化验报告里ALT偏高，最近在吃布洛芬，下周复诊需要准备什么？"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "context_mention"
+  },
+  {
+   "id": "t41",
+   "turns": [
+    "我在吃二甲双胍，想整理一下最近头晕的症状"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "context_mention"
+  },
+  {
+   "id": "t42",
+   "turns": [
+    "不用查药，帮我整理一下咳嗽的症状"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "negation"
+  },
+  {
+   "id": "t43",
+   "turns": [
+    "我没有吃布洛芬，只是想整理一下头痛的情况"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "negation"
+  },
+  {
+   "id": "t44",
+   "turns": [
+    "不需要解释报告，只想知道看医生要准备什么"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "negation"
+  },
+  {
+   "id": "t45",
+   "turns": [
+    "我不去医院，只想查一下布洛芬的禁忌"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "negation"
+  },
+  {
+   "id": "t46",
+   "turns": [
+    "报告我已经看懂了，现在想查一下阿莫西林的说明书"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "negation"
+  },
+  {
+   "id": "t47",
+   "turns": [
+    "我不是要看病，就是问问怎么做番茄炒蛋"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "negation"
+  },
+  {
+   "id": "t48",
+   "turns": [
+    "胸口压着疼，喘不上气"
+   ],
+   "primary": [
+    "risk_handoff"
+   ],
+   "roles": [
+    "risk_handoff"
+   ],
+   "category": "urgent"
+  },
+  {
+   "id": "t49",
+   "turns": [
+    "我爸突然说话不清楚，一边手脚没力气"
+   ],
+   "primary": [
+    "risk_handoff"
+   ],
+   "roles": [
+    "risk_handoff"
+   ],
+   "category": "urgent"
+  },
+  {
+   "id": "t50",
+   "turns": [
+    "孩子吃了一整瓶药，现在叫不醒"
+   ],
+   "primary": [
+    "risk_handoff"
+   ],
+   "roles": [
+    "risk_handoff"
+   ],
+   "category": "urgent"
+  },
+  {
+   "id": "t51",
+   "turns": [
+    "我不想活了"
+   ],
+   "primary": [
+    "risk_handoff"
+   ],
+   "roles": [
+    "risk_handoff"
+   ],
+   "category": "urgent"
+  },
+  {
+   "id": "t52",
+   "turns": [
+    "查一下布洛芬的禁忌，我现在胸口剧痛出冷汗"
+   ],
+   "primary": [
+    "risk_handoff"
+   ],
+   "roles": [
+    "risk_handoff"
+   ],
+   "category": "urgent"
+  },
+  {
+   "id": "t53",
+   "turns": [
+    "布洛芬有什么禁忌",
+    "那孕妇呢"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "followup"
+  },
+  {
+   "id": "t54",
+   "turns": [
+    "帮我整理一下血常规报告",
+    "那单位呢"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "followup"
+  },
+  {
+   "id": "t55",
+   "turns": [
+    "下周去看医生要准备什么",
+    "还要带别的吗"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "followup"
+  },
+  {
+   "id": "t56",
+   "turns": [
+    "我头痛两天了，帮我记录一下",
+    "今天又加重了一点"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "followup"
+  },
+  {
+   "id": "t57",
+   "turns": [
+    "布洛芬有什么禁忌",
+    "换个话题，今天适合跑步吗"
+   ],
+   "primary": [
+    "general"
+   ],
+   "roles": [
+    "general"
+   ],
+   "category": "followup"
+  },
+  {
+   "id": "t58",
+   "turns": [
+    "帮我查一下布洛芬的说明书",
+    "不是布洛芬，是对乙酰氨基酚"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "followup"
+  }
+ ]
+}

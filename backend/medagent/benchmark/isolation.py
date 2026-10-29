@@ -71,7 +71,7 @@ class PairedIsolation(EvaluationIsolation):
             if rows:
                 await asyncio.to_thread(episodes.add,ids=[row["id"] for row in rows],
                     documents=[row["document"] for row in rows],embeddings=[row["embedding"] for row in rows],
-                    metadatas=[{"scope":scope} for row in rows])
+                    metadatas=[memory.episode_metadata(scope) for row in rows])
             if snapshot.risk_seconds > 0:
                 runtime.risk.hints[scope] = runtime.risk.clock()+snapshot.risk_seconds
         return runtime

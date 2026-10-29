@@ -22,6 +22,7 @@ class Settings:
     tool_timeout: float = 20
     tool_call_limit: int = 12
     memory_timeout: float = 20
+    episode_ttl: float = 7*86400
     supporting_agent_limit: int = 2
     agent_concurrency: int = 2
     collaboration_timeout: float = 120
@@ -63,6 +64,7 @@ class Settings:
             tool_timeout=float(env.get("MAR_TOOL_TIMEOUT", "20")),
             tool_call_limit=int(env.get("MAR_TOOL_CALL_LIMIT", "12")),
             memory_timeout=float(env.get("MAR_MEMORY_TIMEOUT", "20")),
+            episode_ttl=float(env.get("MAR_EPISODE_TTL_SECONDS", str(7*86400))),
             supporting_agent_limit=int(env.get("MAR_SUPPORTING_AGENT_LIMIT", "2")),
             agent_concurrency=int(env.get("MAR_AGENT_CONCURRENCY", "2")),
             collaboration_timeout=float(env.get("MAR_COLLABORATION_TIMEOUT", "120")),

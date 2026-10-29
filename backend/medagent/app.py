@@ -63,8 +63,12 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
         missing = catalog_updates(seed, index.documents)
         if missing:
             await index.upsert(missing)
-        memory = SessionMemory(redis, episodes, vectors, gateway)
+        memory = SessionMemory(redis, episodes, vectors, gateway, episode_ttl=settings.episode_ttl)
         memory.available = settings.preview or redis is not None
+        try:
+            await memory.purge_expired_episodes()
+        except Exception:
+            pass  # retried after the next summary write
         app.state.runtime = MedicalRuntime(settings, gateway, vectors, index, memory)
         app.state.services = services
         app.state.runtime.monitor.start()
