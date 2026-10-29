@@ -23,6 +23,7 @@
 - [NHS：Ibuprofen for adults](https://www.nhs.uk/medicines/ibuprofen-for-adults/)：英国成人药品概览。不是本项目编写的制剂说明书，不能外推到儿童、其他剂型或地区。
 - [DailyMed：Advil 布洛芬包衣片](https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=1a665e64-9f30-be37-4a83-38789f1f1e89)：Haleon US Holdings LLC 提交的在用标签，SPL v38；项目只写美国 Advil 200 mg 口服包衣片的成人资料摘要。并核对厂商 LBL-00000027 v38.0，不镜像 PDF、包装图或全文。
 - `consultation-record` 和 `symptom-record` 是本项目的信息整理模板；没有医学指南或医院业务来源的含义。
+- `backend/resources/medication-names.json` 是项目作者整理的常见药品通用名（国际非专利名）及英文名列表，只用于识别用户提到的药名；不含剂量或临床内容，不是药品数据库，也不表示已有对应资料。
 
 资料更新时核对来源、文本使用条件及适用范围，不把来源页面的权利转授给使用者。
 

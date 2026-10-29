@@ -6,10 +6,11 @@ import uuid
 from ..core.contracts import Intent, Understanding, TaskUnderstanding
 from .conversation import FIELD_NAMES, ground_update, institution_request, local_updates, merge_fields, user_sources
 from ..core.observability import event
+from .medications import NAMES
 
 LEXICON = {
     Intent.SYMPTOMS: r"头痛|咳嗽|发热|发烧|腹痛|恶心|不舒服|症状|科室|分诊",
-    Intent.MEDICINE: r"药|布洛芬|阿莫西林|用量|禁忌|说明书|相互作用|一起吃",
+    Intent.MEDICINE: r"药|用量|禁忌|说明书|相互作用|一起吃|" + NAMES,
     Intent.VISIT: r"挂号|预约|就诊|就医|看医生|带什么|带哪些|准备.*材料",
     Intent.REPORT: r"报告|化验|检验|指标|参考范围|血常规|升高|偏低",
     Intent.GENERAL: r"你好|功能|能做什么|谢谢",

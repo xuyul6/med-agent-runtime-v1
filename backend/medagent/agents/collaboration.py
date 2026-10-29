@@ -2,6 +2,7 @@
 from ..core.contracts import Answer, RoutingFallback
 from .checks import VISIT_URGENCY_ATTRIBUTION_NOTICE, checked_answer
 from ..core.observability import CURRENT, event
+from ..understanding.medications import canonical
 from ..understanding.routing import LABELS
 
 
@@ -36,7 +37,7 @@ def conflicts_in(results, understanding):
                 expected["report."+item.value+"."+field] = fact.value
     def normalized(value):
         value = str(value).strip().lower()
-        return "布洛芬" if value == "ibuprofen" else value
+        return canonical(value).casefold()
     for result in results:
         for field, value in structured_facts(result):
             if field in expected and normalized(value) != normalized(expected[field]):

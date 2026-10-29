@@ -2,6 +2,7 @@
 import math
 import re
 from .classification import LEXICON
+from .medications import NAMES
 from ..core.contracts import (AgentAssignment, InstanceChoice, Intent, RoutingCandidate, RoutingDecision,
                         RoutingFallback, Understanding)
 from .conversation import clauses, institution_request, positive_request
@@ -25,7 +26,7 @@ LABELS = {"general":"需求澄清", "symptom_guide":"症状记录", "drug_refere
           "report_explainer":"报告整理", "visit_guide":"就医准备", "risk_handoff":"风险提示"}
 TASK_EVIDENCE = {
     Intent.SYMPTOMS: LEXICON[Intent.SYMPTOMS],
-    Intent.MEDICINE: r"(?:查|核对|了解|介绍|解释).{0,12}(?:药|布洛芬|阿莫西林)|药.{0,8}(?:资料|查询)|说明书|禁忌|相互作用|用量",
+    Intent.MEDICINE: r"(?:查|核对|了解|介绍|解释).{0,12}(?:药|" + NAMES + r")|药.{0,8}(?:资料|查询)|说明书|禁忌|相互作用|用量",
     Intent.REPORT: r"(?:整理|解释|解读|了解|查看|核对).{0,12}(?:报告|化验|指标|参考范围)|报告.{0,12}(?:含义|解释|整理)|参考范围.*(?:含义|术语)",
     Intent.VISIT: LEXICON[Intent.VISIT],
 }

@@ -9,12 +9,12 @@ from pydantic import ValidationError
 from ..core.contracts import FieldName, FieldSource, GroundedField, Intent, Question
 from ..memory import scope_key
 from ..core.observability import event
+from .medications import NAME_PATTERN, canonical
 
 
 MAX_HISTORY_USERS = 4
 MAX_HISTORY_CHARACTERS = 1200
 FIELD_NAMES = get_args(FieldName)
-MEDICATIONS = ("布洛芬", "ibuprofen", "阿莫西林")
 SYMPTOMS = ("头痛", "咳嗽", "发热", "发烧", "腹痛", "恶心")
 NEGATION = r"(?:没有|否认|不伴|并非|不是|未出现|不再|不用|不查|不问|不要|无).{0,3}$"
 UNCERTAIN = r"是不是|是否|会不会|可能|假如|如果|科普|什么是|[？?]|吗"
@@ -186,15 +186,28 @@ def ground_update(candidate: dict, sources: dict[str, dict]) -> GroundedField | 
         return None
 
 
+def medication_mentions(text: str) -> list[tuple[str, str, str]]:
+    """(clause, written name, topic|negated) for every lexicon drug name in the text."""
+    found = []
+    for clause in clauses(text):
+        for match in NAME_PATTERN.finditer(clause):
+            negative = re.search(r"(?:不是|不查|不要|不问).{0,3}$", clause[max(0,match.start()-8):match.start()])
+            found.append((clause, match.group(), "negated" if negative else "topic"))
+    return found
+
+
 def local_updates(source: dict, prior_intent: str = "") -> list[dict]:
     result = []
+    mentions = medication_mentions(source["text"])
+    # Two different drugs in one turn (e.g. an interaction question) cannot be reduced to one lookup target.
+    single_topic = len({canonical(name) for _, name, state in mentions if state == "topic"}) <= 1
     for clause in clauses(source["text"]):
         def add(name, value, state="provided"):
             result.append({"name":name, "value":value, "state":state, "quote":clause, "turn_id":source["turn_id"]})
-        for match in re.finditer("|".join(map(re.escape, MEDICATIONS)), clause, re.I):
-            negative = re.search(r"(?:不是|不查|不要|不问).{0,3}$", clause[max(0,match.start()-8):match.start()])
-            add("medication_name", match.group(), "negated" if negative else "topic")
-        if prior_intent == "medicine" or re.search(r"布洛芬|ibuprofen|Advil|药品|制剂|说明书", source["text"], re.I):
+        for mentioned, name, state in mentions:
+            if mentioned == clause and (state == "negated" or single_topic):
+                add("medication_name", name, state)
+        if prior_intent == "medicine" or NAME_PATTERN.search(source["text"]) or re.search(r"Advil|药品|制剂|说明书", source["text"], re.I):
             for name, pattern in {"product_name":r"\bAdvil\b", "strength":r"(?<![\d.])\d+(?:\.\d+)?\s*(?:mg|毫克)(?![a-z])",
                                   "formulation":r"口服包衣片|包衣片|缓释胶囊|胶囊|混悬液|凝胶|片剂",
                                   "region":r"美国|英国|中国大陆|中国", "population":r"18岁及以上|成年人|成人|儿童|婴儿|孕妇|哺乳期"}.items():

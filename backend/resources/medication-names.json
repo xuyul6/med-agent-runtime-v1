@@ -1,0 +1,391 @@
+{
+  "version": "medication-names-1",
+  "note": "Common generic (INN) drug names compiled by the project author for entity recognition only; not a drug database, no dosing or clinical content. Brand names are deliberately not mapped to generics.",
+  "medications": [
+    {
+      "name": "布洛芬",
+      "aliases": [
+        "ibuprofen"
+      ]
+    },
+    {
+      "name": "对乙酰氨基酚",
+      "aliases": [
+        "acetaminophen",
+        "paracetamol",
+        "扑热息痛"
+      ]
+    },
+    {
+      "name": "阿司匹林",
+      "aliases": [
+        "aspirin"
+      ]
+    },
+    {
+      "name": "双氯芬酸",
+      "aliases": [
+        "diclofenac"
+      ]
+    },
+    {
+      "name": "萘普生",
+      "aliases": [
+        "naproxen"
+      ]
+    },
+    {
+      "name": "塞来昔布",
+      "aliases": [
+        "celecoxib"
+      ]
+    },
+    {
+      "name": "洛索洛芬",
+      "aliases": [
+        "loxoprofen"
+      ]
+    },
+    {
+      "name": "阿莫西林",
+      "aliases": [
+        "amoxicillin"
+      ]
+    },
+    {
+      "name": "头孢克肟",
+      "aliases": [
+        "cefixime"
+      ]
+    },
+    {
+      "name": "头孢呋辛",
+      "aliases": [
+        "cefuroxime"
+      ]
+    },
+    {
+      "name": "头孢氨苄",
+      "aliases": [
+        "cefalexin",
+        "cephalexin"
+      ]
+    },
+    {
+      "name": "阿奇霉素",
+      "aliases": [
+        "azithromycin"
+      ]
+    },
+    {
+      "name": "克拉霉素",
+      "aliases": [
+        "clarithromycin"
+      ]
+    },
+    {
+      "name": "左氧氟沙星",
+      "aliases": [
+        "levofloxacin"
+      ]
+    },
+    {
+      "name": "莫西沙星",
+      "aliases": [
+        "moxifloxacin"
+      ]
+    },
+    {
+      "name": "甲硝唑",
+      "aliases": [
+        "metronidazole"
+      ]
+    },
+    {
+      "name": "多西环素",
+      "aliases": [
+        "doxycycline"
+      ]
+    },
+    {
+      "name": "氯雷他定",
+      "aliases": [
+        "loratadine"
+      ]
+    },
+    {
+      "name": "地氯雷他定",
+      "aliases": [
+        "desloratadine"
+      ]
+    },
+    {
+      "name": "西替利嗪",
+      "aliases": [
+        "cetirizine"
+      ]
+    },
+    {
+      "name": "氯苯那敏",
+      "aliases": [
+        "chlorphenamine",
+        "扑尔敏"
+      ]
+    },
+    {
+      "name": "奥美拉唑",
+      "aliases": [
+        "omeprazole"
+      ]
+    },
+    {
+      "name": "雷贝拉唑",
+      "aliases": [
+        "rabeprazole"
+      ]
+    },
+    {
+      "name": "泮托拉唑",
+      "aliases": [
+        "pantoprazole"
+      ]
+    },
+    {
+      "name": "法莫替丁",
+      "aliases": [
+        "famotidine"
+      ]
+    },
+    {
+      "name": "蒙脱石散",
+      "aliases": [
+        "smectite"
+      ]
+    },
+    {
+      "name": "多潘立酮",
+      "aliases": [
+        "domperidone"
+      ]
+    },
+    {
+      "name": "洛哌丁胺",
+      "aliases": [
+        "loperamide"
+      ]
+    },
+    {
+      "name": "氨氯地平",
+      "aliases": [
+        "amlodipine"
+      ]
+    },
+    {
+      "name": "硝苯地平",
+      "aliases": [
+        "nifedipine"
+      ]
+    },
+    {
+      "name": "缬沙坦",
+      "aliases": [
+        "valsartan"
+      ]
+    },
+    {
+      "name": "氯沙坦",
+      "aliases": [
+        "losartan"
+      ]
+    },
+    {
+      "name": "厄贝沙坦",
+      "aliases": [
+        "irbesartan"
+      ]
+    },
+    {
+      "name": "依那普利",
+      "aliases": [
+        "enalapril"
+      ]
+    },
+    {
+      "name": "美托洛尔",
+      "aliases": [
+        "metoprolol"
+      ]
+    },
+    {
+      "name": "比索洛尔",
+      "aliases": [
+        "bisoprolol"
+      ]
+    },
+    {
+      "name": "阿托伐他汀",
+      "aliases": [
+        "atorvastatin"
+      ]
+    },
+    {
+      "name": "瑞舒伐他汀",
+      "aliases": [
+        "rosuvastatin"
+      ]
+    },
+    {
+      "name": "华法林",
+      "aliases": [
+        "warfarin"
+      ]
+    },
+    {
+      "name": "氯吡格雷",
+      "aliases": [
+        "clopidogrel"
+      ]
+    },
+    {
+      "name": "硝酸甘油",
+      "aliases": [
+        "nitroglycerin"
+      ]
+    },
+    {
+      "name": "二甲双胍",
+      "aliases": [
+        "metformin"
+      ]
+    },
+    {
+      "name": "格列美脲",
+      "aliases": [
+        "glimepiride"
+      ]
+    },
+    {
+      "name": "阿卡波糖",
+      "aliases": [
+        "acarbose"
+      ]
+    },
+    {
+      "name": "胰岛素",
+      "aliases": [
+        "insulin"
+      ]
+    },
+    {
+      "name": "沙丁胺醇",
+      "aliases": [
+        "salbutamol",
+        "albuterol"
+      ]
+    },
+    {
+      "name": "孟鲁司特",
+      "aliases": [
+        "montelukast"
+      ]
+    },
+    {
+      "name": "氨溴索",
+      "aliases": [
+        "ambroxol"
+      ]
+    },
+    {
+      "name": "右美沙芬",
+      "aliases": [
+        "dextromethorphan"
+      ]
+    },
+    {
+      "name": "布地奈德",
+      "aliases": [
+        "budesonide"
+      ]
+    },
+    {
+      "name": "左甲状腺素",
+      "aliases": [
+        "levothyroxine"
+      ]
+    },
+    {
+      "name": "泼尼松",
+      "aliases": [
+        "prednisone"
+      ]
+    },
+    {
+      "name": "地塞米松",
+      "aliases": [
+        "dexamethasone"
+      ]
+    },
+    {
+      "name": "奥司他韦",
+      "aliases": [
+        "oseltamivir"
+      ]
+    },
+    {
+      "name": "阿昔洛韦",
+      "aliases": [
+        "acyclovir",
+        "aciclovir"
+      ]
+    },
+    {
+      "name": "氟康唑",
+      "aliases": [
+        "fluconazole"
+      ]
+    },
+    {
+      "name": "舍曲林",
+      "aliases": [
+        "sertraline"
+      ]
+    },
+    {
+      "name": "艾司唑仑",
+      "aliases": [
+        "estazolam"
+      ]
+    },
+    {
+      "name": "唑吡坦",
+      "aliases": [
+        "zolpidem"
+      ]
+    },
+    {
+      "name": "叶酸",
+      "aliases": [
+        "folic acid"
+      ]
+    },
+    {
+      "name": "艾司奥美拉唑",
+      "aliases": [
+        "esomeprazole"
+      ]
+    },
+    {
+      "name": "左西替利嗪",
+      "aliases": [
+        "levocetirizine"
+      ]
+    },
+    {
+      "name": "阿莫西林克拉维酸钾",
+      "aliases": [
+        "amoxicillin-clavulanate",
+        "amoxicillin clavulanate"
+      ]
+    }
+  ]
+}
