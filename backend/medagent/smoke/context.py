@@ -1,11 +1,7 @@
 """Explicitly invoked synthetic multi-turn integration checks; no Judge."""
-import argparse
 import asyncio
-from datetime import datetime, timezone
-import json
-from pathlib import Path
 import uuid
-import httpx
+from .common import OnlineSmoke, arguments, new_report
 
 
 DIALOGUES = [
@@ -55,50 +51,20 @@ def checks(case: dict, reply: dict, trace: dict) -> dict:
 
 
 async def run(url: str, output: str) -> dict:
-    target = Path(output)
-    if target.exists(): raise FileExistsError("preserve_existing_context_report")
-    report = {"dataset":"context-smoke-v1", "started_at":datetime.now(timezone.utc).isoformat(),
-              "synthetic":True, "judge":False, "total":sum(len(dialogue["turns"]) for dialogue in DIALOGUES), "cases":[]}
-    async with httpx.AsyncClient(timeout=240) as client:
-        health = await client.get(url.rstrip("/")+"/health")
-        health.raise_for_status()
-        report["environment"] = health.json()
-        if report["environment"].get("preview") or report["environment"].get("status") != "ok":
-            raise ValueError("healthy_online_runtime_required")
-        consecutive_failures = 0
+    report = new_report("context-smoke-v1", total=sum(len(dialogue["turns"]) for dialogue in DIALOGUES))
+    async with OnlineSmoke(url, output, report) as smoke:
         for dialogue in DIALOGUES:
             session, user = "", "context-smoke-"+str(uuid.uuid4())
             for turn_index, case in enumerate(dialogue["turns"]):
-                row = {"dialogue":dialogue["id"], "turn":turn_index+1, "case":case, "passed":False}
-                try:
-                    response = await client.post(url.rstrip("/")+"/chat", json={"text":case["text"], "user":user, "session":session})
-                    response.raise_for_status()
-                    row["reply"] = response.json()
-                    session = row["reply"]["session"]
-                    traced = await client.get(url.rstrip("/")+"/traces/"+row["reply"]["request_id"])
-                    traced.raise_for_status()
-                    row["trace"] = traced.json()
-                    row["checks"] = checks(case, row["reply"], row["trace"])
-                    row["passed"] = all(row["checks"].values())
-                except Exception as exc:
-                    row["error"] = type(exc).__name__
-                report["cases"].append(row)
-                report["executed"] = len(report["cases"])
-                report["passed"] = sum(item["passed"] for item in report["cases"])
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(json.dumps(report, ensure_ascii=False, indent=2)+"\n")
-                print(json.dumps({"dialogue":row["dialogue"], "turn":row["turn"], "passed":row["passed"],
-                                  "failed_checks":[key for key,value in row.get("checks", {}).items() if not value],
-                                  "error":row.get("error"), "usage":row.get("reply", {}).get("usage")},ensure_ascii=False),flush=True)
-                consecutive_failures = 0 if row["passed"] else consecutive_failures+1
-                if consecutive_failures >= 2:
+                row = {"dialogue":dialogue["id"], "turn":turn_index+1, "case":case}
+                await smoke.attempt(row, {"text":case["text"], "user":user, "session":session},
+                                    lambda reply, trace: checks(case, reply, trace))
+                session = row.get("reply", {}).get("session", session)
+                if not smoke.record(row, {"dialogue":row["dialogue"], "turn":row["turn"]}):
                     return report
     return report
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--url", default="http://127.0.0.1:18001")
-    parser.add_argument("--output", required=True)
-    args = parser.parse_args()
+    args = arguments().parse_args()
     asyncio.run(run(args.url, args.output))

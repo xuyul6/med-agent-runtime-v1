@@ -1,11 +1,7 @@
 """Explicit online routing smoke checks with synthetic requests; no Judge."""
-import argparse
 import asyncio
-from datetime import datetime, timezone
-import json
-from pathlib import Path
 import uuid
-import httpx
+from .common import OnlineSmoke, arguments, new_report
 
 
 CASES = [
@@ -34,45 +30,16 @@ def checks(case, reply, trace):
 
 
 async def run(url: str, output: str):
-    path = Path(output)
-    if path.exists(): raise FileExistsError("preserve_existing_routing_report")
-    report = {"dataset":"routing-smoke-v1", "synthetic":True, "judge":False,
-              "started_at":datetime.now(timezone.utc).isoformat(), "total":len(CASES), "cases":[]}
-    async with httpx.AsyncClient(timeout=240) as client:
-        health = await client.get(url.rstrip("/")+"/health")
-        health.raise_for_status()
-        report["environment"] = health.json()
-        if report["environment"].get("preview") or report["environment"].get("status") != "ok":
-            raise ValueError("healthy_online_runtime_required")
-        failures = 0
+    report = new_report("routing-smoke-v1", total=len(CASES))
+    async with OnlineSmoke(url, output, report) as smoke:
         for case in CASES:
-            row = {"case":case, "passed":False}
-            try:
-                response = await client.post(url.rstrip("/")+"/chat",json={"text":case["text"], "user":"routing-smoke-"+str(uuid.uuid4())})
-                response.raise_for_status()
-                row["reply"] = response.json()
-                traced = await client.get(url.rstrip("/")+"/traces/"+row["reply"]["request_id"])
-                traced.raise_for_status()
-                row["trace"] = traced.json()
-                row["checks"] = checks(case,row["reply"],row["trace"])
-                row["passed"] = all(row["checks"].values())
-            except Exception as exc:
-                row["error"] = type(exc).__name__
-            report["cases"].append(row)
-            report.update(executed=len(report["cases"]),passed=sum(item["passed"] for item in report["cases"]))
-            path.parent.mkdir(parents=True,exist_ok=True)
-            path.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
-            print(json.dumps({"id":case["id"], "passed":row["passed"],
-                "failed_checks":[key for key,value in row.get("checks",{}).items() if not value],
-                "error":row.get("error"), "usage":row.get("reply",{}).get("usage")},ensure_ascii=False),flush=True)
-            failures = 0 if row["passed"] else failures+1
-            if failures >= 2: break
+            row = await smoke.attempt({"case":case}, {"text":case["text"], "user":"routing-smoke-"+str(uuid.uuid4())},
+                                      lambda reply, trace: checks(case, reply, trace))
+            if not smoke.record(row, {"id":case["id"]}):
+                break
     return report
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--url",default="http://127.0.0.1:18001")
-    parser.add_argument("--output",required=True)
-    args = parser.parse_args()
-    asyncio.run(run(args.url,args.output))
+    args = arguments().parse_args()
+    asyncio.run(run(args.url, args.output))
