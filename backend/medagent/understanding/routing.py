@@ -95,9 +95,9 @@ class RoutingPlanner:
                 pattern = LEXICON[task.intent]
                 negative_only = re.search(pattern, text) and not positive_request(text, pattern)
                 requested = positive_request(text, TASK_EVIDENCE[task.intent])
-                # Next to a medical primary task, a keyword-only task needs request wording: mentioning a drug
-                # or report is context. When the primary is general, keyword evidence may still replace it.
-                strong = task.confidence >= .3 and (task.source != "keywords" or understanding.primary == Intent.GENERAL)
+                # Next to a medical primary task, every support task needs request wording, whether keywords or the
+                # model named it: "我在吃二甲双胍" is context. When the primary is general, the task may still replace it.
+                strong = task.confidence >= .3 and understanding.primary == Intent.GENERAL
                 if not negative_only and (strong or task.confidence >= .12 and requested):
                     domains.add(task.intent)
             domains.update(kind for kind, pattern in TASK_EVIDENCE.items() if positive_request(text, pattern)
