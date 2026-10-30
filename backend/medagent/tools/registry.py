@@ -237,9 +237,12 @@ class ToolExecutor:
         self.monitor = monitor
 
     def circuit_snapshot(self, name: str) -> dict:
-        until = self.open_until.get(name, 0)
+        """One tool's state, taking the worst of its per-domain circuits."""
+        keys = {key for state in (self.failures, self.open_until, self.probes) for key in state
+                if key == name or key.startswith(name+":")} or {name}
+        until = max(self.open_until.get(key, 0) for key in keys)
         return {"circuit_state":"open" if until > self.clock() else "half_open" if until else "closed",
-                "consecutive_fails":self.failures.get(name, 0), "probe_inflight":name in self.probes,
+                "consecutive_fails":max(self.failures.get(key, 0) for key in keys), "probe_inflight":any(key in self.probes for key in keys),
                 "cooldown_remaining_seconds":max(0, until-self.clock())}
 
     def _prepare(self, name: str, arguments: dict, context: ToolContext, budget: ToolBudget):
@@ -303,16 +306,20 @@ class ToolExecutor:
     async def call(self, name: str, arguments: dict, context: ToolContext, budget: ToolBudget) -> BaseModel:
         started, probe, generation, spec = self.clock(), None, None, None
         invoked, filtered_before = False, context.scope_filtered_count
+        circuit = name
         try:
             spec, request = self._prepare(name, arguments, context, budget)
+            # A domain's failures stay in that domain: a role retry counts twice, which must not block other roles' lookups.
+            if isinstance(request, LookupArguments):
+                circuit = f"{name}:{request.domain.value}"
             if spec.dependency:
-                until = self.open_until.get(name, 0)
-                if until > self.clock() or (until and name in self.probes):
+                until = self.open_until.get(circuit, 0)
+                if until > self.clock() or (until and circuit in self.probes):
                     raise CircuitUnavailable(name)
                 if until:
                     probe = object()
-                    self.probes[name] = probe
-                generation = self.generations.get(name, 0)
+                    self.probes[circuit] = probe
+                generation = self.generations.get(circuit, 0)
             async def invoke():
                 nonlocal invoked
                 invoked = True
@@ -320,27 +327,27 @@ class ToolExecutor:
                 return await value if inspect.isawaitable(value) else value
             value = await asyncio.wait_for(invoke(), timeout=min(self.timeout, spec.timeout))
             result = self._validate(spec, value, context)
-            if spec.dependency and generation == self.generations.get(name, 0):
-                self.failures[name] = 0
-                self.open_until.pop(name, None)
+            if spec.dependency and generation == self.generations.get(circuit, 0):
+                self.failures[circuit] = 0
+                self.open_until.pop(circuit, None)
             empty = isinstance(result, LookupResult) and not result.documents
             self._record(name, "empty_result" if empty else "ok", started, context, budget,
                          invoked=invoked, filtered=context.scope_filtered_count-filtered_before)
             return result
         except (Exception, asyncio.CancelledError) as exc:
-            if spec is not None and spec.dependency and generation == self.generations.get(name, 0) and not isinstance(
+            if spec is not None and spec.dependency and generation == self.generations.get(circuit, 0) and not isinstance(
                 exc, (PermissionError, ToolInputError, ToolBudgetExceeded, CircuitUnavailable, asyncio.CancelledError)
             ):
-                self.failures[name] = self.failures.get(name, 0)+1
-                if self.failures[name] >= 2:
-                    self.open_until[name] = self.clock()+self.cooldown
-                    self.generations[name] = self.generations.get(name, 0)+1
+                self.failures[circuit] = self.failures.get(circuit, 0)+1
+                if self.failures[circuit] >= 2:
+                    self.open_until[circuit] = self.clock()+self.cooldown
+                    self.generations[circuit] = self.generations.get(circuit, 0)+1
             self._record(name, self._error_status(exc), started, context, budget, exc,
                          invoked=invoked, filtered=context.scope_filtered_count-filtered_before)
             raise
         finally:
-            if probe is not None and self.probes.get(name) is probe:
-                self.probes.pop(name, None)
+            if probe is not None and self.probes.get(circuit) is probe:
+                self.probes.pop(circuit, None)
 
     def call_local(self, name: str, arguments: dict, context: ToolContext, budget: ToolBudget) -> BaseModel:
         """Run only bounded local computation; deterministic risk cannot await I/O."""
