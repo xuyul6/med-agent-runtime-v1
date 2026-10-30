@@ -179,7 +179,7 @@ def recommendations_for(rows):
                 elif any(item.startswith("judge:") for item in failed): action = "核对 Judge 调用与结构化解析；先恢复评分覆盖，不能用模拟分补齐缺测。"
                 elif validations: action = "按本轮脱敏输出错误码和字段定位解析、身份或载荷问题；核对一次纠正是否成功，保持证据和医学边界后定向复测原题。"
                 elif any(item.startswith("judge_below_threshold:") for item in failed): action = "结合本轮引用和预期行为检查最低评分维度，定向复测原题。"
-                elif any("intent" in item or "classification" in item for item in failed): action = "核对本轮三路信号、风险门控和期望标签，检查历史是否压过了新任务。"
+                elif any("intent" in item or "classification" in item for item in failed): action = "核对本轮三路信号、急症筛选控和期望标签，检查历史是否压过了新任务。"
                 elif any(item.startswith("entity") for item in failed): action = "核对用户原话出处、指代、更正和咨询对象作用域，不从摘要补事实。"
                 else: action = "按本案 Trace 核对字段、来源、记忆与依赖故障，保留原题定向回归。"
                 suggestions.append({"case_id":row["id"],"turn":turn.get("turn",1),"trace_id":trace.get("request_id"),

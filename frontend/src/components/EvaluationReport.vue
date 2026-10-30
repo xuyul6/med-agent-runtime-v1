@@ -13,7 +13,7 @@ defineProps({ report: { type: Object, required: true } })
   <p v-if="Array.isArray(report.cleanup_errors) && report.cleanup_errors.length" class="degraded">清理错误：{{ report.cleanup_errors.join('、') }}</p>
   <p v-if="Array.isArray(report.not_run) && report.not_run.length" class="hint">未运行案例：{{ report.not_run.join('、') }}</p>
   <p class="hint">指标版本：{{ report.metadata?.metric_version || '未提供' }} · 数据集：{{ report.dataset || '未提供' }} · 模式：{{ report.mode || '未提供' }}</p>
-  <p v-if="report.classification" class="hint">分类器 Accuracy {{ scoreLabel(report.classification.classifier?.accuracy) }} · Macro-F1 {{ scoreLabel(report.classification.classifier?.macro_f1) }} · 覆盖率 {{ scoreLabel(report.classification.classifier?.coverage) }}；风险门控后 Accuracy {{ scoreLabel(report.classification.risk_gated?.accuracy) }} · Macro-F1 {{ scoreLabel(report.classification.risk_gated?.macro_f1) }}。</p>
+  <p v-if="report.classification" class="hint">分类器 Accuracy {{ scoreLabel(report.classification.classifier?.accuracy) }} · Macro-F1 {{ scoreLabel(report.classification.classifier?.macro_f1) }} · 覆盖率 {{ scoreLabel(report.classification.classifier?.coverage) }}；急症筛选控后 Accuracy {{ scoreLabel(report.classification.risk_gated?.accuracy) }} · Macro-F1 {{ scoreLabel(report.classification.risk_gated?.macro_f1) }}。</p>
   <p v-else class="hint">分类指标不可用。</p>
   <p class="hint">{{ comparisonLabel(report.comparison) }}</p>
   <p v-if="report.baseline?.saved === true" class="hint">基线已保存：{{ report.baseline.id }}</p>
