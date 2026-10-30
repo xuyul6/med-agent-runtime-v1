@@ -11,6 +11,12 @@ class Settings:
     api_key: str = ""
     model: str = ""
     api_url: str = "https://api.anthropic.com"
+    # Vendors whose Anthropic-format endpoint has no output_config JSON schema get the schema in the system prompt.
+    structured_output: bool = True
+    # Standby role instance at another vendor; an empty key keeps both instances on the primary model.
+    fallback_api_key: str = ""
+    fallback_model: str = "deepseek-flash"
+    fallback_api_url: str = "https://api.deepseek.com/anthropic"
     redis_url: str = "redis://localhost:6379/0"
     chroma_host: str = "localhost"
     chroma_port: int = 8001
@@ -55,6 +61,9 @@ class Settings:
             api_key=env.get("ANTHROPIC_API_KEY", ""),
             model=env.get("ANTHROPIC_MODEL", ""),
             api_url=env.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com").rstrip("/"),
+            fallback_api_key=env.get("DEEPSEEK_API_KEY", ""),
+            fallback_model=env.get("DEEPSEEK_MODEL", "deepseek-flash"),
+            fallback_api_url=env.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic").rstrip("/"),
             redis_url=env.get("REDIS_URL", "redis://localhost:6379/0"),
             chroma_host=env.get("CHROMA_HOST", "localhost"),
             chroma_port=int(env.get("CHROMA_PORT", "8001")),

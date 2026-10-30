@@ -15,7 +15,7 @@ from .evaluation.isolation import ReferenceSnapshotError
 from .evaluation.contracts import EvaluationRequest
 from .evaluation.metrics import BaselineError, BaselineStore
 from .memory import SessionMemory
-from .core.provider import ClaudeGateway
+from .core.provider import ClaudeGateway, fallback_gateway
 from .knowledge.retrieval import ReferenceIndex, Vectorizer, catalog_updates
 from .runtime import MedicalRuntime
 from .agents.skills import SkillValidationError
@@ -36,6 +36,7 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
                 await runtime.monitor.stop()
             return
         gateway = None if settings.preview else ClaudeGateway(settings)
+        standby = None if settings.preview else fallback_gateway(settings)
         vectors = Vectorizer("hash" if settings.preview else settings.embeddings)
         redis, client, collection, episodes = None, None, None, None
         services = {"redis":"preview","chroma":"preview"}
@@ -71,7 +72,7 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
             await memory.purge_expired_episodes()
         except Exception:
             pass  # retried after the next summary write
-        app.state.runtime = MedicalRuntime(settings, gateway, vectors, index, memory)
+        app.state.runtime = MedicalRuntime(settings, gateway, vectors, index, memory, fallback_model=standby)
         app.state.services = services
         app.state.runtime.monitor.start()
         try:
@@ -80,6 +81,8 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
             await app.state.runtime.monitor.stop()
             if gateway:
                 await gateway.close()
+            if standby:
+                await standby.close()
             if redis:
                 await redis.aclose()
 
@@ -91,6 +94,7 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
     async def health():
         return {"status":"degraded" if "unavailable" in app.state.services.values() else "ok",
                 "implementation":"independent-v1","preview":settings.preview,"model":settings.model,
+                "standby_model":settings.fallback_model if settings.fallback_api_key and not settings.preview else None,
                 "embedding":app.state.runtime.vectors.identity,"services":app.state.services}
 
     @app.post("/chat", response_model=Reply)

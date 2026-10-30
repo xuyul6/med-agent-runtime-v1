@@ -132,7 +132,8 @@ class RoutingPlanner:
                     continue
                 state = monitor.routing_state(agent.instance)
                 choice = InstanceChoice(instance=agent.instance, health=bounded_score(state["health"]),
-                    samples=len(monitor._rows(agent.instance)), monitor_penalty=state["monitor_penalty"], monitor_probe=state["probe_available"])
+                    samples=len(monitor._rows(agent.instance)), monitor_penalty=state["monitor_penalty"], monitor_probe=state["probe_available"],
+                    standby=getattr(agent, "standby", False))
                 if state["excluded"]:
                     monitor_blocked.append(agent.instance)
                     if state["probe_available"]: probes.append(choice)
@@ -140,7 +141,8 @@ class RoutingPlanner:
                     choices.append(choice)
             # At most one recovery probe per role; it reuses a normal request and has a shorter timeout.
             choices += sorted(probes, key=lambda choice:choice.instance)[:1]
-            choices.sort(key=lambda choice:(not choice.monitor_probe, -choice.health, choice.instance))
+            # An unused instance has full health, so without this the standby would take normal traffic.
+            choices.sort(key=lambda choice:(choice.standby, not choice.monitor_probe, -choice.health, choice.instance))
             if not choices:
                 reasons.append("no_qualified_instance")
                 if monitor_blocked: reasons.append("monitor_penalty_threshold")

@@ -16,7 +16,7 @@ class Intent(str, Enum):
 class Risk(BaseModel):
     level: Literal["ROUTINE", "CAUTION", "CRITICAL"] = "ROUTINE"
     reasons: list[str] = Field(default_factory=list)
-    rule_version: str = "screening-2"
+    rule_version: str = "screening-3"
 
 
 class Question(BaseModel):
@@ -74,6 +74,7 @@ class Understanding(BaseModel):
     retrieval_query: str = ""
     context_used: bool = False
     fallbacks: list[str] = Field(default_factory=list)
+    urgent_quote: str = Field(default="", exclude=True)
 
 
 class SourceProvenance(BaseModel):
@@ -173,6 +174,7 @@ class InstanceChoice(RoutingRecord):
     samples: int = Field(ge=0)
     monitor_penalty: float = Field(default=0, ge=0, le=1)
     monitor_probe: bool = False
+    standby: bool = False
 
 
 class RoutingCandidate(RoutingRecord):

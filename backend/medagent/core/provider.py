@@ -1,3 +1,4 @@
+from dataclasses import replace
 import json
 import time
 import httpx
@@ -44,6 +45,7 @@ def json_schema(stage: str) -> dict | None:
     properties = {
         "understanding": {
             "topic_relation":{"type":"string", "enum":["new", "followup", "uncertain"]},
+            "urgent_quote":string,
             "scores":{"type":"object","properties":{key:{"type":"number"} for key in ["symptoms","medicine","visit","report","general"]},
                       "required":["symptoms","medicine","visit","report","general"],"additionalProperties":False},
             "tasks":{"type":"array", "items":{"type":"object", "properties":{"intent":{"type":"string", "enum":["symptoms","medicine","visit","report","general"]}, "goal":string},
@@ -90,8 +92,10 @@ class ClaudeGateway:
         payload = {"model": self.settings.model, "max_tokens": budget,
                    "system": system, "messages": messages, "thinking": {"type": "disabled"}}
         schema = json_schema(stage)
-        if schema:
+        if schema and self.settings.structured_output:
             payload["output_config"] = {"format":{"type":"json_schema","schema":schema}}
+        elif schema:
+            payload["system"] = system+"\n最终回答须是符合此 JSON Schema 的单个 JSON 对象，不使用 Markdown："+json.dumps(schema, ensure_ascii=False)
         if tools:
             payload["tools"] = tools
         try:
@@ -127,3 +131,11 @@ class ClaudeGateway:
 
     async def close(self):
         await self.client.aclose()
+
+
+def fallback_gateway(settings, client=None) -> ClaudeGateway | None:
+    """Gateway for the standby role instance; None keeps both instances on the primary model."""
+    if not settings.fallback_api_key or not settings.fallback_model:
+        return None
+    return ClaudeGateway(replace(settings, api_key=settings.fallback_api_key, model=settings.fallback_model,
+                                 api_url=settings.fallback_api_url, structured_output=False), client)

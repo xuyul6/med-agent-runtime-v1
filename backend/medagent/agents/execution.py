@@ -73,11 +73,11 @@ def finish_result(profile: AgentProfile, instance: str, workflow: WorkflowRun, d
 
 
 class RoleAgent:
-    def __init__(self, role, instance, model, index, skills, tools, registry: ProfileRegistry = DEFAULT_REGISTRY):
+    def __init__(self, role, instance, model, index, skills, tools, registry: ProfileRegistry = DEFAULT_REGISTRY, standby: bool = False):
         self.profile = registry[role]
         if self.profile.deterministic:
             raise ValueError("deterministic_role_requires_risk_executor")
-        self.role, self.instance = role, instance
+        self.role, self.instance, self.standby = role, instance, standby
         self.model, self.index, self.skills, self.tools = model, index, skills, tools
 
     async def run(self, text: str, intent: Intent, memory: dict, context_mode: str, *,

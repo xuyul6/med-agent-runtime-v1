@@ -52,7 +52,7 @@ def role_input(assignment, understanding, question, context, clock):
 
 
 class MedicalRuntime:
-    def __init__(self, settings, model, vectors, index, memory, profiles=None, skills=None):
+    def __init__(self, settings, model, vectors, index, memory, profiles=None, skills=None, fallback_model=None):
         self.settings, self.model, self.index, self.memory = settings, model, index, memory
         self.monitor, self.risk = Monitor(MonitorPolicy.from_settings(settings)), RiskGate()
         self.subjects = SubjectTracker()
@@ -69,7 +69,10 @@ class MedicalRuntime:
             raise ValueError("invalid_collaboration_budget")
         self.planner = RoutingPlanner(self.registry, self.tools.registry, settings.supporting_agent_limit)
         self.risk_agent = RiskHandoffAgent(self.registry, self.tools)
-        self.agents = {role:[RoleAgent(role, f"{role}.{slot}", model, index, self.skills, self.tools, self.registry) for slot in [1,2]]
+        # Slot 2 is a standby at another vendor when one is configured: it runs only after slot 1 failed or was excluded.
+        self.agents = {role:[RoleAgent(role, f"{role}.{slot}", fallback_model if slot == 2 and fallback_model else model, index,
+                                       self.skills, self.tools, self.registry, standby=slot == 2 and fallback_model is not None)
+                             for slot in [1,2]]
                        for role, profile in self.registry.profiles.items() if not profile.deterministic}
         for role,agents in self.agents.items():
             for agent in agents: self.monitor.register_agent(agent.instance, role)
@@ -177,7 +180,7 @@ class MedicalRuntime:
                 understanding, decision, answer, refs, agent_results = self._urgent(question, risk, skill_snapshot, tool_budget, log)
                 degraded, storage = False, "skipped"
             else:
-                understanding, decision, answer, refs, agent_results, degraded, storage = await self._consult(
+                understanding, decision, answer, refs, agent_results, degraded, storage, risk = await self._consult(
                     question, resolution, scope, risk, skill_snapshot, tool_budget, log)
             self.monitor.observe_execution(decision, log.request_id)
             event("routing_execution", primary=decision.primary_agent, status=decision.collaboration_status, monitor_fallback=decision.monitor_fallback,
@@ -219,6 +222,10 @@ class MedicalRuntime:
             degraded = True
             event("storage_fallback", service="reference_index")
         understanding, need = await self._understand(question, resolution, state, storage, scope, log)
+        if understanding.urgent_quote:
+            risk = self.risk.escalate(scope)
+            event("risk", level=risk.level, reasons=risk.reasons, version=risk.rule_version)
+            return (*self._urgent(question, risk, skill_snapshot, tool_budget, log), False, "skipped", risk)
         state = {**state, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in understanding.entities.items()}}
         state["consultation_need"] = need[0]
         if self.single:
@@ -248,7 +255,7 @@ class MedicalRuntime:
         except Exception as exc:
             degraded, storage = True, "degraded"
             event("memory_error", stage="write", error=type(exc).__name__)
-        return understanding, decision, answer, refs, agent_results, degraded, storage
+        return understanding, decision, answer, refs, agent_results, degraded, storage, risk
 
     async def _single_agent(self, question, understanding, state, risk, skill_snapshot, tool_budget, log):
         """Comparison baseline: one agent answers the whole turn; no routing, role contracts or merge."""

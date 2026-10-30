@@ -1,22 +1,32 @@
-"""Deterministic emergency screening; an engineering filter that cannot recognise every emergency."""
+"""Deterministic emergency screening; an engineering filter that cannot recognise every emergency.
+
+The rules run first and work without a model. A model signal may raise a turn to critical afterwards but never lowers one.
+"""
 import re
 import time
 from ..core.contracts import Risk
 
-RULE_VERSION = "screening-2"
+RULE_VERSION = "screening-3"
 # An unresolved urgent sign keeps short follow-ups ("还是这样") urgent for this long.
 HINT_SECONDS = 1800
 PAIN = "(?:痛|疼)"
+# Words that sit inside a sign ("呼吸很困难"); the matched sign is still subject to the denial checks.
+DEGREE = r"(?:很|好|太|挺|特别|非常|十分|极其|越来越|有点|有些|都|也|已经|更|这么|那么){0,2}"
+SUDDEN = r"(?:突然|突发|忽然|一下子)"
+WEAK = r"(?:动不了|没(?:有)?(?:力|知觉|感觉)|无力|使不上劲|麻|抬不起)"
+# Sides need 边/侧 for 一 and 半 so that "一手" and "半手" stay ordinary words.
+SIDE_LIMB = r"(?:[左右](?:边|侧)?|[一半](?:边|侧))的?(?:手(?!机)|胳膊|手臂|腿|脚)"
+SIDE_BODY = r"(?:[左右一半])(?:边|侧)的?(?:手脚|胳膊和?腿|手和脚|手臂和腿|身子|身体|肢体)"
 
 SIGNS = {
     "breathing": "|".join([
-        r"呼吸困[难男南]", r"喘不[过上]气", r"上不来气", r"(?:无法|不能)呼吸", r"吸不进(?:去)?(?:气)?", r"一口气都吸不",
-        r"憋得(?:慌|喘|说不出)", r"憋[紫青]", r"窒息", r"嘴唇发[紫青]", r"喘得(?:说不出话|很厉害|厉害|不行)", r"坐着都喘",
+        r"呼吸" + DEGREE + r"困[难男南]", r"喘不[过上]气", r"上不来气", r"(?:无法|不能)呼吸", r"吸不进(?:去)?(?:气)?", r"一口气都吸不",
+        r"憋得(?:慌|喘|说不出)", r"憋[紫青]", r"窒息", r"(?:嘴唇|口唇)" + DEGREE + r"发?[紫青]", r"喘得(?:说不出话|很厉害|厉害|不行)", r"坐着都喘",
         r"呼吸(?:很|特别|非常)?急促?(?:很急)?", r"肋骨.{0,4}凹", r"卡住(?:了)?(?:喉咙|嗓子)", r"哮喘发作",
         r"can'?t ?breathe", r"cannot ?breathe", r"shortness ?of ?breath"]),
     "chest": "|".join([
-        r"胸" + PAIN, r"胸[口部](?:剧|闷|绞|压榨)?" + PAIN, r"胸口(?:剧痛|压榨|像压|.{0,4}压了)", r"胸[口部]?闷" + PAIN,
-        r"心口" + PAIN, r"心脏.{0,3}(?:绞痛|剧痛|" + PAIN + ")", r"chest ?pain"]),
+        r"胸[口部]?" + DEGREE + r"(?:剧|闷|绞|压榨)?" + PAIN, r"胸口(?:剧痛|压榨|像压|.{0,4}压了)", r"胸[口部]?闷" + PAIN,
+        r"心口" + DEGREE + PAIN, r"心脏.{0,3}(?:绞痛|剧痛|" + PAIN + ")", r"chest ?pain"]),
     "consciousness": "|".join([
         r"意识(?:不清|模糊|丧失)", r"神志不清", r"叫不(?:太)?醒", r"(?:拍|喊|叫|摇).{0,4}(?:不醒|没(?:有)?反应)", r"昏迷",
         r"昏(?:过去|倒)", r"晕(?:倒|过去)", r"失去意识", r"不省人事", r"倒地", r"说胡话", r"认不出.{0,4}人", r"反应(?:很|特别)?迟钝"]),
@@ -25,9 +35,10 @@ SIGNS = {
         r"一直(?:在)?(?:流|冒)血", r"血.{0,2}往外冒", r"呕血", r"吐(?:了)?(?:好多|很多|大量|一口)?血", r"咳血不止", r"大口咳血",
         r"黑便", r"柏油(?:样)?(?:的)?便"]),
     "neurological": "|".join([
-        r"突(?:然|发).{0,6}(?:口齿不清|说话不清|一侧无力|半边|嘴歪|重影|走路不稳|看不见|剧烈头" + PAIN + ")",
-        r"嘴(?:也|都)?歪了", r"半边身子.{0,4}(?:动不了|没力|无力|麻)", r"一侧(?:肢体)?无力", r"(?:一边|半边)脸.{0,2}麻",
-        r"手.{0,2}抬不起来", r"剧烈的?头" + PAIN, r"头" + PAIN + r".{0,4}(?:炸开|欲裂)"]),
+        SUDDEN + r".{0,6}(?:口齿不清|说话.{0,2}不清|说不(?:清|出)|含糊不清|一侧无力|半边|嘴歪|重影|走路不稳|站不稳|看不见|剧烈头" + PAIN + ")",
+        r"嘴(?:巴|角)?" + DEGREE + r"歪了", r"口角歪斜", r"眼歪嘴斜", SIDE_BODY + r".{0,6}" + WEAK, r"一侧(?:肢体)?无力", r"(?:一边|半边)脸.{0,2}麻",
+        SIDE_LIMB + r".{0,3}" + SUDDEN + r".{0,3}" + WEAK, SUDDEN + r".{0,3}" + SIDE_LIMB + r".{0,6}" + WEAK,
+        r"手.{0,2}抬不起来", r"剧烈的?头" + PAIN, r"头" + PAIN + r".{0,6}(?:炸开|欲裂|裂开)"]),
     "anaphylaxis": "|".join([
         r"(?:喉咙|嗓子)(?:发紧|肿)", r"(?:舌头|嘴唇).{0,2}肿", r"过敏性休克",
         r"(?:吃了|被).{0,8}(?:后|了).{0,6}脸.{0,2}肿", r"全身.{0,4}(?:疹|风团).{0,8}(?:喘|紧|呼吸)"]),
@@ -41,7 +52,7 @@ SIGNS = {
     "trauma": "|".join([
         r"头.{0,4}(?:流血|出血)", r"车祸.{0,8}(?:流血|出血|昏|动不了|骨折)", r"(?:摔|跌).{0,10}(?:变形|动不了|骨折)",
         r"(?:腿|胳膊|脚|手臂|手腕|骨头)(?:都|也|好像)?变形", r"大面积(?:烫伤|烧伤)", r"(?:烫|烧)伤.{0,6}(?:脱落|大面积)", r"皮.{0,2}(?:都)?脱落"]),
-    "abdominal": "|".join([r"肚子.{0,3}(?:剧痛|" + PAIN + r"得(?:打滚|受不了))", r"腹部剧痛", r"腹痛.{0,4}剧烈", r"硬得像木板", r"板状腹"]),
+    "abdominal": "|".join([r"肚子.{0,3}(?:剧痛|" + PAIN + r"得.{0,2}(?:打滚|受不了))", r"腹部剧痛", r"腹痛.{0,4}剧烈", r"硬得像木板", r"板状腹"]),
     "heat": r"中暑.{0,10}(?:神志|昏|不出汗|抽)|热射病",
     "generic_distress": r"救命|救救我|(?:快|要)不行了|求救",
 }
@@ -68,6 +79,13 @@ CAUTION = (r"怀孕|孕妇|备孕|哺乳|婴儿|新生儿|宝宝|幼儿|儿童|�
 
 def normalize(text: str) -> str:
     return re.sub(r"\s+", "", text).lower().replace("’", "'")
+
+
+def grounded_urgent_quote(quote, text: str) -> str:
+    """A model urgent signal counts only as a quote of the current turn; injected text can at most cause a false alarm."""
+    if not isinstance(quote, str) or len(normalize(quote)) < 2 or normalize(quote) not in normalize(text):
+        return ""
+    return quote
 
 
 def context_excludes(text: str) -> bool:
@@ -106,6 +124,11 @@ class RiskGate:
                         continue
                     found.append(code)
         return sorted(set(found))
+
+    def escalate(self, scope: str) -> Risk:
+        """Raise a turn to critical on a grounded model signal; follow-ups stay urgent as after a rule hit."""
+        self.hints[scope] = self.clock() + HINT_SECONDS
+        return Risk(level="CRITICAL", reasons=["model_urgent_signal"], rule_version=RULE_VERSION)
 
     def screen(self, text: str, scope: str) -> Risk:
         now = self.clock()

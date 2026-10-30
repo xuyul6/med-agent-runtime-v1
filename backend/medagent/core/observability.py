@@ -21,8 +21,10 @@ class RunLog:
         calls = [x for x in self.events if x["event"] == "model"]
         known = bool(calls) and all(type(x.get("input_tokens")) is int and x["input_tokens"] >= 0
                                    and type(x.get("output_tokens")) is int and x["output_tokens"] >= 0 for x in calls)
+        # Cache hits are billed separately and left out of input_tokens; some vendors cache every request automatically.
         return {"calls": len(calls), "measurement": "provider" if known else "unavailable",
-                "input_tokens": sum(x["input_tokens"] for x in calls) if known else None,
+                "input_tokens": sum(x["input_tokens"]+(x.get("cache_read_input_tokens") or 0)
+                                    +(x.get("cache_creation_input_tokens") or 0) for x in calls) if known else None,
                 "output_tokens": sum(x["output_tokens"] for x in calls) if known else None}
 
 

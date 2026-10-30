@@ -1,13 +1,21 @@
-"""Offline red-team measurement of the deterministic risk gate; no model, storage or network."""
+"""Red-team measurement of urgent screening. Offline by default: rules only, no model, storage or network.
+
+With --online the understanding call also runs on turns the rules did not flag; it can only raise a level.
+"""
 import argparse
+import asyncio
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
-from ..core.config import ROOT
+from ..core.config import ROOT, Settings
 from ..core.contracts import Risk
+from ..core.provider import ClaudeGateway
+from ..understanding.classification import IntentRouter
 from ..understanding.risk import RULE_VERSION, RiskGate
+from .budget import BudgetedModel, ModelBudget, aggregate_usage
+from .contracts import EvalLimits
 
 DATASET = ROOT/"resources"/"risk-redteam-v1.json"
 LEVELS = ("ROUTINE", "CAUTION", "CRITICAL")
@@ -85,15 +93,52 @@ def run(dataset: Path = DATASET) -> dict:
             "summary":summarize(rows, set(body["covered_categories"])), "cases":rows}
 
 
+async def run_with_model(dataset: Path, model, limits: EvalLimits, model_name: str | None = None) -> dict:
+    """Failed model calls stay in the report as unchecked turns; they are not counted as a pass for the model."""
+    report = run(dataset)
+    covered = set(json.loads(dataset.read_bytes())["covered_categories"])
+    budget = ModelBudget(limits)
+    router = IntentRouter(BudgetedModel(model, budget))
+    for row in report["cases"]:
+        row.update(rule_actual=row["actual"], model_escalated=False, model_checked=False)
+        if row["actual"] == "CRITICAL":
+            continue
+        understanding = await router.understand(row["text"])
+        row["model_checked"] = "language_unavailable" not in understanding.fallbacks
+        if understanding.urgent_quote:
+            row.update(actual="CRITICAL", passed=row["expected"] == "CRITICAL", model_escalated=True, reasons=["model_urgent_signal"])
+    usage = aggregate_usage(budget.entries)
+    return {**report, "kind":"online_risk_redteam", "model":model_name, "paid_model_calls":usage["attempted_calls"], "usage":usage,
+            "budget_stop":budget.exhausted, "failed_model_calls":sum(entry["error"] is not None for entry in budget.entries),
+            "unchecked_turns":sum(row["rule_actual"] != "CRITICAL" and not row["model_checked"] for row in report["cases"]),
+            "rule_summary":report["summary"], "summary":summarize(report["cases"], covered)}
+
+
+async def run_online(dataset: Path, max_calls: int) -> dict:
+    settings = Settings.load()
+    if settings.preview or not settings.api_key or not settings.model:
+        raise RuntimeError("online_redteam_needs_configured_model")
+    gateway = ClaudeGateway(settings)
+    try:
+        return await run_with_model(dataset, gateway, EvalLimits(max_model_calls=max_calls, max_output_tokens=max_calls*1800,
+                                                                 per_call_output_tokens=1800), settings.model)
+    finally:
+        await gateway.close()
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Offline red-team check of deterministic risk screening; no model calls")
+    parser = argparse.ArgumentParser(description="Red-team check of urgent screening; rules only unless --online")
     parser.add_argument("--dataset", default=str(DATASET))
     parser.add_argument("--output", required=True)
+    parser.add_argument("--online", action="store_true", help="add the understanding call on turns the rules did not flag (paid)")
+    parser.add_argument("--max-calls", type=int, default=0, help="required with --online: hard cap on model calls")
     args = parser.parse_args()
+    if args.online and not 1 <= args.max_calls <= 200:
+        parser.error("--online needs --max-calls between 1 and 200")
     target = Path(args.output)
     if target.exists():
         raise FileExistsError("preserve_existing_risk_report:"+str(target))
-    report = run(Path(args.dataset))
+    report = asyncio.run(run_online(Path(args.dataset), args.max_calls)) if args.online else run(Path(args.dataset))
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("x") as handle:
         handle.write(json.dumps(report, ensure_ascii=False, indent=2)+"\n")
