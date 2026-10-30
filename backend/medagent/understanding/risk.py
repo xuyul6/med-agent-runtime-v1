@@ -81,8 +81,8 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", "", text).lower().replace("’", "'")
 
 
-def grounded_urgent_quote(quote, text: str) -> str:
-    """A model urgent signal counts only as a quote of the current turn; injected text can at most cause a false alarm."""
+def grounded_quote(quote, text: str) -> str:
+    """A model signal counts only as a quote of the current turn; injected text can at most cause a false alarm or an extra role."""
     if not isinstance(quote, str) or len(normalize(quote)) < 2 or normalize(quote) not in normalize(text):
         return ""
     return quote

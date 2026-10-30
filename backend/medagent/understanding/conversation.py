@@ -270,7 +270,7 @@ def merge_fields(previous: dict, updates: list[GroundedField], subject: str) -> 
 def positive_request(text: str, pattern: str) -> bool:
     for clause in clauses(text):
         for match in re.finditer(pattern, clause):
-            if not re.search(r"(?:不需要|不用|不要|无需|不查|不问|不必).{0,4}$", clause[max(0,match.start()-12):match.start()]):
+            if not re.search(r"(?:不需要|不用|不要|无需|不查|不问|不必).{0,8}$", clause[max(0,match.start()-12):match.start()]):
                 return True
     return False
 

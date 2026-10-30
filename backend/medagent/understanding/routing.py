@@ -6,7 +6,7 @@ from .medications import NAMES
 from ..core.contracts import (AgentAssignment, InstanceChoice, Intent, RoutingCandidate, RoutingDecision,
                         RoutingFallback, Understanding)
 from .conversation import VISIT_EVENT, VISIT_PREPARATION_REQUEST, clauses, institution_request, positive_request
-from .risk import CURRENT, HISTORICAL
+from .risk import CURRENT, HISTORICAL, normalize
 
 
 ROLE_FIELDS = {
@@ -53,6 +53,19 @@ def cross_clause_visit_preparation(text: str) -> bool:
     return False
 
 
+# Asking wording in any domain; a quote without it ("我在吃二甲双胍") is background.
+REQUEST_FORM = r"帮|请|查|说说|讲|告诉|解释|介绍|了解|知道|弄明白|看看|怎么看|整理|记录|记下|列|理一下|怎么|怎样|如何|什么|哪些|吗|[？?]"
+
+
+def quoted_request(text: str, quote: str, primary_quote: str) -> bool:
+    """The model quoted its own request for this task, in words apart from the primary task's."""
+    if not quote or not primary_quote or not positive_request(quote, REQUEST_FORM):
+        return False
+    body, own, other = normalize(text), normalize(quote), normalize(primary_quote)
+    start, other_start = body.find(own), body.find(other)
+    return start+len(own) <= other_start or other_start+len(other) <= start
+
+
 # "只想…" narrows the turn to what that clause asks for.
 SCOPE = r"(?:只|仅)(?:想|需要)|只要(?:问|查|整理|了解|知道)|就想"
 
@@ -94,9 +107,9 @@ class RoutingPlanner:
                     continue
                 pattern = LEXICON[task.intent]
                 negative_only = re.search(pattern, text) and not positive_request(text, pattern)
-                requested = positive_request(text, TASK_EVIDENCE[task.intent])
-                # Next to a medical primary task, every support task needs request wording, whether keywords or the
-                # model named it: "我在吃二甲双胍" is context. When the primary is general, the task may still replace it.
+                requested = positive_request(text, TASK_EVIDENCE[task.intent]) or quoted_request(text, task.quote, understanding.tasks[0].quote)
+                # Next to a medical primary task, every support task needs request wording, from the word list or its
+                # own quote: "我在吃二甲双胍" is context. When the primary is general, the task may still replace it.
                 strong = task.confidence >= .3 and understanding.primary == Intent.GENERAL
                 if not negative_only and (strong or task.confidence >= .12 and requested):
                     domains.add(task.intent)

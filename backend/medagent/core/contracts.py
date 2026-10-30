@@ -55,6 +55,8 @@ class TaskUnderstanding(BaseModel):
     confidence: float = Field(default=0, ge=0, le=1)
     # "keywords": inferred only from keyword hits, which can be a mention ("在吃布洛芬") rather than a request.
     source: Literal["classifier", "model", "keywords"] = "classifier"
+    # The current-turn words the model says ask for this task; empty unless found verbatim in the turn.
+    quote: str = Field(default="", max_length=300)
 
 
 class Understanding(BaseModel):

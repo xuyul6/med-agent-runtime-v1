@@ -48,8 +48,8 @@ def json_schema(stage: str) -> dict | None:
             "urgent_quote":string,
             "scores":{"type":"object","properties":{key:{"type":"number"} for key in ["symptoms","medicine","visit","report","general"]},
                       "required":["symptoms","medicine","visit","report","general"],"additionalProperties":False},
-            "tasks":{"type":"array", "items":{"type":"object", "properties":{"intent":{"type":"string", "enum":["symptoms","medicine","visit","report","general"]}, "goal":string},
-                        "required":["intent", "goal"], "additionalProperties":False}},
+            "tasks":{"type":"array", "items":{"type":"object", "properties":{"intent":{"type":"string", "enum":["symptoms","medicine","visit","report","general"]}, "goal":string, "quote":string},
+                        "required":["intent", "goal", "quote"], "additionalProperties":False}},
             "updates":{"type":"array", "items":{"type":"object", "properties":{
                 "name":{"type":"string", "enum":list(FIELD_NAMES)}, "value":{"anyOf":[string,{"type":"null"}]},
                 "state":{"type":"string", "enum":["provided","topic","negated","unknown"]}, "quote":string, "turn_id":string},

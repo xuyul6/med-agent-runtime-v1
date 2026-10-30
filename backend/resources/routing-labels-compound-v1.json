@@ -1,0 +1,413 @@
+{
+ "version": "routing-labels-compound-1",
+ "created": "2026-10-30",
+ "note": "合成路由标注集，专门测复合请求的角色召回和背景提及的误派。seen 取自已用完的对照预留题集，修路由时看过；new 和 background 在在线运行前写定，同一作者编写，独立性有限。只判角色集合，主角色接受任一预期角色。",
+ "cases": [
+  {
+   "id": "seen-hc-report-visit",
+   "turns": [
+    "想先弄明白报告上的项目和结果怎么对应，也想知道见医生那天该带些什么。"
+   ],
+   "primary": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "seen-hc-medicine-visit",
+   "turns": [
+    "周五要去门诊，帮我列一下得准备的东西，再说说成人布洛芬的公开资料讲了什么。"
+   ],
+   "primary": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "seen-hc-symptom-report",
+   "turns": [
+    "这周总是没力气，想把情况记下来；另外化验单上的计量单位该怎么看？"
+   ],
+   "primary": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "seen-hc-label-report",
+   "turns": [
+    "查一下美国 Advil 200 mg 口服包衣片成人标签写的禁用情形，再解释化验结果为什么要结合病史来看。"
+   ],
+   "primary": [
+    "drug_reference",
+    "report_explainer"
+   ],
+   "roles": [
+    "drug_reference",
+    "report_explainer"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "seen-hc-symptom-visit",
+   "turns": [
+    "胃胀断断续续两周了，帮我理一下要记哪些内容，再告诉我看门诊之前还要备点什么。"
+   ],
+   "primary": [
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "roles": [
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "seen-hc-three-domains",
+   "turns": [
+    "下个月复诊，帮我整理要带的材料，讲讲化验报告里参考范围的含义，再查查成人布洛芬的公开资料。"
+   ],
+   "primary": [
+    "drug_reference",
+    "report_explainer",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "seen-hf-medicine-compound",
+   "turns": [
+    "下周要看医生，帮我列一下要带的东西，再查查成人布洛芬的公开资料。"
+   ],
+   "primary": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "seen-hf-report-compound",
+   "turns": [
+    "想知道看报告时项目和结果怎么对应，也想知道见医生那天该带什么。"
+   ],
+   "primary": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "seen-hf-visit-compound",
+   "turns": [
+    "查一下成人布洛芬的公开资料，再告诉我复诊前要准备些什么。"
+   ],
+   "primary": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "category": "seen_compound"
+  },
+  {
+   "id": "c01",
+   "turns": [
+    "下周三约了内科，能不能列个清单告诉我带啥，顺带讲讲对乙酰氨基酚的公开资料？"
+   ],
+   "primary": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c02",
+   "turns": [
+    "这张体检单上的项目我看不懂，想搞清楚怎么读；另外腰疼好几天了，帮我把情况捋一捋。"
+   ],
+   "primary": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c03",
+   "turns": [
+    "布洛芬的说明讲了哪些不能一起用的情况？还有复诊那天我该准备点啥？"
+   ],
+   "primary": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "visit_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c04",
+   "turns": [
+    "最近老是失眠，想记一下规律，同时想搞懂化验单上箭头是什么意思。"
+   ],
+   "primary": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "symptom_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c05",
+   "turns": [
+    "明天要见大夫，帮我想想要问哪些问题，再看看化验单里的单位是怎么回事。"
+   ],
+   "primary": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c06",
+   "turns": [
+    "我想弄清楚阿司匹林资料里写的注意事项，也想把这周胃不舒服的经过记下来。"
+   ],
+   "primary": [
+    "drug_reference",
+    "symptom_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "symptom_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c07",
+   "turns": [
+    "帮忙理一下这半个月头晕的经过，然后讲讲就诊时怎么跟医生说比较好。"
+   ],
+   "primary": [
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "roles": [
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c08",
+   "turns": [
+    "血常规那几个缩写代表啥？顺便说说去看病要带哪些东西。"
+   ],
+   "primary": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "roles": [
+    "report_explainer",
+    "visit_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c09",
+   "turns": [
+    "查查二甲双胍的公开介绍，再教我怎么看报告里的数值和单位。"
+   ],
+   "primary": [
+    "drug_reference",
+    "report_explainer"
+   ],
+   "roles": [
+    "drug_reference",
+    "report_explainer"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "c10",
+   "turns": [
+    "想了解布洛芬的说明书怎么写的，再帮我记录下这几天的咳嗽，顺便说说复诊带什么。"
+   ],
+   "primary": [
+    "drug_reference",
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "roles": [
+    "drug_reference",
+    "symptom_guide",
+    "visit_guide"
+   ],
+   "category": "new_compound"
+  },
+  {
+   "id": "b01",
+   "turns": [
+    "我一直在吃二甲双胍，帮我把最近的头晕记录下来"
+   ],
+   "primary": [
+    "symptom_guide"
+   ],
+   "roles": [
+    "symptom_guide"
+   ],
+   "category": "background"
+  },
+  {
+   "id": "b02",
+   "turns": [
+    "上周刚做了血常规，这次复诊要带些什么"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "background"
+  },
+  {
+   "id": "b03",
+   "turns": [
+    "医生让我查了肝功能，现在想问布洛芬的公开资料里写了什么"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "background"
+  },
+  {
+   "id": "b04",
+   "turns": [
+    "吃了布洛芬以后，报告上的转氨酶这一项怎么看"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "background"
+  },
+  {
+   "id": "b05",
+   "turns": [
+    "我有高血压，帮我列一下看医生要准备的东西"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "background"
+  },
+  {
+   "id": "b06",
+   "turns": [
+    "化验单我已经看懂了，不用解释，帮我查一下布洛芬的公开资料"
+   ],
+   "primary": [
+    "drug_reference"
+   ],
+   "roles": [
+    "drug_reference"
+   ],
+   "category": "background"
+  },
+  {
+   "id": "b07",
+   "turns": [
+    "不用整理症状，只想知道复诊要带什么"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "background"
+  },
+  {
+   "id": "b08",
+   "turns": [
+    "我最近咳嗽，医生开了止咳药，报告里的参考范围是什么意思"
+   ],
+   "primary": [
+    "report_explainer"
+   ],
+   "roles": [
+    "report_explainer"
+   ],
+   "category": "background"
+  },
+  {
+   "id": "b09",
+   "turns": [
+    "复查之前要整理哪些资料"
+   ],
+   "primary": [
+    "visit_guide"
+   ],
+   "roles": [
+    "visit_guide"
+   ],
+   "category": "background"
+  }
+ ]
+}
