@@ -1,7 +1,7 @@
 """Re-score saved comparison answers with the configured Judge.
 
-Answers are not regenerated, so the Judge is the only thing that changes. The rebuilt input is hashed against the one stored
-with the original score; a turn whose input differs is skipped and counted instead of being compared.
+Answers are not regenerated, so only the Judge changes. The rebuilt input is hashed against the one stored with the original
+score, under the protocol version of that run; a turn whose input differs is skipped and counted instead of being compared.
 """
 import argparse
 import asyncio
@@ -16,10 +16,10 @@ from types import SimpleNamespace
 from ..comparison.contracts import ComparisonRequest, resolve_comparison
 from ..core.config import Settings
 from ..core.contracts import AgentExecution, Answer, Reference
-from ..core.provider import judge_gateway
+from ..core.provider import ClaudeGateway, judge_gateway
 from .budget import BudgetedModel, ModelBudget, aggregate_usage
 from .contracts import EvalLimits, JudgeScore
-from .judging import JUDGE_INSTRUCTIONS, judge_audit, judge_input
+from .judging import JUDGE_INSTRUCTIONS, JUDGE_PROTOCOL_VERSION, judge_audit, judge_input
 
 DIMENSIONS = ("relevance", "accuracy", "completeness", "helpfulness")
 
@@ -52,7 +52,8 @@ def rebuilt_input(item: dict, turns: dict, history: dict) -> dict | None:
                             agent_results=[AgentExecution.model_validate(row) for row in stored["agent_results"]],
                             references=[Reference.model_validate(row) for row in stored["references"]])
     payload = judge_input(turns[item["case_id"]], reply, history.get(item["case_id"], []), trace=arm.get("trace"))
-    return payload if judge_audit(payload)["input_sha256"] == arm["judge_context"]["input_sha256"] else None
+    original = {**payload, "protocol_version":arm["judge_context"]["protocol_version"]}
+    return payload if judge_audit(original)["input_sha256"] == arm["judge_context"]["input_sha256"] else None
 
 
 def rank(values: list[float]) -> list[float]:
@@ -105,22 +106,22 @@ async def score(report: dict, model, limits: EvalLimits, *, per_category: int, r
                 row["errors"].append(type(exc).__name__)
             row["elapsed_ms"].append(round((time.perf_counter()-started)*1000))
         rows.append(row)
-    return {"kind":"judge_rescore", "synthetic":True, "judge_model":model_name, "source_code_hash":report["metadata"]["code_hash"],
+    return {"kind":"judge_rescore", "synthetic":True, "judge_model":model_name, "judge_protocol":JUDGE_PROTOCOL_VERSION, "source_code_hash":report["metadata"]["code_hash"],
             "source_run":report["run_id"], "repeats":repeats, "seed":seed, "skipped_input_mismatch":skipped,
             "note":"same stored answers, different Judge; scores are not comparable with any other Judge's",
             "usage":aggregate_usage(budget.entries), "budget_stop":budget.exhausted, "summary":summarize(rows), "cases":rows,
             "generated_at":datetime.now(timezone.utc).isoformat()}
 
 
-async def run_online(path: Path, max_calls: int, per_category: int, repeats: int, seed: int) -> dict:
+async def run_online(path: Path, max_calls: int, per_category: int, repeats: int, seed: int, judge: str = "configured") -> dict:
     settings = Settings.load()
-    gateway = judge_gateway(settings)
+    gateway = ClaudeGateway(settings) if judge == "primary" else judge_gateway(settings)
     if gateway is None:
         raise RuntimeError("judge_model_not_configured")
     try:
         return await score(json.loads(path.read_text()), gateway,
                            EvalLimits(max_model_calls=max_calls, max_output_tokens=max_calls*950, per_call_output_tokens=950),
-                           per_category=per_category, repeats=repeats, seed=seed, model_name=settings.judge_model)
+                           per_category=per_category, repeats=repeats, seed=seed, model_name=settings.model if judge == "primary" else settings.judge_model)
     finally:
         await gateway.close()
 
@@ -133,13 +134,14 @@ def main():
     parser.add_argument("--per-category", type=int, default=6)
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--seed", type=int, default=20261030)
+    parser.add_argument("--judge", choices=["configured", "primary"], default="configured", help="primary scores with ANTHROPIC_MODEL")
     args = parser.parse_args()
     if not 1 <= args.max_calls <= 100:
         parser.error("--max-calls must be between 1 and 100")
     target = Path(args.output)
     if target.exists():
         raise FileExistsError("preserve_existing_rejudge_report:"+str(target))
-    report = asyncio.run(run_online(Path(args.report), args.max_calls, args.per_category, args.repeats, args.seed))
+    report = asyncio.run(run_online(Path(args.report), args.max_calls, args.per_category, args.repeats, args.seed, args.judge))
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("x") as handle:
         handle.write(json.dumps(report, ensure_ascii=False, indent=2)+"\n")
