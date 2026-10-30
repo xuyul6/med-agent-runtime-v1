@@ -4,6 +4,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
+# Connection details and secrets stay out of the settings hash stored in reports.
+UNHASHED_SETTINGS = {"api_key", "api_url", "fallback_api_key", "fallback_api_url", "redis_url", "chroma_host", "chroma_port", "skill_directory"}
 
 
 @dataclass(frozen=True)
@@ -17,6 +19,8 @@ class Settings:
     fallback_api_key: str = ""
     fallback_model: str = "deepseek-flash"
     fallback_api_url: str = "https://api.deepseek.com/anthropic"
+    # Judge on the same vendor as the standby; empty keeps it on the primary model.
+    judge_model: str = ""
     redis_url: str = "redis://localhost:6379/0"
     chroma_host: str = "localhost"
     chroma_port: int = 8001
@@ -64,6 +68,7 @@ class Settings:
             fallback_api_key=env.get("DEEPSEEK_API_KEY", ""),
             fallback_model=env.get("DEEPSEEK_MODEL", "deepseek-flash"),
             fallback_api_url=env.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/anthropic").rstrip("/"),
+            judge_model=env.get("DEEPSEEK_JUDGE_MODEL", ""),
             redis_url=env.get("REDIS_URL", "redis://localhost:6379/0"),
             chroma_host=env.get("CHROMA_HOST", "localhost"),
             chroma_port=int(env.get("CHROMA_PORT", "8001")),

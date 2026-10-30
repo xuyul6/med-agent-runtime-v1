@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 import json
 import tempfile
-from .budget import BudgetedModel
+from .budget import BudgetedModel, judge_source
 from ..memory import SessionMemory
 from ..core.observability import event
 from ..knowledge.retrieval import ReferenceIndex, Vectorizer
@@ -45,6 +45,7 @@ class EvaluationIsolation:
         self.profiles = list(source.registry.profiles.values())
         self.specs = list(source.tools.registry.specs.values())
         self.base_model = source.model
+        self.judge_model = judge_source(source)
         self.redis,self.client,self.runtime = None,None,None
         self.directory,self.creating = None,None
         self.created, self.cleanup_errors = [],[]

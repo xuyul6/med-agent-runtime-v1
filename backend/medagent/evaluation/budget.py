@@ -15,6 +15,15 @@ def aggregate_usage(entries):
             "output_tokens":sum(item["usage"]["output_tokens"] for item in entries) if known else None}
 
 
+def judge_source(source):
+    """The Judge's own gateway when one is configured, otherwise the runtime model."""
+    return getattr(source, "judge_model", None) or source.model
+
+
+def judge_model_name(source) -> str:
+    return getattr(getattr(judge_source(source), "settings", None), "model", None) or source.settings.model
+
+
 class ModelBudget:
     def __init__(self, limits):
         self.limits, self.calls, self.reserved_output, self.entries = limits,0,0,[]

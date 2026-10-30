@@ -10,7 +10,8 @@ import uuid
 from ..benchmark.isolation import PairedIsolation
 from ..core.provider import ClaudeGateway
 from ..benchmark.metrics import measured_usage, staged_usage
-from ..benchmark.runner import FixedOutputBudget, SafetyStop, experiment_metadata, infrastructure_failed, observe, score_observation
+from ..benchmark.runner import (FixedOutputBudget, SafetyStop, experiment_metadata, infrastructure_failed, observe, observed_judge_models,
+                                score_observation)
 from ..evaluation.metrics import digest
 from .contracts import ARM_SETTINGS, ARMS, PROTOCOL, ComparisonRequest, resolve_comparison
 from .metrics import summarize_comparison
@@ -157,6 +158,7 @@ async def run_comparison(source, request: ComparisonRequest | None = None, *, is
                        for phase in ["preparation", "target", "judge"]}
     report["stages"] = {phase:staged_usage([entry for entry in budget.entries if entry["phase"] == phase]) for phase in report["usage"]}
     report["budget"] = {"attempted_calls":budget.calls, "reserved_max_output_tokens":budget.reserved_output, "stop_reason":budget.exhausted}
+    report["observed_judge_models"] = observed_judge_models(budget.entries)
     report["elapsed_ms"] = round((time.perf_counter()-started)*1000, 1)
     summarize_comparison(report, request)
     return report

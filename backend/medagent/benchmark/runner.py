@@ -10,9 +10,10 @@ import uuid
 from .contracts import BenchmarkRequest, PROTOCOL, resolve_benchmark
 from .isolation import PairedIsolation
 from .metrics import measured_usage, staged_usage, summarize_benchmark
+from ..core.config import UNHASHED_SETTINGS
 from ..core.contracts import Question
 from ..evaluation.runner import CODE_HASH, behavior_checks, hard_checks, judge_turn
-from ..evaluation.budget import BudgetedModel, EvaluationBudgetExceeded, ModelBudget
+from ..evaluation.budget import BudgetedModel, EvaluationBudgetExceeded, ModelBudget, judge_model_name
 from ..evaluation.metrics import digest
 
 
@@ -45,11 +46,11 @@ def schedule(request, cases):
 
 def experiment_metadata(source, isolation, request, version, cases, pairs):
     settings = {field.name:getattr(isolation.settings,field.name) for field in fields(isolation.settings)
-        if field.name not in {"api_key","api_url","redis_url","chroma_host","chroma_port","skill_directory"}}
+        if field.name not in UNHASHED_SETTINGS}
     return {"code_hash":CODE_HASH,"protocol":deepcopy(PROTOCOL),"protocol_hash":digest(PROTOCOL),"dataset":version,
         "cases_hash":digest([case.model_dump(mode="json") for case in cases]),
         "request_hash":digest(request.model_dump(mode="json")),"schedule_hash":digest(pairs),
-        "model":isolation.settings.model,"provider":type(isolation.base_model).__name__ if isolation.base_model else None,
+        "model":isolation.settings.model,"judge_model":judge_model_name(source),"provider":type(isolation.base_model).__name__ if isolation.base_model else None,
         "skills_hash":isolation.skills.snapshot_id,"skills_versions":{role:doc.version for role,doc in isolation.skills.documents.items()},
         "references_hash":digest([ref.model_dump(mode="json") for ref in sorted(isolation.records,key=lambda ref:ref.key)]),
         "references_versions":{ref.key:ref.version for ref in isolation.records},
@@ -87,11 +88,16 @@ async def observe(runtime, turn, user, session, subject, mode, budget, row):
     return reply
 
 
+def observed_judge_models(entries) -> list[str]:
+    return sorted({event["response_model"] for entry in entries if entry["phase"] == "judge" for event in entry["trace"]["events"]
+                   if event["event"] == "model" and isinstance(event.get("response_model"),str) and event["response_model"]})
+
+
 async def score_observation(reply, turn, snapshot, isolation, budget, row):
     begin = len(budget.entries)
     try:
         if reply is None: raise RuntimeError("target_reply_unavailable")
-        judge = BudgetedModel(isolation.base_model,budget,"judge") if isolation.base_model else None
+        judge = BudgetedModel(isolation.judge_model,budget,"judge") if isolation.judge_model else None
         row["judge_context"] = {}
         row["quality"] = await judge_turn(judge,turn,reply,snapshot.history,audit=row["judge_context"],trace=row.get("trace"))
     except asyncio.CancelledError:
@@ -233,9 +239,11 @@ async def run_benchmark(source, request: BenchmarkRequest | None=None, *, isolat
     report["stages"] = {phase:staged_usage([entry for entry in budget.entries if entry["phase"] == phase]) for phase in report["usage"]}
     report["budget"] = {"attempted_calls":budget.calls,"reserved_max_output_tokens":budget.reserved_output,"stop_reason":budget.exhausted}
     report["elapsed_ms"] = round((time.perf_counter()-started)*1000,1)
-    model_events = [event for entry in budget.entries for event in entry["trace"]["events"] if event["event"] == "model"]
+    # The Judge may be another vendor by design; only the models under test have to agree.
+    model_events = [event for entry in budget.entries if entry["phase"] != "judge" for event in entry["trace"]["events"] if event["event"] == "model"]
     observed_models = sorted({event["response_model"] for event in model_events if isinstance(event.get("response_model"),str) and event["response_model"]})
     report["observed_models"] = observed_models
+    report["observed_judge_models"] = observed_judge_models(budget.entries)
     report["comparability"] = {
         "snapshot_verified":all(arm.get("snapshot_hash") == pair.get("snapshot_hash") and bool(pair.get("snapshot_hash"))
             for pair in pairs for arm in pair["arms"].values() if arm["status"] != "not_run"),

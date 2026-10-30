@@ -52,8 +52,9 @@ def role_input(assignment, understanding, question, context, clock):
 
 
 class MedicalRuntime:
-    def __init__(self, settings, model, vectors, index, memory, profiles=None, skills=None, fallback_model=None):
+    def __init__(self, settings, model, vectors, index, memory, profiles=None, skills=None, fallback_model=None, judge_model=None):
         self.settings, self.model, self.index, self.memory = settings, model, index, memory
+        self.judge_model = judge_model
         self.monitor, self.risk = Monitor(MonitorPolicy.from_settings(settings)), RiskGate()
         self.subjects = SubjectTracker()
         self.vectors = vectors

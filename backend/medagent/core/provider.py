@@ -133,9 +133,17 @@ class ClaudeGateway:
         await self.client.aclose()
 
 
-def fallback_gateway(settings, client=None) -> ClaudeGateway | None:
-    """Gateway for the standby role instance; None keeps both instances on the primary model."""
-    if not settings.fallback_api_key or not settings.fallback_model:
+def vendor_gateway(settings, model: str, client=None) -> ClaudeGateway | None:
+    """Gateway for a model at the second vendor; None when that model or its key is not configured."""
+    if not settings.fallback_api_key or not model:
         return None
-    return ClaudeGateway(replace(settings, api_key=settings.fallback_api_key, model=settings.fallback_model,
+    return ClaudeGateway(replace(settings, api_key=settings.fallback_api_key, model=model,
                                  api_url=settings.fallback_api_url, structured_output=False), client)
+
+
+def fallback_gateway(settings, client=None) -> ClaudeGateway | None:
+    return vendor_gateway(settings, settings.fallback_model, client)
+
+
+def judge_gateway(settings, client=None) -> ClaudeGateway | None:
+    return vendor_gateway(settings, settings.judge_model, client)

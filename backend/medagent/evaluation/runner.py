@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 import time
 import uuid
-from ..core.config import ROOT
+from ..core.config import ROOT, UNHASHED_SETTINGS
 from ..core.contracts import Intent, Question, RoutingDecision
-from .budget import BudgetedModel, ModelBudget, aggregate_usage
+from .budget import BudgetedModel, ModelBudget, aggregate_usage, judge_model_name, judge_source
 from .contracts import DialogCase, EvaluationRequest, IntentCase, JudgeScore
 from .isolation import EvaluationIsolation, ReferenceSnapshotError, injected_faults
 from .metrics import (BaselineError, BaselineStore, CLASSIFIER_LABELS, GATED_LABELS, METRIC_VERSION,
@@ -59,8 +59,9 @@ def snapshot_preflight(isolation, dialogs):
 
 def metadata_for(source, isolation, request, version, intents, dialogs):
     runtime_settings = {field.name:getattr(source.settings,field.name) for field in fields(source.settings)
-                        if field.name not in {"api_key","api_url","redis_url","chroma_host","chroma_port","skill_directory"}}
-    policy = {**POLICY,"judge_enabled":request.judge,"evaluation_mode":"offline" if source.settings.preview or source.model is None else "online"}
+                        if field.name not in UNHASHED_SETTINGS}
+    # In the policy hash so that a baseline scored by another Judge is rejected, not compared.
+    policy = {**POLICY,"judge_enabled":request.judge,"judge_model":judge_model_name(source) if request.judge else None,"evaluation_mode":"offline" if source.settings.preview or source.model is None else "online"}
     dialog_data = [row.model_dump(mode="json") for row in dialogs]
     for row in dialog_data:
         if row.get("reference_snapshot") is None: row.pop("reference_snapshot", None)
@@ -226,7 +227,7 @@ async def run_dialog(runtime, case, run_id, request, budget, row=None):
     row = row if row is not None else {}
     row.update(id=case.id,kind="dialog",turns=[],total_turns=len(case.turns),quality=None,judge_error=None,checks={},passed=False,rule_passed=False)
     session,subject,history = "","self",[]
-    judge = BudgetedModel(budget.base_model,budget,"judge") if budget.base_model else None
+    judge = BudgetedModel(budget.judge_model,budget,"judge") if budget.judge_model else None
     for index,turn in enumerate(case.turns,1):
         usage_begin = len(budget.entries)
         item = {"turn":index,"checks":{},"safety_checks":{},"quality":None,"judge_error":None,"passed":False}
@@ -316,7 +317,7 @@ async def evaluate(source, request: EvaluationRequest | None = None, *, baseline
     request = request or EvaluationRequest()
     version,intents,dialogs = resolve_cases(request)
     budget = ModelBudget(request.limits)
-    budget.base_model = source.model
+    budget.base_model, budget.judge_model = source.model, judge_source(source)
     identity = uuid.uuid4().hex
     isolation = isolation_factory(source,identity,budget)
     snapshots = snapshot_preflight(isolation,dialogs)
