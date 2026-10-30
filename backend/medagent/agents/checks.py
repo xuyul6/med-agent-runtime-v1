@@ -100,29 +100,63 @@ def check_boundaries(data) -> None:
                     raise AgentOutputError(code, rules=(rule,))
 
 
+RANGE_CLAIM = r"参考范围.*(?:统计|区间)|(?:统计|区间).*参考范围"
+
+
+def compact_sentence(part: str) -> str:
+    compact = re.sub(r"\s+", "", part)
+    compact = re.sub(r"^(?:[-•*]|[0-9]{1,2}[.、)])", "", compact, count=1)
+    wrappers = {"“":"”", "‘":"’", '"':'"', "「":"」", "『":"』"}
+    if len(compact) >= 2 and compact[0] in wrappers and compact[-1] == wrappers[compact[0]]:
+        compact = compact[1:-1]
+    return compact
+
+
+def source_sentences(value: str) -> list[str]:
+    return [compact_sentence(part) for part in re.split(r"[。！？!?；;\n]+", value) if part.strip()]
+
+
 def check_report_range_claims(text: str, keys: list[str], references: dict, field: str) -> None:
     """Conservatively require exact cited sentences for a narrow range-definition claim."""
-    def sentences(value):
-        def normalize(part):
-            compact = re.sub(r"\s+", "", part)
-            compact = re.sub(r"^(?:[-•*]|[0-9]{1,2}[.、)])", "", compact, count=1)
-            wrappers = {"“":"”", "‘":"’", '"':'"', "「":"」", "『":"』"}
-            if len(compact) >= 2 and compact[0] in wrappers and compact[-1] == wrappers[compact[0]]:
-                compact = compact[1:-1]
-            return compact
-        return [normalize(part) for part in re.split(r"[。！？!?；;\n]+", value) if part.strip()]
-
-    cited = {sentence for key in keys for sentence in sentences(references[key].text)}
-    relevant = lambda value: bool(re.search(r"参考范围.*(?:统计|区间)|(?:统计|区间).*参考范围", value))
-    for sentence in sentences(text):
+    cited = {sentence for key in keys for sentence in source_sentences(references[key].text)}
+    relevant = lambda value: bool(re.search(RANGE_CLAIM, value))
+    for sentence in source_sentences(text):
         if relevant(sentence) and sentence not in cited:
             uncited = {part for key,ref in references.items() if key not in keys and ref.approved and ref.domain == Intent.REPORT
-                       for part in sentences(ref.text)}
+                       for part in source_sentences(ref.text)}
             reason = ("no_sources_cited" if not keys else
                       "exact_sentence_in_uncited_source" if sentence in uncited else
                       "not_exact_cited_sentence" if any(relevant(part) for part in cited) else
                       "no_range_sentence_in_cited_sources")
             raise AgentOutputError("report_range_claim_without_exact_source", [field], evidence_reason=reason)
+
+
+def insert_range_sentences(text: str, keys: list[str], references: dict) -> tuple[str, list[str], int]:
+    """Put the reviewed source sentence where a draft states a range definition; the model never has to quote it.
+
+    Only sentences retrieved this turn qualify. Without one the draft is returned unchanged for the normal check.
+    """
+    quotes = report_range_source_quotes(references)
+    quotes.sort(key=lambda quote: quote["reference_key"] not in keys)
+    parts = re.split(r"([。！？!?；;\n]+)", text)
+    claims = [index for index in range(0, len(parts), 2) if parts[index].strip() and re.search(RANGE_CLAIM, parts[index])]
+    known = {compact_sentence(quote["sentence"]):quote for quote in quotes}
+    claims = [index for index in claims if compact_sentence(parts[index]) not in known]
+    present = next((quote for index in range(0, len(parts), 2)
+                    for quote in [known.get(compact_sentence(parts[index]))] if quote), None)
+    if not quotes or not (claims or present):
+        return text, keys, 0
+    quote = present or quotes[0]
+    if quote["reference_key"] not in keys and len(keys) >= 8:
+        return text, keys, 0
+    for index in claims:
+        if present is None:
+            parts[index], present = quote["sentence"], quote
+        else:
+            parts[index] = ""
+            if index+1 < len(parts):
+                parts[index+1] = ""
+    return "".join(parts), keys if quote["reference_key"] in keys else [*keys, quote["reference_key"]], len(claims)
 
 
 def report_range_source_quotes(references: dict) -> list[dict[str, str]]:
@@ -133,7 +167,7 @@ def report_range_source_quotes(references: dict) -> list[dict[str, str]]:
             continue
         for sentence in re.split(r"[。！？!?；;\n]+", reference.text):
             sentence = sentence.strip()
-            if 0 < len(sentence) <= 300 and re.search(r"参考范围.*(?:统计|区间)|(?:统计|区间).*参考范围", sentence):
+            if 0 < len(sentence) <= 300 and re.search(RANGE_CLAIM, sentence):
                 quotes.append({"reference_key":reference.key, "sentence":sentence})
                 if len(quotes) == 3: return quotes
     return quotes
@@ -171,6 +205,9 @@ def checked_single_answer(data: dict, references: dict, *, visit_task: bool, evi
     answer = checked_answer(data, references)
     if any(not references[key].approved for key in answer.reference_keys):
         raise AgentOutputError("reference_outside_role_scope",["reference_keys"])
+    answer.text, answer.reference_keys, inserted = insert_range_sentences(answer.text, answer.reference_keys, references)
+    if inserted:
+        event("report_range_inserted", role="single_agent", count=inserted)
     check_report_range_claims(answer.text, answer.reference_keys, references, "text")
     if visit_task and unmatched_urgency_sentences([answer.text, *answer.questions, *answer.next_steps, *answer.limitations],
                                                   answer.reference_keys, references):
@@ -205,6 +242,18 @@ def checked_role_output(profile: AgentProfile, data: dict, references: dict) -> 
            for key in output.answer.reference_keys):
         raise AgentOutputError("reference_outside_role_scope",["reference_keys"])
     if profile.role == "report_explainer":
+        inserted = 0
+        output.answer.text, output.answer.reference_keys, count = insert_range_sentences(output.answer.text, output.answer.reference_keys, references)
+        inserted += count
+        for item in output.payload.term_explanations:
+            item.text, item.reference_keys, count = insert_range_sentences(item.text, item.reference_keys, references)
+            inserted += count
+            added = [key for key in item.reference_keys if key not in output.answer.reference_keys]
+            if len(output.answer.reference_keys)+len(added) > 8:
+                raise AgentOutputError("payload_references_not_in_answer",["reference_keys"])
+            output.answer.reference_keys = [*output.answer.reference_keys, *added]
+        if inserted:
+            event("report_range_inserted", role=profile.role, count=inserted)
         check_report_range_claims(output.answer.text, output.answer.reference_keys, references, "text")
         for item in output.payload.term_explanations:
             check_report_range_claims(item.text, item.reference_keys, references, "term_explanations")
