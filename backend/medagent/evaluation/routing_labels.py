@@ -1,6 +1,6 @@
 """Routing check against labelled requests.
 
-Offline (default) uses the keyword and vector channels only. With a model, only the understanding stage calls it:
+Offline (default) uses the keyword channel and the fixed prior only. With a model, only the understanding stage calls it:
 role execution stays in preview, so the paid calls are one per turn and are capped by an explicit budget.
 """
 import argparse
@@ -24,12 +24,12 @@ DATASET = ROOT/"resources"/"routing-labels-v1.json"
 ROLES = ("general", "symptom_guide", "drug_reference", "report_explainer", "visit_guide", "risk_handoff")
 
 
-async def preview_runtime(embeddings: str = "hash", language_model=None) -> MedicalRuntime:
+async def preview_runtime(language_model=None) -> MedicalRuntime:
     """Preview roles and storage; `language_model` feeds only the classifier's language channel."""
-    vectors = Vectorizer(embeddings)
+    vectors = Vectorizer("hash")
     index = ReferenceIndex(vectors, None)
     await index.upsert([Reference.model_validate(x) for x in json.loads((ROOT/"resources"/"references.json").read_text())])
-    runtime = MedicalRuntime(Settings(preview=True, embeddings=embeddings), None, vectors, index, SessionMemory())
+    runtime = MedicalRuntime(Settings(preview=True, embeddings="hash"), None, vectors, index, SessionMemory())
     runtime.router.model = language_model
     return runtime
 
@@ -69,7 +69,7 @@ def summarize(rows: list[dict]) -> dict:
     }
 
 
-async def score(dataset: Path, embeddings: str = "hash", model=None, limits: EvalLimits | None = None,
+async def score(dataset: Path, model=None, limits: EvalLimits | None = None,
                 model_name: str | None = None) -> dict:
     raw = dataset.read_bytes()
     body = json.loads(raw)
@@ -77,7 +77,7 @@ async def score(dataset: Path, embeddings: str = "hash", model=None, limits: Eva
     if duplicates := [key for key, count in ids.items() if count > 1]:
         raise ValueError("duplicate_case_ids:"+",".join(duplicates))
     budget = ModelBudget(limits or EvalLimits(max_model_calls=120, max_output_tokens=120*900, per_call_output_tokens=900))
-    runtime = await preview_runtime(embeddings, BudgetedModel(model, budget) if model is not None else None)
+    runtime = await preview_runtime(BudgetedModel(model, budget) if model is not None else None)
     rows = []
     for case in body["cases"]:
         if not set(case["primary"]) <= set(case["roles"]) <= set(ROLES):
@@ -96,7 +96,7 @@ async def score(dataset: Path, embeddings: str = "hash", model=None, limits: Eva
     missing = sum(not row["language_channel"] for row in rows if row["actual_primary"] != "risk_handoff")
     return {"kind":"online_routing_labels" if online else "offline_routing_labels", "dataset":body["version"],
             "dataset_sha256":hashlib.sha256(raw).hexdigest(), "code_sha256":CODE_HASH,
-            "channels":["keywords", "embedding:"+runtime.router.vectors.identity, *(["language:"+(model_name or "model")] if online else [])],
+            "channels":["keywords", "prior:uniform", *(["language:"+(model_name or "model")] if online else [])],
             "language_channel":("scored_cases_without_language:"+str(missing)) if online else "not_used_offline",
             "labels":"engineering labels written before rule changes",
             "paid_model_calls":usage["attempted_calls"] if online else 0, "usage":usage, "budget_stop":budget.exhausted,
@@ -104,8 +104,8 @@ async def score(dataset: Path, embeddings: str = "hash", model=None, limits: Eva
             "generated_at":datetime.now(timezone.utc).isoformat(), "summary":summarize(rows), "cases":rows}
 
 
-def run(dataset: Path = DATASET, embeddings: str = "hash") -> dict:
-    return asyncio.run(score(dataset, embeddings))
+def run(dataset: Path = DATASET) -> dict:
+    return asyncio.run(score(dataset))
 
 
 async def run_online(dataset: Path, max_calls: int) -> dict:
@@ -114,7 +114,7 @@ async def run_online(dataset: Path, max_calls: int) -> dict:
         raise RuntimeError("online_routing_needs_configured_model")
     gateway = ClaudeGateway(settings)
     try:
-        return await score(dataset, settings.embeddings, gateway,
+        return await score(dataset, gateway,
                            EvalLimits(max_model_calls=max_calls, max_output_tokens=max_calls*900, per_call_output_tokens=900),
                            settings.model)
     finally:
@@ -125,7 +125,6 @@ def main():
     parser = argparse.ArgumentParser(description="Routing check against labelled requests; offline unless --online")
     parser.add_argument("--dataset", default=str(DATASET))
     parser.add_argument("--output", required=True)
-    parser.add_argument("--embeddings", choices=["hash", "onnx"], default="hash", help="offline vector channel")
     parser.add_argument("--online", action="store_true", help="add the configured model as the language channel (paid)")
     parser.add_argument("--max-calls", type=int, default=0, help="required with --online: hard cap on model calls")
     args = parser.parse_args()
@@ -134,7 +133,7 @@ def main():
     target = Path(args.output)
     if target.exists():
         raise FileExistsError("preserve_existing_routing_report:"+str(target))
-    report = asyncio.run(run_online(Path(args.dataset), args.max_calls)) if args.online else run(Path(args.dataset), args.embeddings)
+    report = asyncio.run(run_online(Path(args.dataset), args.max_calls)) if args.online else run(Path(args.dataset))
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("x") as handle:
         handle.write(json.dumps(report, ensure_ascii=False, indent=2)+"\n")

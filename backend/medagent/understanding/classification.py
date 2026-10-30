@@ -1,6 +1,4 @@
-import asyncio
 import json
-import math
 import re
 import uuid
 from ..core.contracts import Intent, Understanding, TaskUnderstanding
@@ -26,10 +24,16 @@ def distribution(values: dict) -> dict[str, float]:
     return {k: v/total for k,v in clean.items()} if total else {item.value: float(item == Intent.GENERAL) for item in CLASSES}
 
 
+# Fixed uniform prior carrying the weight the vector channel had. That channel never discriminated: its scores were
+# clamped to a uniform distribution. A working version (softmax scale 5-80, 1 or 8 prototypes per class) picked the
+# right class alone for under half of the single-intent labels and never beat this prior on the tuning set, so it was
+# removed. The prior keeps the fused scores, and so every confidence threshold, exactly as they were.
+PRIOR_WEIGHT = .20
+
+
 class IntentRouter:
-    def __init__(self, vectors, model):
-        self.vectors, self.model = vectors, model
-        self.prototypes = None
+    def __init__(self, model):
+        self.model = model
 
     async def understand(self, text: str, state: dict | None = None, *, subject: str = "self", turn_id: str = "") -> Understanding:
         state, turn_id = state or {}, turn_id or str(uuid.uuid4())
@@ -52,13 +56,6 @@ class IntentRouter:
         if followup and medication and medication.state in {"provided", "topic"} and not any(hits[kind.value] for kind in [Intent.VISIT, Intent.REPORT, Intent.SYMPTOMS]):
             classification_text += "\n本轮指代药品："+medication.value
         keyword = distribution({kind.value:len(re.findall(pattern, classification_text)) for kind,pattern in LEXICON.items()})
-        async def semantic():
-            if self.prototypes is None:
-                self.prototypes = await self.vectors.encode(EXAMPLES)
-            encoded = (await self.vectors.encode([classification_text]))[0]
-            similarities = [sum(a*b for a,b in zip(encoded, row)) for row in self.prototypes]
-            weights = [math.exp(5*score) for score in similarities]
-            return distribution(dict(zip([x.value for x in CLASSES], weights)))
         async def language():
             if self.model is None:
                 raise RuntimeError("preview")
@@ -75,20 +72,18 @@ class IntentRouter:
                 json.dumps(payload, ensure_ascii=False), 1800)
             return {"scores":distribution(result["scores"]), "tasks":result.get("tasks", []), "updates":result.get("updates", []),
                     "topic_relation":result.get("topic_relation")}
-        raw = await asyncio.gather(semantic(), language(), return_exceptions=True)
-        signals = {"keywords": keyword}
-        weights = {"keywords": .35}
+        signals = {"keywords": keyword, "prior": {item.value: 1/len(CLASSES) for item in CLASSES}}
+        weights = {"keywords": .35, "prior": PRIOR_WEIGHT}
         fallbacks, semantic_tasks, semantic_updates, topic_relation = [], [], [], None
-        for name, value, weight in zip(["embedding", "language"], raw, [.20, .45]):
-            if isinstance(value, Exception):
-                event("classification_fallback", channel=name, error=type(value).__name__)
-                fallbacks.append(name+"_unavailable")
-            else:
-                if name == "language":
-                    semantic_tasks, semantic_updates = value["tasks"], value["updates"]
-                    topic_relation = value["topic_relation"]
-                    value = value["scores"]
-                signals[name], weights[name] = value, weight
+        try:
+            value = await language()
+        except Exception as exc:
+            event("classification_fallback", channel="language", error=type(exc).__name__)
+            fallbacks.append("language_unavailable")
+        else:
+            semantic_tasks, semantic_updates = value["tasks"], value["updates"]
+            topic_relation = value["topic_relation"]
+            signals["language"], weights["language"] = value["scores"], .45
         current_medical_fact = any(fact.source.turn_id == turn_id for fact in grounded)
         if isinstance(semantic_updates, list):
             current_medical_fact = current_medical_fact or any(
@@ -146,7 +141,7 @@ class IntentRouter:
         missing = []
         if primary == Intent.MEDICINE and (not medication or medication.state in {"unknown", "negated"}):
             missing.append("medication_name")
-        event("understanding", primary=primary.value, channels=list(signals), vector_backend=self.vectors.identity,
+        event("understanding", primary=primary.value, channels=list(signals),
               entity_fields=sorted(entities), context_users=len(sources)-1, task_intents=[task.intent.value for task in tasks])
         return Understanding(primary=primary, scores=fused, confidence=fused[primary.value], signals=signals,
             subject=subject, turn_id=turn_id, entities=entities, updates=updates, tasks=tasks[:3], missing_fields=missing,

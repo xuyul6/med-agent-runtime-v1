@@ -62,7 +62,7 @@ class EvaluationIsolation:
         refs = await asyncio.to_thread(self.client.create_collection,refs_name,embedding_function=None)
         self.created.append(episodes_name)
         episodes = await asyncio.to_thread(self.client.create_collection,episodes_name,embedding_function=None)
-        vectors = Vectorizer(self.source.router.vectors.mode)
+        vectors = Vectorizer(self.source.vectors.mode)
         model = BudgetedModel(self.base_model,self.budget) if self.base_model else None
         index = ReferenceIndex(vectors,model,refs)
         await index.upsert(self.records)

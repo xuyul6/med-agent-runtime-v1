@@ -40,7 +40,7 @@ class ConversationSnapshot:
 class PairedIsolation(EvaluationIsolation):
     def __init__(self, source, run_id, budget):
         super().__init__(source,run_id,budget)
-        self.settings, self.vector_mode = source.settings, source.router.vectors.mode
+        self.settings, self.vector_mode = source.settings, source.vectors.mode
         self.memory_available, self.serial = source.memory.available, 0
 
     async def branch(self, phase, snapshot=None, cache=()):

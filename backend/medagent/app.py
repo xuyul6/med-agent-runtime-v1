@@ -91,7 +91,7 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
     async def health():
         return {"status":"degraded" if "unavailable" in app.state.services.values() else "ok",
                 "implementation":"independent-v1","preview":settings.preview,"model":settings.model,
-                "embedding":app.state.runtime.router.vectors.identity,"services":app.state.services}
+                "embedding":app.state.runtime.vectors.identity,"services":app.state.services}
 
     @app.post("/chat", response_model=Reply)
     async def chat(question: Question):

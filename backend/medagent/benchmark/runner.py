@@ -186,8 +186,7 @@ async def run_benchmark(source, request: BenchmarkRequest | None=None, *, isolat
                     restored = await isolation.capture(runtime,snapshot.user,snapshot.session,snapshot.subject,snapshot.history)
                     if restored.sha256 != snapshot.sha256: raise ValueError("snapshot_restore_mismatch")
                     arm.update(snapshot_hash=restored.sha256,seeded_cache_entries=len(runtime.index.cache),
-                        initial_monitor_requests=runtime.monitor.requests,initial_tool_failures=dict(runtime.tools.failures),
-                        initial_router_prototypes=runtime.router.prototypes is not None)
+                        initial_monitor_requests=runtime.monitor.requests,initial_tool_failures=dict(runtime.tools.failures))
                     replies[mode] = await observe(runtime,case.target,snapshot.user,snapshot.session,snapshot.subject,mode,budget,arm)
                     if infrastructure_failed(arm):
                         failures += 1

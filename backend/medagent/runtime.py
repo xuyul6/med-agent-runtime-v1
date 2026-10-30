@@ -56,7 +56,8 @@ class MedicalRuntime:
         self.settings, self.model, self.index, self.memory = settings, model, index, memory
         self.monitor, self.risk = Monitor(MonitorPolicy.from_settings(settings)), RiskGate()
         self.subjects = SubjectTracker()
-        self.router = IntentRouter(vectors, model)
+        self.vectors = vectors
+        self.router = IntentRouter(model)
         self.registry = DEFAULT_REGISTRY if profiles is None else ProfileRegistry(profiles)
         self.skills = skills if skills is not None else Skills(settings.skill_directory, self.registry)
         self.tools = ToolExecutor(timeout=settings.tool_timeout, monitor=self.monitor)
