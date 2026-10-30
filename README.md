@@ -151,7 +151,7 @@ npm test
 npm run build
 ```
 
-评测在隔离状态下调用与工作台相同的 `runtime.chat`、记忆和工具。规则检查、Judge 分数、未运行项和 Token 用量分开记录；命令拒绝覆盖已有报告；不同代码版本的分数不合并比较。Judge 与被测模型同为 `claude-haiku-5-5`，属于自己评自己；试过改用 DeepSeek V4 Pro，24 个旧回答上它更宽松，重复打分波动约为 Haiku 的两倍，所以没有采用。Judge 只是辅助指标，不能代替专业的事实核验。
+评测在隔离状态下调用与工作台相同的 `runtime.chat`、记忆和工具。规则检查、Judge 分数、未运行项和 Token 用量分开记录；命令拒绝覆盖已有报告；不同代码版本的分数不合并比较。Judge 与被测模型同为 `claude-haiku-5-5`，属于自己评自己；试过改用 DeepSeek V4 Pro：开启思考后它能遵守评分规则，但在 24 个旧回答的小规模试跑里，15/48 次调用在 3000 Token 内没有完成，完成的 33 次里 26 次满分，难以区分回答好坏，所以没有采用。Judge 只是辅助指标，不能代替专业的事实核验。
 
 常用接口：`GET /health`、`POST /chat`、`GET /agents`、`GET /skills`、`GET /tools`、`GET /knowledge`、`GET /monitor`、`GET /metrics`、`GET /traces/{request_id}`、`POST /eval/run`。
 

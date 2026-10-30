@@ -6,6 +6,7 @@ score, under the protocol version of that run; a turn whose input differs is ski
 import argparse
 import asyncio
 from collections import defaultdict
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -16,7 +17,7 @@ from types import SimpleNamespace
 from ..comparison.contracts import ComparisonRequest, resolve_comparison
 from ..core.config import Settings
 from ..core.contracts import AgentExecution, Answer, Reference
-from ..core.provider import ClaudeGateway, judge_gateway
+from ..core.provider import ClaudeGateway, vendor_gateway
 from .budget import BudgetedModel, ModelBudget, aggregate_usage
 from .contracts import EvalLimits, JudgeScore
 from .judging import JUDGE_INSTRUCTIONS, JUDGE_PROTOCOL_VERSION, judge_audit, judge_input
@@ -84,7 +85,8 @@ def summarize(rows: list[dict]) -> dict:
                                  "new":round(statistics.mean(score[key] for row in scored for score in row["scores"]), 3)} for key in DIMENSIONS}}
 
 
-async def score(report: dict, model, limits: EvalLimits, *, per_category: int, repeats: int, seed: int, model_name: str | None = None) -> dict:
+async def score(report: dict, model, limits: EvalLimits, *, per_category: int, repeats: int, seed: int, model_name: str | None = None,
+                output_tokens: int = 950, thinking: bool = False) -> dict:
     _, cases = resolve_comparison(ComparisonRequest())
     turns, history = {case.id:case.target for case in cases}, histories(report)
     budget = ModelBudget(limits)
@@ -96,32 +98,39 @@ async def score(report: dict, model, limits: EvalLimits, *, per_category: int, r
             skipped += 1
             continue
         row = {key:item[key] for key in ("case_id", "pair", "arm")}
-        row.update(original=item["observation"]["quality"], original_mean=item["observation"]["quality"]["mean"], scores=[], errors=[], elapsed_ms=[])
+        row.update(original=item["observation"]["quality"], original_mean=item["observation"]["quality"]["mean"], scores=[], errors=[], elapsed_ms=[], field_orders=[])
         for _ in range(repeats):
             started = time.perf_counter()
             try:
-                result = await judge.json("evaluation_judge", JUDGE_INSTRUCTIONS, json.dumps(payload, ensure_ascii=False), 950)
+                result = await judge.json("evaluation_judge", JUDGE_INSTRUCTIONS, json.dumps(payload, ensure_ascii=False), output_tokens)
+                row["field_orders"].append(list(result))
                 row["scores"].append(JudgeScore.model_validate(result).result())
             except Exception as exc:
-                row["errors"].append(type(exc).__name__)
+                row["errors"].append(str(exc) or type(exc).__name__)
             row["elapsed_ms"].append(round((time.perf_counter()-started)*1000))
         rows.append(row)
-    return {"kind":"judge_rescore", "synthetic":True, "judge_model":model_name, "judge_protocol":JUDGE_PROTOCOL_VERSION, "source_code_hash":report["metadata"]["code_hash"],
+    return {"kind":"judge_rescore", "synthetic":True, "judge_model":model_name, "judge_protocol":JUDGE_PROTOCOL_VERSION, "thinking":thinking, "output_tokens":output_tokens,
+            "source_code_hash":report["metadata"]["code_hash"],
             "source_run":report["run_id"], "repeats":repeats, "seed":seed, "skipped_input_mismatch":skipped,
             "note":"same stored answers, different Judge; scores are not comparable with any other Judge's",
             "usage":aggregate_usage(budget.entries), "budget_stop":budget.exhausted, "summary":summarize(rows), "cases":rows,
             "generated_at":datetime.now(timezone.utc).isoformat()}
 
 
-async def run_online(path: Path, max_calls: int, per_category: int, repeats: int, seed: int, judge: str = "configured") -> dict:
+async def run_online(path: Path, max_calls: int, per_category: int, repeats: int, seed: int, judge: str = "configured",
+                     model: str = "", output_tokens: int = 950, thinking: bool = False) -> dict:
     settings = Settings.load()
-    gateway = ClaudeGateway(settings) if judge == "primary" else judge_gateway(settings)
+    if thinking:
+        # Thinking takes far longer than a direct answer.
+        settings = replace(settings, thinking=True, model_timeout=max(settings.model_timeout, 180))
+    name = settings.model if judge == "primary" else model or settings.judge_model
+    gateway = ClaudeGateway(settings) if judge == "primary" else vendor_gateway(settings, name)
     if gateway is None:
         raise RuntimeError("judge_model_not_configured")
     try:
         return await score(json.loads(path.read_text()), gateway,
-                           EvalLimits(max_model_calls=max_calls, max_output_tokens=max_calls*950, per_call_output_tokens=950),
-                           per_category=per_category, repeats=repeats, seed=seed, model_name=settings.model if judge == "primary" else settings.judge_model)
+                           EvalLimits(max_model_calls=max_calls, max_output_tokens=max_calls*output_tokens, per_call_output_tokens=output_tokens),
+                           per_category=per_category, repeats=repeats, seed=seed, model_name=name, output_tokens=output_tokens, thinking=thinking)
     finally:
         await gateway.close()
 
@@ -135,13 +144,19 @@ def main():
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--seed", type=int, default=20261030)
     parser.add_argument("--judge", choices=["configured", "primary"], default="configured", help="primary scores with ANTHROPIC_MODEL")
+    parser.add_argument("--model", default="", help="second-vendor model; overrides DEEPSEEK_JUDGE_MODEL")
+    parser.add_argument("--thinking", action="store_true", help="enable the model's thinking mode")
+    parser.add_argument("--output-tokens", type=int, default=950, help="per-call output cap, thinking included")
     args = parser.parse_args()
     if not 1 <= args.max_calls <= 100:
         parser.error("--max-calls must be between 1 and 100")
+    if not 1 <= args.output_tokens <= 3000:
+        parser.error("--output-tokens must be between 1 and 3000")
     target = Path(args.output)
     if target.exists():
         raise FileExistsError("preserve_existing_rejudge_report:"+str(target))
-    report = asyncio.run(run_online(Path(args.report), args.max_calls, args.per_category, args.repeats, args.seed, args.judge))
+    report = asyncio.run(run_online(Path(args.report), args.max_calls, args.per_category, args.repeats, args.seed, args.judge,
+                                    args.model, args.output_tokens, args.thinking))
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("x") as handle:
         handle.write(json.dumps(report, ensure_ascii=False, indent=2)+"\n")

@@ -15,6 +15,7 @@ class Settings:
     api_url: str = "https://api.anthropic.com"
     # Vendors whose Anthropic-format endpoint has no output_config JSON schema get the schema in the system prompt.
     structured_output: bool = True
+    thinking: bool = False
     # Standby role instance at another vendor; an empty key keeps both instances on the primary model.
     fallback_api_key: str = ""
     fallback_model: str = "deepseek-flash"

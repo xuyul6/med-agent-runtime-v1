@@ -58,7 +58,8 @@ def json_schema(stage: str) -> dict | None:
         "retrieval_rewrite": {"query":string},
         "retrieval_rerank": {"keys":arrays},
         "memory_summary": {"summary":string},
-        "evaluation_judge": {**{key:{"type":"number"} for key in ["relevance","accuracy","completeness","helpfulness"]},"reason":string},
+        # The reason comes first so that a model without room to think analyses before it commits to numbers.
+        "evaluation_judge": {"reason":string,**{key:{"type":"number"} for key in ["relevance","accuracy","completeness","helpfulness"]}},
     }
     if stage == "synthesis":
         fields = {"section_ids":arrays}
@@ -90,7 +91,7 @@ class ClaudeGateway:
         if not self.settings.api_key or not self.settings.model:
             raise ModelFailure("model_not_configured")
         payload = {"model": self.settings.model, "max_tokens": budget,
-                   "system": system, "messages": messages, "thinking": {"type": "disabled"}}
+                   "system": system, "messages": messages, "thinking": {"type": "enabled" if self.settings.thinking else "disabled"}}
         schema = json_schema(stage)
         if schema and self.settings.structured_output:
             payload["output_config"] = {"format":{"type":"json_schema","schema":schema}}
