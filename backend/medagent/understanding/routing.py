@@ -6,6 +6,7 @@ from .medications import NAMES
 from ..core.contracts import (AgentAssignment, InstanceChoice, Intent, RoutingCandidate, RoutingDecision,
                         RoutingFallback, Understanding)
 from .conversation import VISIT_EVENT, VISIT_PREPARATION_REQUEST, clauses, institution_request, positive_request
+from .risk import CURRENT, HISTORICAL
 
 
 ROLE_FIELDS = {
@@ -52,6 +53,22 @@ def cross_clause_visit_preparation(text: str) -> bool:
     return False
 
 
+# "只想…" narrows the turn to what that clause asks for.
+SCOPE = r"(?:只|仅)(?:想|需要)|只要(?:问|查|整理|了解|知道)|就想"
+
+
+def past_symptoms_only(text: str) -> bool:
+    """Every symptom mention sits in a clause about a past episode with no current marker."""
+    mentions = [clause for clause in clauses(text) if re.search(LEXICON[Intent.SYMPTOMS], clause)]
+    return bool(mentions) and all(re.search(HISTORICAL, clause) and not re.search(CURRENT, clause) for clause in mentions)
+
+
+def outside_scope(text: str, kind: Intent) -> bool:
+    """A support task is outside the scope when the user narrowed the turn and the scoped clause does not ask for it."""
+    scoped = [clause for clause in clauses(text) if re.search(SCOPE, clause)]
+    return bool(scoped) and not any(positive_request(clause, TASK_EVIDENCE[kind]) for clause in scoped)
+
+
 def bounded_score(value: float) -> float:
     return max(0.0, min(1.0, value)) if math.isfinite(value) else 0.0
 
@@ -89,6 +106,9 @@ class RoutingPlanner:
                 domains.add(Intent.VISIT)
         domains = {kind for kind in domains if kind == Intent.GENERAL or kind == Intent.VISIT and institution_request(text)
                    or not (re.search(LEXICON[kind], text) and not positive_request(text, LEXICON[kind]))}
+        # Support is for current work: a resolved past symptom or a task outside "只想…" stays context.
+        domains = {kind for kind in domains if kind in (understanding.primary, Intent.GENERAL)
+                   or not (kind == Intent.SYMPTOMS and past_symptoms_only(text) or outside_scope(text, kind))}
         if not domains:
             domains = {Intent.GENERAL}
         if len(domains) > 1:
