@@ -12,6 +12,7 @@ from ..core.provider import ClaudeGateway
 from ..benchmark.metrics import measured_usage, staged_usage
 from ..benchmark.runner import (FixedOutputBudget, SafetyStop, experiment_metadata, infrastructure_failed, observe, observed_judge_models,
                                 score_observation)
+from ..evaluation.isolation import injected_faults
 from ..evaluation.metrics import digest
 from .contracts import ARM_SETTINGS, ARMS, PROTOCOL, ComparisonRequest, resolve_comparison
 from .metrics import summarize_comparison
@@ -51,6 +52,8 @@ def broken(arm: dict) -> bool:
 def score_arm(arm: dict, reply, case) -> None:
     arm["coverage"] = reference_coverage(reply, case)
     arm["partial"] = bool(reply.degraded) if reply is not None else None
+    if case.faults:
+        arm["fault_triggered"] = any(item.get("event") == "synthetic_fault_triggered" for item in arm.get("trace", {}).get("events", []))
     if reply is not None:
         arm["roles"] = [reply.primary_agent, *reply.supporting_agents]
     # The shared "degraded" check would count primary_only's honest report of an unfinished task as a rule failure.
@@ -123,8 +126,9 @@ async def run_comparison(source, request: ComparisonRequest | None = None, *, is
                     restored = await isolation.capture(runtime, snapshot.user, snapshot.session, snapshot.subject, snapshot.history)
                     if restored.sha256 != snapshot.sha256: raise ValueError("snapshot_restore_mismatch")
                     arm["snapshot_hash"] = restored.sha256
-                    replies[name] = await observe(runtime, case.target, snapshot.user, snapshot.session, snapshot.subject,
-                                                  "selective", budget, arm)
+                    async with injected_faults(runtime, case.faults, 1):
+                        replies[name] = await observe(runtime, case.target, snapshot.user, snapshot.session, snapshot.subject,
+                                                      "selective", budget, arm)
                     score_arm(arm, replies[name], case)
                     failures += int(broken(arm))
                 if request.judge:

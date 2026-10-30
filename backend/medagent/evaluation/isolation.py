@@ -144,7 +144,11 @@ async def injected_faults(runtime, faults, turn):
         if "memory_unavailable" in kinds: runtime.memory.available = False
         if "index_unavailable" in kinds: runtime.index.collection = None
         if "tool_timeout" in kinds or "tool_invalid_result" in kinds:
+            working_lookup = registry.specs["lookup_reference"].handler
+            scope = next((fault.domain for fault in faults if fault.kind in {"tool_timeout","tool_invalid_result"} and fault.domain),None)
             async def failed_lookup(context,args):
+                if scope is not None and args.domain != scope:
+                    return await working_lookup(context,args)
                 fault = "tool_timeout" if "tool_timeout" in kinds else "tool_invalid_result"
                 event("synthetic_fault_triggered", fault=fault, role=context.profile.role, stage="lookup_reference")
                 if fault == "tool_timeout": raise TimeoutError("synthetic_tool_timeout")
