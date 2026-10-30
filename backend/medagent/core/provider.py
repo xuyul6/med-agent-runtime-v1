@@ -1,15 +1,14 @@
 import json
 import time
 import httpx
+from .contracts import Answer
 from .observability import event
 from ..agents.profiles import DEFAULT_REGISTRY
 from ..understanding.conversation import FIELD_NAMES
 
 
-def role_json_schema(role: str) -> dict:
-    profile = DEFAULT_REGISTRY[role]
-    if profile.deterministic:
-        raise ValueError("deterministic_role_has_no_model_schema")
+def strict_schema(contract) -> dict:
+    """Provider-side structural subset of a Pydantic contract."""
     def normalize(node):
         if isinstance(node, list):
             return [normalize(item) for item in node]
@@ -24,10 +23,20 @@ def role_json_schema(role: str) -> dict:
             result["additionalProperties"] = False
             result["required"] = list(result.get("properties", {}))
         return result
-    return normalize(profile.output_contract.model_json_schema())
+    return normalize(contract.model_json_schema())
+
+
+def role_json_schema(role: str) -> dict:
+    profile = DEFAULT_REGISTRY[role]
+    if profile.deterministic:
+        raise ValueError("deterministic_role_has_no_model_schema")
+    return strict_schema(profile.output_contract)
 
 
 def json_schema(stage: str) -> dict | None:
+    if stage == "agent_single_agent":
+        # The single-agent baseline returns a plain answer, not a role contract.
+        return strict_schema(Answer)
     if stage.startswith("agent_"):
         return role_json_schema(stage.removeprefix("agent_"))
     string = {"type":"string"}
