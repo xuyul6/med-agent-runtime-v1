@@ -1,4 +1,5 @@
 """Merge validated sections without permitting a synthesis model to invent facts."""
+import re
 from ..core.contracts import Answer, RoutingFallback
 from .checks import VISIT_URGENCY_ATTRIBUTION_NOTICE, checked_answer
 from ..core.observability import CURRENT, event
@@ -6,8 +7,27 @@ from ..understanding.medications import canonical
 from ..understanding.routing import LABELS
 
 
+# A role knows the whole request and may report what it left to others. Alone, that tells the user a part is missing;
+# next to the other sections it reads as a contradiction ("未处理" above the answer), so merging removes it.
+ROLE_BOUNDARY = (r"不属于本(?:次|轮|角色)|分配(?:的)?任务|原始请求(?:中|里)?(?:提到|提及)|(?:不在|未在|超出)本角色"
+                 r"|本角色(?:不|未|无法)(?:处理|查询|代为|代答|涉及|单独|负责)|不涉及.{0,16}歧义")
+URGENT_ADVICE = r"急救|急诊|120|(?:立即|立刻|马上|尽快).{0,12}(?:就医|求医|求助|拨打)"
+
+
 def unique(values):
     return list(dict.fromkeys(values))
+
+
+def without_role_boundary(text: str) -> str:
+    """Drop sentences about the split of work; safety advice stays, and so does a text that would end up empty."""
+    parts = re.split(r"([。！？!?；;\n]+)", text)
+    kept = "".join(part+tail for part, tail in zip(parts[::2], [*parts[1::2], ""])
+                   if not re.search(ROLE_BOUNDARY, part) or re.search(URGENT_ADVICE, part))
+    return kept.strip() or text
+
+
+def visible_lines(values) -> list[str]:
+    return [item for item in values if not re.search(ROLE_BOUNDARY, item) or re.search(URGENT_ADVICE, item)]
 
 
 def structured_facts(result):
@@ -53,14 +73,14 @@ def sections_answer(results) -> Answer:
     first = results[0].answer
     if len(results) == 1:
         return first.model_copy(deep=True)
-    limitations = unique([item for result in results for item in result.answer.limitations])
+    limitations = visible_lines(unique([item for result in results for item in result.answer.limitations]))
     if len(limitations) > 6 and any(VISIT_URGENCY_ATTRIBUTION_NOTICE in item for item in limitations):
         limitations = ([item for item in limitations if VISIT_URGENCY_ATTRIBUTION_NOTICE in item]
                        +[item for item in limitations if VISIT_URGENCY_ATTRIBUTION_NOTICE not in item])
         limitations = limitations[:5]+["\n".join(limitations[5:])]
-    return Answer(text="\n\n".join("【"+LABELS[result.execution.role]+"】\n"+result.answer.text for result in results),
-        questions=unique([item for result in results for item in result.answer.questions])[:6],
-        next_steps=unique([item for result in results for item in result.answer.next_steps])[:6],
+    return Answer(text="\n\n".join("【"+LABELS[result.execution.role]+"】\n"+without_role_boundary(result.answer.text) for result in results),
+        questions=visible_lines(unique([item for result in results for item in result.answer.questions]))[:6],
+        next_steps=visible_lines(unique([item for result in results for item in result.answer.next_steps]))[:6],
         limitations=limitations[:6],
         reference_keys=unique([key for result in results for key in result.answer.reference_keys]))
 
