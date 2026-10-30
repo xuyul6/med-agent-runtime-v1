@@ -144,6 +144,8 @@ python -m medagent.comparison --output artifacts/comparison-plan.json
 # 以下命令会调用真实模型并产生费用，只在明确授权后运行
 python -m medagent.evaluate --url http://127.0.0.1:8000 --output artifacts/evaluation.json
 python -m medagent.smoke.roles --url http://127.0.0.1:8000 --output artifacts/role-smoke.json
+# 路由标注集加模型通道：只有意图理解调用模型，角色保持预览，必须给出调用上限
+python -m medagent.evaluation.routing_labels --online --max-calls 120 --output artifacts/routing-labels-online.json
 # frontend/
 npm test
 npm run build
