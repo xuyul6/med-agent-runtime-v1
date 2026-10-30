@@ -139,19 +139,46 @@ def report_range_source_quotes(references: dict) -> list[dict[str, str]]:
     return quotes
 
 
-def unmatched_visit_urgency_warnings(output: AgentOutput, references: dict) -> int:
+def unmatched_urgency_sentences(texts: list[str], keys: list[str], references: dict) -> int:
     """Count a narrow class of specific urgent advice not found verbatim in cited sources."""
     def sentences(value):
         return [re.sub(r"\s+", "", part) for part in re.split(r"[。！？!?；;\n]+", value) if part.strip()]
 
-    cited = {sentence for key in output.answer.reference_keys for sentence in sentences(references[key].text)}
+    cited = {sentence for key in keys for sentence in sentences(references[key].text)}
     symptom = r"胸痛|呼吸困难|喘不过气|意识(?:改变|不清|丧失)|昏迷|(?:剧烈|突然).{0,4}头痛|肢体无力|一侧无力|说话不清|口齿不清|视力(?:突然)?(?:变化|下降|模糊)|颈痛|颈部僵硬"
     urgency = r"急诊|急救|120|(?:立即|立刻|马上|尽快|及时).{0,12}(?:就医|求医|求助)"
-    texts = [output.answer.text, *output.answer.questions, *output.answer.next_steps, *output.answer.limitations,
-             *output.payload.preparation_checklist, *output.payload.needs_verification]
     unmatched = {sentence for text in texts for sentence in sentences(text)
                  if re.search(symptom, sentence) and re.search(urgency, sentence) and sentence not in cited}
     return len(unmatched)
+
+
+def unmatched_visit_urgency_warnings(output: AgentOutput, references: dict) -> int:
+    return unmatched_urgency_sentences([output.answer.text, *output.answer.questions, *output.answer.next_steps,
+                                        *output.answer.limitations, *output.payload.preparation_checklist,
+                                        *output.payload.needs_verification], output.answer.reference_keys, references)
+
+
+def add_urgency_notice(limitations: list[str]) -> None:
+    if not any(VISIT_URGENCY_ATTRIBUTION_NOTICE in item for item in limitations):
+        if len(limitations) < 6:
+            limitations.insert(0, VISIT_URGENCY_ATTRIBUTION_NOTICE)
+        else:
+            limitations[0] = VISIT_URGENCY_ATTRIBUTION_NOTICE+"\n"+limitations[0]
+
+
+def checked_single_answer(data: dict, references: dict, *, visit_task: bool, evidence_requested: bool) -> Answer:
+    """The role path's answer-level evidence checks; its payload checks have no counterpart in a plain answer."""
+    answer = checked_answer(data, references)
+    if any(not references[key].approved for key in answer.reference_keys):
+        raise AgentOutputError("reference_outside_role_scope",["reference_keys"])
+    check_report_range_claims(answer.text, answer.reference_keys, references, "text")
+    if visit_task and unmatched_urgency_sentences([answer.text, *answer.questions, *answer.next_steps, *answer.limitations],
+                                                  answer.reference_keys, references):
+        add_urgency_notice(answer.limitations)
+    # Nothing retrieved: saying so honestly is the correct answer, as in the role path's source gap.
+    if evidence_requested and references and not answer.reference_keys:
+        raise AgentOutputError("requested_evidence_not_returned",["reference_keys"])
+    return answer
 
 
 def checked_role_output(profile: AgentProfile, data: dict, references: dict) -> AgentOutput:
@@ -184,12 +211,7 @@ def checked_role_output(profile: AgentProfile, data: dict, references: dict) -> 
     if profile.role == "visit_guide" and output.payload.institution_facts:
         raise AgentOutputError("institution_source_not_supported",["institution_facts"])
     if profile.role == "visit_guide" and unmatched_visit_urgency_warnings(output, references):
-        limitations = output.answer.limitations
-        if not any(VISIT_URGENCY_ATTRIBUTION_NOTICE in item for item in limitations):
-            if len(limitations) < 6:
-                limitations.insert(0, VISIT_URGENCY_ATTRIBUTION_NOTICE)
-            else:
-                limitations[0] = VISIT_URGENCY_ATTRIBUTION_NOTICE+"\n"+limitations[0]
+        add_urgency_notice(output.answer.limitations)
     if output.status == "needs_clarification":
         output.answer.questions = [FIELD_QUESTIONS[name] for name in dict.fromkeys(output.missing_fields)]
         if profile.role in SOURCE_GAP_QUESTIONS and "source" in output.missing_fields and not references:
