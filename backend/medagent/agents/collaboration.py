@@ -13,13 +13,13 @@ from ..understanding.routing import LABELS
 OWN_SCOPE = r"(?:不在|未在|超出|不属于)(?:本角色|本任务|本次(?:分配的?|通用准备)?任务|本次(?:" + "|".join(LABELS.values()) + r"))"
 SCOPE_EXCLUSION = (OWN_SCOPE + r"(?:[^，。；！？\n]{0,12}(?:范围|权限|任务))?(?:内|之内)?(?=[，。；！？\n]|$)"
                    r"(?:，(?:本次|本回复)?(?:未(?:作(?!为)|处理|检索|查询|回答|执行|予|进行|代为)|不(?:作)?处理)[^，。；！？\n]{0,8})?")
-HANDED_OVER = r"[，,]?(?:该部分|这部分)?由其他(?:任务|部分)处理|属于另一部分(?:内容)?[，,]"
+HANDED_OVER = r"[，,]?(?:该部分|这部分)?由其他(?:任务|部分|安排)处理|属于另一部分(?:内容)?[，,]"
 ROLE_BOUNDARY = (r"不属于本(?:次|轮|角色)|分配(?:的)?任务|原始请求(?:中|里)?(?:提到|提及)|" + OWN_SCOPE + "|" + HANDED_OVER +
                  r"|本角色(?:不|未|无法)(?:处理|查询|代为|代答|涉及|单独|负责)|不涉及.{0,16}歧义")
 URGENT_ADVICE = r"急救|急诊|120|(?:立即|立刻|马上|尽快).{0,12}(?:就医|求医|求助|拨打)"
 # What each section covers, so "this was not done" is only dropped where another section did it; own gaps stay.
 PART_TOPICS = {"symptom_guide":"症状记录", "drug_reference":"药|"+NAMES, "report_explainer":"化验|报告项目|参考范围|计量单位",
-               "visit_guide":"门诊|就医准备|就诊准备|复诊|准备清单|见医生|看医生|携带|要带"}
+               "visit_guide":"门诊|就医准备|就诊准备|复诊|复查|准备清单|见医生|看医生|携带|要带"}
 NOT_DONE = r"(?:未|没有|不)(?:查询|查|检索(?!到)|解读|解释|整理|涉及|处理|回答)|不在(?:本次|我的)|需另行"
 
 

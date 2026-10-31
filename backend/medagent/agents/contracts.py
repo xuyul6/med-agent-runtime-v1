@@ -79,9 +79,6 @@ class VisitInput(AgentInput):
     region: str | None = None
     institution_specific: bool = False
 
-    def information_gaps(self) -> list[str]:
-        return [name for name in ["institution", "region"] if self.institution_specific and not getattr(self, name)]
-
 
 class RiskInput(AgentInput):
     intent: Literal[Intent.URGENT]

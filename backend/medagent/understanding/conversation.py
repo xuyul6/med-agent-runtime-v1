@@ -93,10 +93,14 @@ VISIT_EVENT = r"看医生|就医|就诊|复诊|复查|门诊|(?<![不没别])(?:
 VISIT_PREPARATION_REQUEST = r"(?:" + VISIT_EVENT + r").*(?:准备|带|整理|记录|资料)|挂号.*(?:材料|流程)"
 
 
+# Going to a named department is a visit, however the user says it.
+SPECIALTY_VISIT = r"看(?:牙|中医|专家|眼科?|皮肤科?)|(?:口腔|牙|眼|皮肤|儿|妇|产|骨|内|外|耳鼻喉)科"
+
+
 def visit_query_has_context(text: str) -> bool:
     """Recognize limited visit wording; this is not a semantic or identity check."""
     return bool(re.search(r"就医|就诊|医院|诊所|医疗机构|卫生院|社区卫生|挂号|门诊|复诊|复查|问诊|"
-                          r"医生|医师|医护|医务|体检|急诊|住院|看诊|"
+                          r"医生|医师|医护|医务|体检|急诊|住院|看诊|" + SPECIALTY_VISIT + r"|"
                           r"看病(?=前|时|之前|需要|要|准备|去|就诊|[，。！？?\s]|$)", text))
 
 
@@ -303,7 +307,7 @@ def role_details(understanding, role: str) -> dict:
         return details
     if role == "drug_reference":
         details = {key:fields[key] for key in ["medication_name", "formulation", "population", "product_name", "strength", "region"] if key in fields}
-        if (understanding.tasks and positive_request(understanding.tasks[0].goal, r"具体制剂|这(?:个|种)规格|产品说明书")) or any(key in details for key in ("product_name", "strength", "formulation")):
+        if (understanding.tasks and positive_request(understanding.tasks[0].goal, r"具体制剂|这(?:个|种)规格|产品说明书")) or any(key in details for key in ("product_name", "strength")):
             details["query_type"] = "product_information"
         if "medication_name" in understanding.missing_fields and "medication_name" not in details:
             details["medication_name"] = None

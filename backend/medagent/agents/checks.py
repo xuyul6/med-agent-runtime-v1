@@ -294,13 +294,13 @@ def validate_draft(profile, text: str, request, references: dict, evidence_reque
     return data
 
 
-def safe_report_status_repair(profile, text: str, request, references: dict) -> bool:
+def safe_status_repair(profile, text: str, request, references: dict) -> bool:
     """Allow a status-only retry after independently checking all other constraints."""
     try:
         data = object_from_text(text)
         if data.get("status") != "answered" or not data.get("missing_fields"):
             return False
-        if not isinstance(request, ReportInput) or request.items or data.get("payload", {}).get("report_items"):
+        if isinstance(request, ReportInput) and (request.items or data.get("payload", {}).get("report_items")):
             return False
         checked_role_output(profile, {**data, "status":"needs_clarification"}, references)
         return True

@@ -5,7 +5,7 @@ import math
 import re
 import time
 from ..core.contracts import Intent, Reference
-from ..understanding.conversation import institution_request, visit_query_has_context
+from ..understanding.conversation import SPECIALTY_VISIT, institution_request, visit_query_has_context
 from ..core.observability import event
 from .medication_evidence import rejection_reason
 
@@ -30,7 +30,7 @@ def relevance_terms(text: str) -> set[str]:
 
 def visit_relevance_terms(text: str) -> set[str]:
     """Consultation wording counts as 就医 for visit evidence only, so a report's overlap stays as it was."""
-    return relevance_terms(re.sub(r"门诊|复诊|就诊|看诊|问诊|复查", "就医", text))
+    return relevance_terms(re.sub(r"门诊|复诊|就诊|看诊|问诊|复查|"+SPECIALTY_VISIT, "就医", text))
 
 
 def visit_scope_rejection(ref: Reference) -> str | None:

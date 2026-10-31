@@ -14,7 +14,7 @@ from ..knowledge.retrieval import has_query_overlap
 from .skills import SkillSnapshot
 from ..tools.registry import ToolBudget, ToolBudgetExceeded, ToolContext, ToolExecutor
 from .checks import (checked_role_output, explicit_reference_request, report_range_source_quotes,
-                     safe_report_status_repair, validate_draft)
+                     safe_status_repair, validate_draft)
 from . import report_sources
 
 
@@ -29,6 +29,20 @@ REPORT_RANGE_REPAIR = ("仅删除或改正不能与已引用资料完整原句�
     "只能使用本次已有资料，不能补造事实或引用，保留用户已提供的信息及医学边界。")
 EVIDENCE_MISSING_NOTICE = ("\n本轮明确要求查阅或引用来源，当前尚无资料。必须先调用lookup_reference取得实际来源，再完成回答；"
     "仅描述模板或说来源待核实不算完成。检索无适用资料时明确说明无法完成，不编造来源。")
+
+
+# Roles whose status conflict may be corrected once, and the strategy recorded for it.
+STATUS_REPAIRS = {"report_explainer":"report_status_only", "drug_reference":"medicine_status_only"}
+FIELD_NAMES = {"medication_name":"药名", "formulation":"剂型", "population":"适用人群", "product_name":"产品名称", "strength":"规格",
+               "region":"地区", "report_item":"报告项目名称", "value":"结果数值", "unit":"单位", "reference_range":"参考范围",
+               "report_date":"报告日期", "institution":"机构名称", "visit_purpose":"就医目的", "source":"可核对的资料"}
+
+
+def missing_text(fields: list[str]) -> str:
+    """Say what is needed: the questions below the answer ask for it, but the answer has to make sense alone."""
+    names = [FIELD_NAMES[name] for name in fields if name in FIELD_NAMES]
+    return ("还缺"+"、".join(names)+"，补充后才能继续；不清楚的内容可以保留未知。" if names
+            else "还需要补充一些信息才能继续；不清楚的内容可以保留未知。")
 
 
 def model_blocks(result) -> list[dict]:
@@ -221,7 +235,7 @@ class RoleAgent:
                 "这次提到了多个药品（" + "、".join(named[:4]) + "）。目前一次只核对一个药品的公开资料，请说明先查哪一个。", references,
                 next_steps=["如需比较或同时使用几种药，可分别查询后向药师或医师核实；本资料库没有药物相互作用数据。"])
         return self.limited_result(workflow, "needs_clarification", missing,
-            "还需要补充下面的信息才能继续；不清楚的内容可以保留未知。", references,
+            missing_text(missing), references,
             payload=report_payload)
 
     def _visit_scope_gap(self, workflow, request, intent, evidence_query, references):
@@ -390,12 +404,12 @@ class RoleAgent:
         report_range_repair = (self.role == "report_explainer"
             and exc.code == "report_range_claim_without_exact_source"
             and any(ref.approved and ref.domain == Intent.REPORT for ref in references.values()))
-        report_status_repair = (self.role == "report_explainer" and exc.code == "invalid_output_shape"
+        status_repair = (self.role in STATUS_REPAIRS and exc.code == "invalid_output_shape"
             and exc.rules == ("missing_fields_require_clarification",)
-            and safe_report_status_repair(self.profile, text_result, request, references))
-        repair = (exc.repairable or report_range_repair or report_status_repair) and not repairing and turn < 2
+            and safe_status_repair(self.profile, text_result, request, references))
+        repair = (exc.repairable or report_range_repair or status_repair) and not repairing and turn < 2
         strategy = ("report_range_evidence_only" if report_range_repair else
-                    "report_status_only" if report_status_repair else None)
+                    STATUS_REPAIRS[self.role] if status_repair else None)
         event("agent_output_validation",role=self.role,instance=self.instance,model_round=turn+1,repair_requested=repair,
               **({"repair_strategy":strategy} if repair and strategy else {}),
               **exc.diagnostic())
@@ -404,15 +418,15 @@ class RoleAgent:
         task = (REPORT_RANGE_REPAIR+"重新输出完整角色契约，不要调用工具。" if report_range_repair else
                 "只纠正 status 与 missing_fields 的冲突：当前问题不需要个人字段时，使用 answered 且 missing_fields 为空；"
                 "确有必要字段缺失时使用 needs_clarification 并只列实际缺口。不要编造用户信息、修改引用或越过医学边界；"
-                "重新输出完整角色契约，不要调用工具。" if report_status_repair else
+                "重新输出完整角色契约，不要调用工具。" if status_repair else
                 "只纠正 JSON 格式或查询身份字段；引用、医学边界、状态和未知约束不变。不要调用工具。")
         feedback = {"task":task,
                     "validation":exc.diagnostic()}
         if report_range_repair:
             feedback["repair_strategy"] = "report_range_evidence_only"
             feedback["permitted_source_sentences"] = report_range_source_quotes(references)
-        elif report_status_repair:
-            feedback["repair_strategy"] = "report_status_only"
+        elif status_repair:
+            feedback["repair_strategy"] = STATUS_REPAIRS[self.role]
         if intent == Intent.MEDICINE: feedback["medication_identity"] = query_identity(request)
         return feedback
 

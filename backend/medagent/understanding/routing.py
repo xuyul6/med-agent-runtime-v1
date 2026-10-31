@@ -66,6 +66,10 @@ def quoted_request(text: str, quote: str, primary_quote: str) -> bool:
     return start+len(own) <= other_start or other_start+len(other) <= start
 
 
+# Asking to link what was said makes each named part a task, even though on its own it reads as background.
+LINKED_REQUEST = r"(?:串|连|合|放|摆|归|汇总|整合)(?:在|到)?(?:起来|一起|一块)|这(?:两|三|几)件事"
+
+
 # "只想…" narrows the turn to what that clause asks for.
 SCOPE = r"(?:只|仅)(?:想|需要)|只要(?:问|查|整理|了解|知道)|就想"
 
@@ -113,6 +117,11 @@ class RoutingPlanner:
                 strong = task.confidence >= .3 and understanding.primary == Intent.GENERAL
                 if not negative_only and (strong or task.confidence >= .12 and requested):
                     domains.add(task.intent)
+            if positive_request(text, LINKED_REQUEST):
+                domains.update(task.intent for task in understanding.tasks if task.quote and task.intent in {Intent.MEDICINE, Intent.REPORT})
+                medication = understanding.entities.get("medication_name")
+                if medication and medication.state in {"provided", "topic"} and medication.source.turn_id == understanding.turn_id:
+                    domains.add(Intent.MEDICINE)
             domains.update(kind for kind, pattern in TASK_EVIDENCE.items() if positive_request(text, pattern)
                            and not (re.search(LEXICON[kind], text) and not positive_request(text, LEXICON[kind])))
             if institution_request(text):
