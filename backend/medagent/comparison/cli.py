@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 from ..benchmark.cli import write_report
 from ..evaluation.metrics import digest
-from .contracts import ARMS, PROTOCOL, ComparisonRequest, resolve_comparison
+from .contracts import PROTOCOL, ComparisonRequest, resolve_comparison
 from .runner import schedule
 
 
@@ -19,7 +19,7 @@ def build_plan(request: ComparisonRequest) -> dict:
     return {"schema_version":"architecture-comparison-plan-1", "online_status":"not_run", "dataset":version,
             "protocol":deepcopy(PROTOCOL), "protocol_hash":digest(PROTOCOL), "request":body,
             "cases_per_category":{category:sum(case.category == category for case in cases) for category in {c.category for c in cases}},
-            "planned_pairs":len(pairs), "planned_targets":len(ARMS)*len(pairs), "schedule":pairs,
+            "planned_pairs":len(pairs), "planned_targets":len(request.arm_names)*len(pairs), "schedule":pairs,
             "notice":"Only --execute sends requests; no arm is assumed to be better."}
 
 

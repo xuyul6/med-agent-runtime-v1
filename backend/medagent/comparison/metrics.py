@@ -1,7 +1,7 @@
 """Descriptive per-arm and per-category comparison; missing observations never become wins."""
 import math
 from ..benchmark.metrics import DIMENSIONS, distribution
-from .contracts import ARMS, CATEGORIES, PROTOCOL
+from .contracts import CATEGORIES, PROTOCOL
 
 
 def percentile(values, share):
@@ -41,12 +41,12 @@ def paired_quality(rows: list[dict], arm: str) -> dict:
 
 
 def summarize_comparison(report: dict, request) -> None:
-    rows = report["pairs"]
+    rows, arms = report["pairs"], request.arm_names
     report["statistics"] = {
-        "by_arm":{arm:arm_statistics([row["arms"][arm] for row in rows]) for arm in ARMS},
+        "by_arm":{arm:arm_statistics([row["arms"][arm] for row in rows]) for arm in arms},
         "by_category":{category:{arm:arm_statistics([row["arms"][arm] for row in rows if row["category"] == category])
-                                 for arm in ARMS} for category in CATEGORIES if any(row["category"] == category for row in rows)},
-        "paired_quality":{arm:paired_quality(rows, arm) for arm in ARMS if arm != "multi_agent"},
+                                 for arm in arms} for category in CATEGORIES if any(row["category"] == category for row in rows)},
+        "paired_quality":{arm:paired_quality(rows, arm) for arm in arms if arm != "multi_agent"},
     }
     reasons = []
     if report["mode"] != "online": reasons.append("offline_or_simulated_run")

@@ -61,7 +61,8 @@ class DialogTurn(EvalContract):
 
 class FaultSpec(EvalContract):
     kind: Literal["memory_unavailable", "index_unavailable", "tool_timeout", "tool_invalid_result",
-                  "agent_invalid_output", "synthesis_failure", "summary_failure", "judge_failure", "language_unavailable"]
+                  "agent_invalid_output", "synthesis_failure", "summary_failure", "judge_failure", "language_unavailable",
+                  "generation_failure_once", "generation_failure_always"]
     turn: int | None = Field(default=None, ge=1, le=8)
     # Limits a tool fault to one knowledge domain; other lookups keep working.
     domain: Intent | None = None

@@ -14,7 +14,7 @@ from ..benchmark.runner import (FixedOutputBudget, SafetyStop, experiment_metada
                                 score_observation)
 from ..evaluation.isolation import injected_faults
 from ..evaluation.metrics import digest
-from .contracts import ARM_SETTINGS, ARMS, PROTOCOL, ComparisonRequest, resolve_comparison
+from .contracts import ARM_SETTINGS, PROTOCOL, ComparisonRequest, resolve_comparison
 from .metrics import summarize_comparison
 
 
@@ -32,7 +32,8 @@ class ArchitectureIsolation(PairedIsolation):
 def schedule(request: ComparisonRequest, cases) -> list[dict]:
     shuffled = list(cases)
     random.Random(request.seed).shuffle(shuffled)
-    orders = [list(ARMS[index:]+ARMS[:index]) for index in range(len(ARMS))]
+    arms = request.arm_names
+    orders = [list(arms[index:]+arms[:index]) for index in range(len(arms))]
     rows = []
     for repeat in range(request.repetitions):
         for case_index, case in enumerate(shuffled):
@@ -40,7 +41,7 @@ def schedule(request: ComparisonRequest, cases) -> list[dict]:
             rows.append({"id":f"{case.id}-{repeat+1}", "case_id":case.id, "category":case.category, "repeat":repeat+1,
                          "order":order, "judge_order":list(reversed(order)),
                          "arms":{arm:{"arm":arm, "status":"not_run", "quality":None, "judge_error":None, "rule_passed":False,
-                                      "coverage":None} for arm in ARMS}})
+                                      "coverage":None} for arm in arms}})
     return rows
 
 
