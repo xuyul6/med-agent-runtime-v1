@@ -80,6 +80,8 @@ class MedicalRuntime:
         self.monitor.register_agent(self.risk_agent.instance, "risk_handoff", deterministic=True)
         if settings.architecture not in {"multi_agent", SINGLE_AGENT}:
             raise ValueError("invalid_architecture")
+        if settings.single_agent_attempts not in {1, 2}:
+            raise ValueError("invalid_single_agent_attempts")
         self.single = SingleAgent(model, index, self.tools, self.registry) if settings.architecture == SINGLE_AGENT else None
         if self.single:
             self.monitor.register_agent(SINGLE_INSTANCE, SINGLE_AGENT)
@@ -267,19 +269,22 @@ class MedicalRuntime:
                                    assignments=[assignment], collaboration_status="single")
         event("routing", primary=SINGLE_AGENT, support=[], reason=decision.routing_reason, confidence=1,
               monitor_fallback=[], confidence_kind="engineering_score", candidates=[])
-        started = time.perf_counter()
-        try:
-            answer, refs, execution = await asyncio.wait_for(self.single.run(question, understanding, state, risk,
-                skill_snapshot, tool_budget), self.settings.agent_timeout)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            status = "timeout" if isinstance(exc, TimeoutError) else "failed"
-            diagnostic = {"error_code":exc.code, "error_stage":exc.stage} if isinstance(exc, AgentOutputError) else {}
+        for _ in range(self.settings.single_agent_attempts):
+            started = time.perf_counter()
+            try:
+                answer, refs, execution = await asyncio.wait_for(self.single.run(question, understanding, state, risk,
+                    skill_snapshot, tool_budget), self.settings.agent_timeout)
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                status = "timeout" if isinstance(exc, TimeoutError) else "failed"
+                diagnostic = {"error_code":exc.code, "error_stage":exc.stage} if isinstance(exc, AgentOutputError) else {}
+                assignment.attempts.append(ExecutionAttempt(instance=SINGLE_INSTANCE, status=status, error=type(exc).__name__, **diagnostic))
+                self.monitor.record(SINGLE_INSTANCE, False, (time.perf_counter()-started)*1000, status=status, error=type(exc).__name__)
+                event("agent", instance=SINGLE_INSTANCE, task_id=assignment.task_id, status=status, error=type(exc).__name__, **diagnostic)
+        else:
             assignment.status = "failed"
-            assignment.attempts.append(ExecutionAttempt(instance=SINGLE_INSTANCE, status=status, error=type(exc).__name__, **diagnostic))
-            self.monitor.record(SINGLE_INSTANCE, False, (time.perf_counter()-started)*1000, status=status, error=type(exc).__name__)
-            event("agent", instance=SINGLE_INSTANCE, task_id=assignment.task_id, status=status, error=type(exc).__name__, **diagnostic)
             decision.collaboration_status = "failed"
             decision.fallbacks.append(RoutingFallback(role=SINGLE_AGENT, reason=status, action="transparent_guidance"))
             answer = Answer(text="当前未能完成可靠回答。请稍后重试，或携带问题和相关资料咨询医护人员。",

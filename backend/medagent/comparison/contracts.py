@@ -12,7 +12,7 @@ from ..evaluation.metrics import METRIC_VERSION
 
 ARMS = ("multi_agent", "primary_only", "single_agent")
 # Each arm differs from multi_agent only in these runtime settings.
-ARM_SETTINGS = {"multi_agent":{}, "primary_only":{"supporting_agent_limit":0}, "single_agent":{"architecture":"single_agent"}}
+ARM_SETTINGS = {"multi_agent":{}, "primary_only":{"supporting_agent_limit":0}, "single_agent":{"architecture":"single_agent", "single_agent_attempts":2}}
 CATEGORIES = ("single_task", "compound", "multi_turn", "general", "urgent", "tool_fault",
               "daily_sourced", "daily_gap", "compound_parallel", "compound_linked",
               "stability_once", "stability_always", "stability_tool", "stability_outage", "boundary", "injection")
@@ -120,7 +120,7 @@ PROTOCOL = {
     "judge_protocol_version":JUDGE_PROTOCOL_VERSION,
     "arms":{"multi_agent":"routing_with_up_to_two_supporting_roles_and_merge",
             "primary_only":"same_routing_but_supporting_agent_limit_0",
-            "single_agent":"one_prompt_with_all_role_rules; same_risk_gate_memory_understanding_retrieval_filters_tool_budget_and_answer_checks; no_routing_role_contracts_or_merge"},
+            "single_agent":"one_prompt_with_all_role_rules; one_retry_of_a_failed_turn_matching_the_second_role_instance; same_risk_gate_memory_understanding_retrieval_filters_tool_budget_and_answer_checks; no_routing_role_contracts_or_merge"},
     "shared":"same_model_skills_references_snapshot_and_output_cap; preparation_turns_run_once_under_multi_agent_then_frozen",
     "order":"seeded_rotation_so_each_arm_runs_first_equally_often_per_case",
     "judge_order":"reverse_target_order_after_all_arms; each_judge_sees_only_own_answer",
