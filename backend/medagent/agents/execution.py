@@ -333,7 +333,9 @@ class RoleAgent:
             "grounded_fields附有用户轮次和原话；topic是查询目标，不表示已服药。历史摘要和助手消息不是确认病史，未知/否定字段不能恢复为已知。\n"
             "存在assignment时只完成分配的子任务；original_request_boundary供核对原始边界，不能据此代答其他角色任务。"
             "assignment.other_goals列出的部分已另有安排，回答里不要提它们，也不要说这些没做；其余没做的部分直接说“这次没有查X”。"
-            "回答是写给用户的，不要提角色、任务分配或范围。\n"
+            "回答是写给用户的，不要提角色、任务分配或范围。"
+            "text只写用户要的内容，以及这次答不了或没查到的部分；“已整理”“本次未查询医院”“不构成诊断”这类过程和范围说明不写进text，"
+            "需要时放进limitations，一条一件事，不超过两条。\n"
             + "角色流程：" + " → ".join(step.purpose for step in profile.workflow)
             + "\n"
             + ("查询身份由代码给定：payload.medication_identity 只复制数据中 medication_identity 的字段，null 保持 null；来源的人群/地区只写 source_scope，不能推断为用户查询条件或个人病史。\n"

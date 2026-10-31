@@ -62,7 +62,7 @@ def json_schema(stage: str) -> dict | None:
         "evaluation_judge": {"reason":string,**{key:{"type":"number"} for key in ["relevance","accuracy","completeness","helpfulness"]}},
     }
     if stage == "synthesis":
-        fields = {"section_ids":arrays}
+        fields = {"section_ids":arrays, "drop_ids":arrays}
     else:
         fields = properties.get(stage)
     return {"type":"object","properties":fields,"required":list(fields),"additionalProperties":False} if fields else None
