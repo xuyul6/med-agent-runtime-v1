@@ -94,7 +94,7 @@ VISIT_PREPARATION_REQUEST = r"(?:" + VISIT_EVENT + r").*(?:准备|带|整理|记
 
 
 # Going to a named department is a visit, however the user says it.
-SPECIALTY_VISIT = r"看(?:牙|中医|专家|眼科?|皮肤科?)|(?:口腔|牙|眼|皮肤|儿|妇|产|骨|内|外|耳鼻喉)科"
+SPECIALTY_VISIT = r"看(?:牙|中医)|(?:口腔|牙|眼|皮肤|儿|妇|产|骨|内|外|耳鼻喉)科"
 
 
 def visit_query_has_context(text: str) -> bool:

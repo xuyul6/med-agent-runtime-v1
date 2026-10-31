@@ -1,7 +1,9 @@
 """Merge validated sections without permitting a synthesis model to invent facts."""
 import re
+from itertools import zip_longest
 from ..core.contracts import Answer, RoutingFallback
 from .checks import VISIT_URGENCY_ATTRIBUTION_NOTICE, checked_answer
+from .execution import FIELD_NAMES
 from ..core.observability import CURRENT, event
 from ..knowledge.retrieval import relevance_terms
 from ..understanding.medications import NAMES, canonical
@@ -27,6 +29,8 @@ NOTICE_KINDS = (r"不构成|未作医学判断|不作诊断", r"模板|不是[^�
 # Offered to the merge step for removal: sentences that open by describing the work. Anything protected is never offered.
 PROCESS_TALK = r"^\s*(?:已(?:为[你您])?(?:整理|记录)|本次|这次|以下(?:是|为)|目前没有|本回答|本记录|本清单|未(?:执行|查询|检索|接入|连接))"
 PROTECTED = URGENT_ADVICE + r"|[：:]|不能|无法|未找到|没能|未能|暂时|超时|未完成|剂量|禁忌|相互作用|资料|概览|\d"
+# A user answers a few questions, not one per field of every section.
+MERGED_QUESTIONS = 3
 
 
 def unique(values):
@@ -59,10 +63,10 @@ def visible_lines(results, field: str) -> list[str]:
 
 
 def near_copy(line: str, kept: list[str]) -> bool:
-    """Nearly the same words and the same numbers: lines that differ in a number say different things."""
-    terms, numbers = relevance_terms(line), re.findall(r"\d+", line)
+    """Nearly the same words, numbers and negations: lines that differ in one of those say different things."""
+    terms, marks = relevance_terms(line), re.findall(r"\d+|不|没|未|无|勿|禁", line)
     return any(len(terms & relevance_terms(other)) / max(len(terms | relevance_terms(other)), 1) >= .6
-               and numbers == re.findall(r"\d+", other) for other in kept)
+               and marks == re.findall(r"\d+|不|没|未|无|勿|禁", other) for other in kept)
 
 
 def distinct_lines(lines: list[str], kinds: tuple = ()) -> list[str]:
@@ -146,6 +150,21 @@ def conflicts_in(results, understanding):
     return conflicts
 
 
+def section_questions(results, result) -> list[str]:
+    """A section waiting on several fields asks for them together; alone it would ask field by field."""
+    names = [FIELD_NAMES[name] for name in result.execution.missing_fields if name in FIELD_NAMES]
+    if result.execution.status == "needs_clarification" and len(names) == len(result.execution.missing_fields) > 1:
+        return ["请补充"+"、".join(names)+"；不清楚的内容可以保留未知。"]
+    return [item for item in result.answer.questions if not reads_as_missing(item, covered_elsewhere(results, result))]
+
+
+def merged_questions(results) -> list[str]:
+    """Sections waiting on the user ask first, then every section takes a turn, so no part goes unasked for another's detail."""
+    waiting = sorted(results, key=lambda result:result.execution.status != "needs_clarification")
+    turns = zip_longest(*[section_questions(results, result) for result in waiting])
+    return distinct_lines(unique([line for turn in turns for line in turn if line]))[:MERGED_QUESTIONS]
+
+
 def kept_text(results, result, dropped: frozenset) -> str:
     text = section_text(results, result)
     kept = [sentence for index, sentence in enumerate(sentences(text)) if f"{result.execution.task_id}#{index}" not in dropped]
@@ -162,7 +181,7 @@ def sections_answer(results, dropped: frozenset = frozenset()) -> Answer:
                        +[item for item in limitations if VISIT_URGENCY_ATTRIBUTION_NOTICE not in item])
         limitations = limitations[:5]+["\n".join(limitations[5:])]
     return Answer(text="\n\n".join("【"+LABELS[result.execution.role]+"】\n"+kept_text(results, result, dropped) for result in results),
-        questions=distinct_lines(visible_lines(results, "questions"))[:6],
+        questions=merged_questions(results),
         next_steps=distinct_lines(visible_lines(results, "next_steps"))[:6],
         limitations=limitations[:6],
         reference_keys=unique([key for result in results for key in result.answer.reference_keys]))
