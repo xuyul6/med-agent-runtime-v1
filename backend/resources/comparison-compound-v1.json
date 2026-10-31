@@ -1,0 +1,185 @@
+{
+  "version": "comparison-compound-1",
+  "created": "2026-10-31",
+  "synthetic": true,
+  "note": "复合层：compound_parallel 的两部分互不相关，compound_linked 的两部分互相依赖。合成题集，题目由项目作者编写，分布是假设，不是真实使用数据，也不是临床验证；资料库只有 8 份资料。运行前冻结，只跑一次。",
+  "cases": [
+    {
+      "id": "cp-medicine-visit",
+      "category": "compound_parallel",
+      "preparation": [],
+      "target": {
+        "message": "过两天去看牙，帮我想想要带什么；顺便查查成人布洛芬的公开资料。",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine",
+        "visit"
+      ]
+    },
+    {
+      "id": "cp-report-visit",
+      "category": "compound_parallel",
+      "preparation": [],
+      "target": {
+        "message": "体检报告出来了，想知道参考范围怎么理解，还有下周复查要准备什么。",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "report",
+        "visit"
+      ]
+    },
+    {
+      "id": "cp-symptom-medicine",
+      "category": "compound_parallel",
+      "preparation": [],
+      "target": {
+        "message": "膝盖疼了三天，帮我记一下要写哪些情况，另外查一下成人布洛芬的公开资料。",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine"
+      ]
+    },
+    {
+      "id": "cp-symptom-report",
+      "category": "compound_parallel",
+      "preparation": [],
+      "target": {
+        "message": "最近老是头晕，想把情况记下来，另外想问化验单上的单位有什么用。",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "report"
+      ]
+    },
+    {
+      "id": "cp-symptom-visit",
+      "category": "compound_parallel",
+      "preparation": [],
+      "target": {
+        "message": "失眠快一个月了，帮我列一下该记什么，再说说去门诊前要准备什么。",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "visit"
+      ]
+    },
+    {
+      "id": "cp-medicine-report",
+      "category": "compound_parallel",
+      "preparation": [],
+      "target": {
+        "message": "成人布洛芬的公开资料是哪家机构写的？另外报告上的项目和结果怎么对应？",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine",
+        "report"
+      ]
+    },
+    {
+      "id": "cp-three",
+      "category": "compound_parallel",
+      "preparation": [],
+      "target": {
+        "message": "下周复查，帮我理一下要带什么，解释一下报告的参考范围，再查查成人布洛芬的剂型资料。",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine",
+        "report",
+        "visit"
+      ]
+    },
+    {
+      "id": "cl-report-medicine",
+      "category": "compound_linked",
+      "preparation": [],
+      "target": {
+        "message": "报告上有一项超出了参考范围，我又在吃布洛芬，想把这两件事放在一起理清楚再问医生，资料上各怎么说？",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine",
+        "report"
+      ]
+    },
+    {
+      "id": "cl-symptom-visit",
+      "category": "compound_linked",
+      "preparation": [],
+      "target": {
+        "message": "胃疼反复三天了，帮我按这个情况整理成见医生时能直接说的话，再按这个情况说说要带什么。",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "visit"
+      ]
+    },
+    {
+      "id": "cl-label-visit",
+      "category": "compound_linked",
+      "preparation": [],
+      "target": {
+        "message": "我在吃美国买的 Advil 200 mg 包衣片，成人。看医生时怎么把这个药说清楚，标签上哪些内容值得带去问？",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine",
+        "visit"
+      ]
+    },
+    {
+      "id": "cl-report-visit",
+      "category": "compound_linked",
+      "preparation": [],
+      "target": {
+        "message": "都说化验结果要结合病史看，那我见医生前具体该把哪些病史和报告放在一起？",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "report",
+        "visit"
+      ]
+    },
+    {
+      "id": "cl-three",
+      "category": "compound_linked",
+      "preparation": [],
+      "target": {
+        "message": "头疼一周，吃过布洛芬，上周化验有一项偏高。帮我把这三件事串起来，整理成一份给医生看的说明。",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine",
+        "report"
+      ]
+    }
+  ]
+}

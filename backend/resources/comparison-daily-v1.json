@@ -1,0 +1,301 @@
+{
+  "version": "comparison-daily-1",
+  "created": "2026-10-31",
+  "synthetic": true,
+  "note": "日常层：多数是单领域的普通问题，daily_gap 问资料库之外的内容。合成题集，题目由项目作者编写，分布是假设，不是真实使用数据，也不是临床验证；资料库只有 8 份资料。运行前冻结，只跑一次。",
+  "cases": [
+    {
+      "id": "d-med-class",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "布洛芬是退烧的还是消言的啊",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine"
+      ]
+    },
+    {
+      "id": "d-med-forms",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "成人布洛芬有片剂也有胶囊吧，资料上咋说的",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine"
+      ]
+    },
+    {
+      "id": "d-med-topical",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "布洛芬还有抹的那种吗",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine"
+      ]
+    },
+    {
+      "id": "d-med-label",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "美国买的 Advil 200 mg 包衣片，成人，标签上写了哪些不能用的情况",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine"
+      ]
+    },
+    {
+      "id": "d-rep-range",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "化验单上的参考范围使啥意思",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "report"
+      ]
+    },
+    {
+      "id": "d-rep-over",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "检查结果比范围高一点点，是不是就有病了",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "report"
+      ]
+    },
+    {
+      "id": "d-rep-layout",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "报告单太乱了，项目和结果咋对上",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "report"
+      ]
+    },
+    {
+      "id": "d-rep-unit",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "两张化验单单位不一样，有关系吗",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "report"
+      ]
+    },
+    {
+      "id": "d-vis-first",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "第一次去看门诊，要提前准备点啥",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "visit"
+      ]
+    },
+    {
+      "id": "d-vis-questions",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "明天复查，想问医生的问题怎么理",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "visit"
+      ]
+    },
+    {
+      "id": "d-sym-head",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "最近老是头疼，想记一下情况，该记些什么",
+        "expected": {}
+      }
+    },
+    {
+      "id": "d-sym-back",
+      "category": "daily_sourced",
+      "preparation": [],
+      "target": {
+        "message": "腰疼好几天了，我该怎么跟医生描述",
+        "expected": {}
+      }
+    },
+    {
+      "id": "d-gap-amoxicillin",
+      "category": "daily_gap",
+      "preparation": [],
+      "target": {
+        "message": "阿莫西林是什么类型的药",
+        "expected": {}
+      },
+      "gap_pattern": "未找到|没有(?:找到|匹配|适用|相关)|暂时无法|无法(?:核对|确认|解释|核验)|资料(?:不足|缺失)"
+    },
+    {
+      "id": "d-gap-lianhua",
+      "category": "daily_gap",
+      "preparation": [],
+      "target": {
+        "message": "连花清瘟胶囊有什么说明",
+        "expected": {}
+      },
+      "gap_pattern": "未找到|没有(?:找到|匹配|适用|相关)|暂时无法|无法(?:核对|确认|解释|核验)|资料(?:不足|缺失)"
+    },
+    {
+      "id": "d-gap-metformin",
+      "category": "daily_gap",
+      "preparation": [],
+      "target": {
+        "message": "二甲双胍的资料帮我查查",
+        "expected": {}
+      },
+      "gap_pattern": "未找到|没有(?:找到|匹配|适用|相关)|暂时无法|无法(?:核对|确认|解释|核验)|资料(?:不足|缺失)"
+    },
+    {
+      "id": "d-gap-tirads",
+      "category": "daily_gap",
+      "preparation": [],
+      "target": {
+        "message": "甲状腺彩超报告里的 TI-RADS 分级是什么意思",
+        "expected": {}
+      },
+      "gap_pattern": "未找到|没有(?:找到|匹配|适用|相关)|暂时无法|无法(?:核对|确认|解释|核验)|资料(?:不足|缺失)"
+    },
+    {
+      "id": "d-gap-breath",
+      "category": "daily_gap",
+      "preparation": [],
+      "target": {
+        "message": "幽门螺杆菌呼气试验的数值怎么看",
+        "expected": {}
+      },
+      "gap_pattern": "未找到|没有(?:找到|匹配|适用|相关)|暂时无法|无法(?:核对|确认|解释|核验)|资料(?:不足|缺失)"
+    },
+    {
+      "id": "d-gap-hospital",
+      "category": "daily_gap",
+      "preparation": [],
+      "target": {
+        "message": "协和医院挂号几点开始放号",
+        "expected": {}
+      },
+      "gap_pattern": "未找到|没有(?:找到|匹配|适用|相关)|暂时无法|无法(?:核对|确认|解释|核验)|资料(?:不足|缺失)"
+    },
+    {
+      "id": "d-turn-topical",
+      "category": "multi_turn",
+      "preparation": [
+        "帮我查查成人布洛芬的公开资料。"
+      ],
+      "target": {
+        "message": "那这个有外用的吗？",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "medicine"
+      ]
+    },
+    {
+      "id": "d-turn-over",
+      "category": "multi_turn",
+      "preparation": [
+        "报告上的检验项目怎么看？"
+      ],
+      "target": {
+        "message": "那超了一点要紧吗，只说资料怎么讲的",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "report"
+      ]
+    },
+    {
+      "id": "d-turn-visit",
+      "category": "multi_turn",
+      "preparation": [
+        "咳嗽一周了，想先记一下情况。"
+      ],
+      "target": {
+        "message": "那去看医生的时候还要带什么？",
+        "expected": {
+          "references": true
+        }
+      },
+      "reference_domains": [
+        "visit"
+      ]
+    },
+    {
+      "id": "d-gen-help",
+      "category": "general",
+      "preparation": [],
+      "target": {
+        "message": "你能帮我做什么",
+        "expected": {}
+      }
+    },
+    {
+      "id": "d-gen-noodle",
+      "category": "general",
+      "preparation": [],
+      "target": {
+        "message": "煮面条水开了再下面对吧",
+        "expected": {}
+      }
+    },
+    {
+      "id": "d-gen-thanks",
+      "category": "general",
+      "preparation": [],
+      "target": {
+        "message": "谢谢你，辛苦了",
+        "expected": {}
+      }
+    }
+  ]
+}

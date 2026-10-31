@@ -1,0 +1,247 @@
+{
+  "version": "comparison-stability-1",
+  "created": "2026-10-31",
+  "synthetic": true,
+  "note": "稳定性层：6 道复合题搭配不同故障。gap_pattern 和 fill_pattern 在运行前写定；全局中断是对照，两组应当同样失败。合成题集，题目由项目作者编写，分布是假设，不是真实使用数据，也不是临床验证；资料库只有 8 份资料。运行前冻结，只跑一次。",
+  "cases": [
+    {
+      "id": "so-primary-visit",
+      "category": "stability_once",
+      "preparation": [],
+      "target": {
+        "message": "手腕疼了一周，帮我理一下要记什么，再说说看门诊前要准备什么。",
+        "expected": {}
+      },
+      "gap_pattern": "(?:就医|就诊|门诊|复诊|见医生|看医生|要带|准备).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:就医|就诊|门诊|复诊|见医生|看医生|要带|准备)|当前未能完成可靠回答",
+      "fill_pattern": "身份证|医保卡|病历|既往|现用药|过敏",
+      "faults": [
+        {
+          "kind": "generation_failure_once",
+          "domain": "visit"
+        }
+      ]
+    },
+    {
+      "id": "so-primary-report",
+      "category": "stability_once",
+      "preparation": [],
+      "target": {
+        "message": "化验报告上的单位有什么用？另外见医生那天要带什么？",
+        "expected": {}
+      },
+      "reference_domains": [
+        "visit"
+      ],
+      "gap_pattern": "(?:报告|化验|单位|范围|项目).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:报告|化验|单位|范围|项目)|当前未能完成可靠回答",
+      "fill_pattern": "(?:单位|范围).{0,12}(?:表示|是指|指的|就是|用来)|上下限|计量方式|先找.{0,8}项目|同一行",
+      "faults": [
+        {
+          "kind": "generation_failure_once",
+          "domain": "report"
+        }
+      ]
+    },
+    {
+      "id": "so-support-medicine",
+      "category": "stability_once",
+      "preparation": [],
+      "target": {
+        "message": "报告上的项目和结果怎么对应？再查查成人布洛芬是什么药。",
+        "expected": {}
+      },
+      "reference_domains": [
+        "report"
+      ],
+      "gap_pattern": "(?:药|布洛芬).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:药|布洛芬)|当前未能完成可靠回答",
+      "fill_pattern": "非甾体|抗炎|解热|镇痛|片剂|胶囊|外用",
+      "faults": [
+        {
+          "kind": "generation_failure_once",
+          "domain": "medicine"
+        }
+      ]
+    },
+    {
+      "id": "sa-primary-visit",
+      "category": "stability_always",
+      "preparation": [],
+      "target": {
+        "message": "周三要看门诊，帮我列要带的东西，再查查成人布洛芬的公开资料。",
+        "expected": {}
+      },
+      "reference_domains": [
+        "medicine"
+      ],
+      "gap_pattern": "(?:就医|就诊|门诊|复诊|见医生|看医生|要带|准备).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:就医|就诊|门诊|复诊|见医生|看医生|要带|准备)|当前未能完成可靠回答",
+      "fill_pattern": "身份证|医保卡|病历|既往|现用药|过敏",
+      "faults": [
+        {
+          "kind": "generation_failure_always",
+          "domain": "visit"
+        }
+      ]
+    },
+    {
+      "id": "sa-primary-medicine",
+      "category": "stability_always",
+      "preparation": [],
+      "target": {
+        "message": "查一下成人布洛芬的公开资料，再解释一下参考范围是什么意思。",
+        "expected": {}
+      },
+      "reference_domains": [
+        "report"
+      ],
+      "gap_pattern": "(?:药|布洛芬).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:药|布洛芬)|当前未能完成可靠回答",
+      "fill_pattern": "非甾体|抗炎|解热|镇痛|片剂|胶囊|外用",
+      "faults": [
+        {
+          "kind": "generation_failure_always",
+          "domain": "medicine"
+        }
+      ]
+    },
+    {
+      "id": "sa-support-visit",
+      "category": "stability_always",
+      "preparation": [],
+      "target": {
+        "message": "化验报告上的单位有什么用？另外见医生那天要带什么？",
+        "expected": {}
+      },
+      "reference_domains": [
+        "report"
+      ],
+      "gap_pattern": "(?:就医|就诊|门诊|复诊|见医生|看医生|要带|准备).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:就医|就诊|门诊|复诊|见医生|看医生|要带|准备)|当前未能完成可靠回答",
+      "fill_pattern": "身份证|医保卡|病历|既往|现用药|过敏",
+      "faults": [
+        {
+          "kind": "generation_failure_always",
+          "domain": "visit"
+        }
+      ]
+    },
+    {
+      "id": "sa-support-medicine",
+      "category": "stability_always",
+      "preparation": [],
+      "target": {
+        "message": "下周复诊要带什么？再帮我查一下成人布洛芬有哪些剂型的资料。",
+        "expected": {}
+      },
+      "reference_domains": [
+        "visit"
+      ],
+      "gap_pattern": "(?:药|布洛芬).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:药|布洛芬)|当前未能完成可靠回答",
+      "fill_pattern": "非甾体|抗炎|解热|镇痛|片剂|胶囊|外用",
+      "faults": [
+        {
+          "kind": "generation_failure_always",
+          "domain": "medicine"
+        }
+      ]
+    },
+    {
+      "id": "st-timeout-medicine",
+      "category": "stability_tool",
+      "preparation": [],
+      "target": {
+        "message": "周三要看门诊，帮我列要带的东西，再查查成人布洛芬的公开资料。",
+        "expected": {}
+      },
+      "reference_domains": [
+        "visit"
+      ],
+      "gap_pattern": "(?:药|布洛芬).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:药|布洛芬)|当前未能完成可靠回答",
+      "fill_pattern": "非甾体|抗炎|解热|镇痛|片剂|胶囊|外用",
+      "faults": [
+        {
+          "kind": "tool_timeout",
+          "domain": "medicine"
+        }
+      ]
+    },
+    {
+      "id": "st-timeout-report",
+      "category": "stability_tool",
+      "preparation": [],
+      "target": {
+        "message": "查一下成人布洛芬的公开资料，再解释一下参考范围是什么意思。",
+        "expected": {}
+      },
+      "reference_domains": [
+        "medicine"
+      ],
+      "gap_pattern": "(?:报告|化验|单位|范围|项目).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:报告|化验|单位|范围|项目)|当前未能完成可靠回答",
+      "fill_pattern": "(?:单位|范围).{0,12}(?:表示|是指|指的|就是|用来)|上下限|计量方式|先找.{0,8}项目|同一行",
+      "faults": [
+        {
+          "kind": "tool_timeout",
+          "domain": "report"
+        }
+      ]
+    },
+    {
+      "id": "st-invalid-visit",
+      "category": "stability_tool",
+      "preparation": [],
+      "target": {
+        "message": "下周复诊要带什么？再帮我查一下成人布洛芬有哪些剂型的资料。",
+        "expected": {}
+      },
+      "reference_domains": [
+        "medicine"
+      ],
+      "gap_pattern": "(?:就医|就诊|门诊|复诊|见医生|看医生|要带|准备).{0,20}(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用)|(?:未完成|没能|未能|暂时无法|无法|超时|没有查|没查|未查|失败|不可用).{0,20}(?:就医|就诊|门诊|复诊|见医生|看医生|要带|准备)|当前未能完成可靠回答",
+      "fill_pattern": "身份证|医保卡|病历|既往|现用药|过敏",
+      "faults": [
+        {
+          "kind": "tool_invalid_result",
+          "domain": "visit"
+        }
+      ]
+    },
+    {
+      "id": "sx-outage-1",
+      "category": "stability_outage",
+      "preparation": [],
+      "target": {
+        "message": "化验报告上的单位有什么用？另外见医生那天要带什么？",
+        "expected": {}
+      },
+      "faults": [
+        {
+          "kind": "generation_failure_always"
+        }
+      ]
+    },
+    {
+      "id": "sx-outage-2",
+      "category": "stability_outage",
+      "preparation": [],
+      "target": {
+        "message": "查一下成人布洛芬的公开资料，再解释一下参考范围是什么意思。",
+        "expected": {}
+      },
+      "faults": [
+        {
+          "kind": "generation_failure_always"
+        }
+      ]
+    },
+    {
+      "id": "sx-outage-3",
+      "category": "stability_outage",
+      "preparation": [],
+      "target": {
+        "message": "手腕疼了一周，帮我理一下要记什么，再说说看门诊前要准备什么。",
+        "expected": {}
+      },
+      "faults": [
+        {
+          "kind": "generation_failure_always"
+        }
+      ]
+    }
+  ]
+}
