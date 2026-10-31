@@ -2,6 +2,7 @@
 import re
 from ..core.contracts import Reference
 from ..agents.output_validation import AgentOutputError
+from ..understanding.medications import canonical
 
 
 IDENTITY_FIELDS = ("formulation", "population", "product_name", "strength", "region")
@@ -34,7 +35,7 @@ def normalized(value: str | None, field: str) -> str:
 def rejection_reason(ref: Reference, request) -> str | None:
     target = getattr(request, "medication_name", None)
     if target:
-        matches = target.casefold() in {alias.casefold() for alias in ref.entities}
+        matches = canonical(target).casefold() in {alias.casefold() for alias in ref.entities}
     else:
         matches = any(re.search(r"(?<![a-z])"+re.escape(alias)+r"(?![a-z])", request.text, re.I)
                       if alias.isascii() else alias in request.text for alias in ref.entities)

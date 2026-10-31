@@ -14,6 +14,7 @@ from ..understanding.conversation import institution_request
 from ..core.observability import event
 from ..knowledge.medication_evidence import rejection_reason
 from ..knowledge.retrieval import ReferenceIndex, has_query_overlap, visit_scope_rejection
+from ..understanding.medications import canonical
 from ..understanding.conversation import visit_query_has_context
 from .contracts import (
     ChecklistResult, ContextResult, EmptyArguments, FieldCheck, HandoffSummary, LookupArguments,
@@ -151,7 +152,7 @@ async def lookup_reference(context: ToolContext, arguments: LookupArguments) -> 
     if arguments.domain not in context.profile.knowledge_domains or arguments.domain != context.request.intent:
         raise PermissionError("knowledge_domain_not_allowed")
     query = arguments.query
-    target = getattr(context.request, "medication_name", None)
+    target = canonical(getattr(context.request, "medication_name", None))
     if arguments.domain == Intent.MEDICINE and target and target.casefold() not in query.casefold():
         query = target+" "+query
     if isinstance(context.index, ReferenceIndex):

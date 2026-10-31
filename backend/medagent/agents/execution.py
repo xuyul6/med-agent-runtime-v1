@@ -221,7 +221,7 @@ class RoleAgent:
                 "这次提到了多个药品（" + "、".join(named[:4]) + "）。目前一次只核对一个药品的公开资料，请说明先查哪一个。", references,
                 next_steps=["如需比较或同时使用几种药，可分别查询后向药师或医师核实；本资料库没有药物相互作用数据。"])
         return self.limited_result(workflow, "needs_clarification", missing,
-            "已提供的结构化信息尚不完整，请补充必要字段；不清楚的内容可以保留未知。", references,
+            "还需要补充下面的信息才能继续；不清楚的内容可以保留未知。", references,
             payload=report_payload)
 
     def _visit_scope_gap(self, workflow, request, intent, evidence_query, references):
