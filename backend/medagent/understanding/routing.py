@@ -191,6 +191,8 @@ class RoutingPlanner:
         chosen, deferred = eligible[:1+self.supporting_limit], eligible[1+self.supporting_limit:]
         unavailable = [item.role for item in candidates if item.intent in domains and not item.eligible]
         assignments = [self._assignment(text, understanding, item) for item in chosen]
+        for assignment in assignments:
+            assignment.other_goals = [item.goal for item in assignments if item is not assignment]
         return RoutingDecision(primary_agent=chosen[0].role, supporting_agents=[item.role for item in chosen[1:]],
             routing_reason="domain_and_tool_admission_then_weighted_score"+monitor_reason, routing_confidence=chosen[0].score,
             monitor_fallback=monitor_fallback,

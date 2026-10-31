@@ -203,6 +203,7 @@ class AgentAssignment(RoutingRecord):
     intent: Intent
     goal: str
     input_text: str = Field(exclude=True)
+    other_goals: list[str] = Field(default_factory=list, exclude=True)
     context_fields: list[str] = Field(default_factory=list)
     instances: list[InstanceChoice] = Field(default_factory=list)
     selected_instance: str | None = None

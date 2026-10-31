@@ -3,7 +3,7 @@ import re
 from ..core.contracts import Answer, RoutingFallback
 from .checks import VISIT_URGENCY_ATTRIBUTION_NOTICE, checked_answer
 from ..core.observability import CURRENT, event
-from ..understanding.medications import canonical
+from ..understanding.medications import NAMES, canonical
 from ..understanding.routing import LABELS
 
 
@@ -16,22 +16,38 @@ SCOPE_EXCLUSION = (OWN_SCOPE + r"(?:[^，。；！？\n]{0,12}(?:范围|权限|�
 ROLE_BOUNDARY = (r"不属于本(?:次|轮|角色)|分配(?:的)?任务|原始请求(?:中|里)?(?:提到|提及)|" + OWN_SCOPE +
                  r"|本角色(?:不|未|无法)(?:处理|查询|代为|代答|涉及|单独|负责)|不涉及.{0,16}歧义")
 URGENT_ADVICE = r"急救|急诊|120|(?:立即|立刻|马上|尽快).{0,12}(?:就医|求医|求助|拨打)"
+# What each section covers, so "this was not done" is only dropped where another section did it; own gaps stay.
+PART_TOPICS = {"symptom_guide":"症状记录", "drug_reference":"药|"+NAMES, "report_explainer":"化验|报告项目|参考范围|计量单位",
+               "visit_guide":"门诊|就医准备|就诊准备|复诊|准备清单"}
+NOT_DONE = r"(?:未|没有|不)(?:查询|查|检索(?!到)|解读|解释|整理|涉及|处理|回答)|不在(?:本次|我的)|需另行"
 
 
 def unique(values):
     return list(dict.fromkeys(values))
 
 
-def without_role_boundary(text: str) -> str:
+def covered_elsewhere(results, result) -> str:
+    """A clause reporting as not done a part that another merged section covers."""
+    topics = "|".join(PART_TOPICS[item.execution.role] for item in results
+                      if item is not result and item.execution.role in PART_TOPICS)
+    return rf"(?:{NOT_DONE})[^，。；]*(?:{topics})|(?:{topics})[^，。；]*(?:{NOT_DONE})" if topics else ""
+
+
+def reads_as_missing(text: str, covered: str = "") -> bool:
+    return (bool(re.search(ROLE_BOUNDARY, text) or covered and re.search(covered, text, re.I))
+            and not re.search(URGENT_ADVICE, text))
+
+
+def without_role_boundary(text: str, covered: str = "") -> str:
     """Drop sentences about the split of work; safety advice stays, and so does a text that would end up empty."""
     parts = re.split(r"([。！？!?；;\n]+)", text)
-    kept = "".join(part+tail for part, tail in zip(parts[::2], [*parts[1::2], ""])
-                   if not re.search(ROLE_BOUNDARY, part) or re.search(URGENT_ADVICE, part))
+    kept = "".join(part+tail for part, tail in zip(parts[::2], [*parts[1::2], ""]) if not reads_as_missing(part, covered))
     return kept.strip() or text
 
 
-def visible_lines(values) -> list[str]:
-    return [item for item in values if not re.search(ROLE_BOUNDARY, item) or re.search(URGENT_ADVICE, item)]
+def visible_lines(results, field: str) -> list[str]:
+    return unique([item for result in results for item in getattr(result.answer, field)
+                   if not reads_as_missing(item, covered_elsewhere(results, result))])
 
 
 def plain_wording(text: str) -> str:
@@ -89,14 +105,15 @@ def sections_answer(results) -> Answer:
     first = results[0].answer
     if len(results) == 1:
         return first.model_copy(deep=True)
-    limitations = visible_lines(unique([item for result in results for item in result.answer.limitations]))
+    limitations = visible_lines(results, "limitations")
     if len(limitations) > 6 and any(VISIT_URGENCY_ATTRIBUTION_NOTICE in item for item in limitations):
         limitations = ([item for item in limitations if VISIT_URGENCY_ATTRIBUTION_NOTICE in item]
                        +[item for item in limitations if VISIT_URGENCY_ATTRIBUTION_NOTICE not in item])
         limitations = limitations[:5]+["\n".join(limitations[5:])]
-    return Answer(text="\n\n".join("【"+LABELS[result.execution.role]+"】\n"+without_role_boundary(result.answer.text) for result in results),
-        questions=visible_lines(unique([item for result in results for item in result.answer.questions]))[:6],
-        next_steps=visible_lines(unique([item for result in results for item in result.answer.next_steps]))[:6],
+    return Answer(text="\n\n".join("【"+LABELS[result.execution.role]+"】\n"+without_role_boundary(result.answer.text, covered_elsewhere(results, result))
+                                    for result in results),
+        questions=visible_lines(results, "questions")[:6],
+        next_steps=visible_lines(results, "next_steps")[:6],
         limitations=limitations[:6],
         reference_keys=unique([key for result in results for key in result.answer.reference_keys]))
 
@@ -135,6 +152,7 @@ async def compose(decision, outputs: dict, understanding, model, timeout: float)
     else:
         answer = primary.answer.model_copy(deep=True)
         decision.collaboration_status = "single" if len(decision.assignments) == 1 else "partial"
+        sections = [primary]
         if primary.execution.status == "answered" and len(valid) > 1:
             # The model only orders existing section IDs; all assigned valid sections are mandatory.
             if decision.conflicts:
@@ -161,15 +179,20 @@ async def compose(decision, outputs: dict, understanding, model, timeout: float)
                     decision.fallbacks.append(RoutingFallback(role=decision.primary_agent, reason="synthesis_failed", action="validated_sections"))
             elif all(result.execution.status == "answered" for result in valid):
                 decision.collaboration_status = "merged" if not unfinished else "partial"
+            sections = valid
+        elif len(valid) > 1:
+            # A question on the primary part does not undo what the other parts finished.
+            sections = [result for result in valid if result is primary or result.execution.status == "answered"]
+            decision.fallbacks.append(RoutingFallback(role=decision.primary_agent, reason="primary_requires_clarification_or_handoff",
+                                                      action="keep_completed_support" if len(sections) > 1 else "retain_primary_state"))
+        if len(sections) > 1:
             try:
-                answer = sections_answer(valid)
+                answer = sections_answer(sections)
             except ValueError:
                 degraded = True
                 decision.collaboration_status = "partial"
                 decision.fallbacks.append(RoutingFallback(role=decision.primary_agent, reason="composition_size_limit", action="retain_primary"))
-                unfinished += [result.execution.role for result in valid if result is not primary]
-        elif len(valid) > 1:
-            decision.fallbacks.append(RoutingFallback(role=decision.primary_agent, reason="primary_requires_clarification_or_handoff", action="retain_primary_state"))
+                unfinished += [result.execution.role for result in sections if result is not primary]
     if not primary and valid:
         # Preserve completed support without presenting it as a replacement for the failed task.
         try:
