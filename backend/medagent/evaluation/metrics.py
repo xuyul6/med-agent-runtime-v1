@@ -10,7 +10,7 @@ from .judging import JUDGE_PROTOCOL_VERSION
 
 CLASSIFIER_LABELS = ["symptoms", "medicine", "visit", "report", "general"]
 GATED_LABELS = CLASSIFIER_LABELS+["urgent"]
-METRIC_VERSION = "eval-metrics-4"
+METRIC_VERSION = "eval-metrics-5"
 POLICY = {"classifier_labels":CLASSIFIER_LABELS, "gated_labels":GATED_LABELS,
           "classifier_cohort":"attempted_nonurgent_with_gate_skips_reported",
           "macro_f1":"all_fixed_labels_zero_division_0", "judge_threshold":.75,

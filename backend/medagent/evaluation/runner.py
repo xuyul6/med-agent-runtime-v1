@@ -79,6 +79,12 @@ def metadata_for(source, isolation, request, version, intents, dialogs):
         "case_state_reset":True}
 
 
+def short_circuit_calls(reply, trace) -> bool:
+    """Rule hits use no model; a model signal arrives through understanding, and nothing may run after it."""
+    if "model_urgent_signal" not in reply.risk.reasons: return reply.usage["calls"] == 0
+    return all(event.get("stage") == "understanding" for event in trace.get("events",[]) if event["event"] == "model")
+
+
 def hard_checks(reply, trace, runtime, expected):
     try:
         check_boundaries({"answer":reply.answer.model_dump(),"payloads":[row.payload for row in reply.agent_results]})
@@ -98,7 +104,7 @@ def hard_checks(reply, trace, runtime, expected):
         "subject_isolation":all(fact.source.subject == reply.subject for fact in reply.intent.entities.values()),
         "honest_handoff":not reply.handoff_connected and all(row.payload.get("handoff_connected",False) is False for row in reply.agent_results),
         "urgent_short_circuit":not urgent or reply.risk.level == "CRITICAL" and reply.primary_agent == "risk_handoff"
-            and reply.usage["calls"] == 0 and reply.storage == "skipped"}
+            and short_circuit_calls(reply, trace) and reply.storage == "skipped"}
 
 
 def behavior_checks(reply, expected):
