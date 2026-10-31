@@ -1,7 +1,7 @@
 """Descriptive per-arm and per-category comparison; missing observations never become wins."""
 import math
 from ..benchmark.metrics import DIMENSIONS, distribution
-from .contracts import CATEGORIES, PROTOCOL
+from .contracts import CATEGORIES, FAULT_CATEGORIES, PROTOCOL
 
 
 def percentile(values, share):
@@ -58,7 +58,7 @@ def summarize_comparison(report: dict, request) -> None:
         reasons.append("too_few_cases_in_a_category")
     if any(arm.get("usage", {}).get("total_input_tokens") is None for arm in observed): reasons.append("unknown_token_usage")
     # primary_only may never reach a faulted supporting domain; the other two have to, or the case tested nothing.
-    if any(row["category"] == "tool_fault" and name != "primary_only" and arm["status"] == "completed" and not arm.get("fault_triggered")
+    if any(row["category"] in FAULT_CATEGORIES and name != "primary_only" and arm["status"] == "completed" and not arm.get("fault_triggered")
            for row in rows for name, arm in row["arms"].items()):
         reasons.append("fault_not_triggered")
     report["cases_per_category"] = counts

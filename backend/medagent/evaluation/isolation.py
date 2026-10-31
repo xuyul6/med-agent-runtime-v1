@@ -5,6 +5,9 @@ from dataclasses import replace
 import json
 import tempfile
 from .budget import BudgetedModel, judge_source
+from .contracts import GENERATION_FAULTS
+from ..agents.output_validation import AgentOutputError
+from ..agents.single import DOMAIN_ROLES, SINGLE_AGENT
 from ..memory import SessionMemory
 from ..core.observability import event
 from ..knowledge.retrieval import ReferenceIndex, Vectorizer
@@ -119,7 +122,17 @@ class EvaluationIsolation:
 
 
 class FaultModel:
-    def __init__(self, base, kinds): self.base,self.kinds = base,kinds
+    def __init__(self, base, kinds, domain=None): self.base,self.kinds,self.domain,self.fired_once = base,kinds,domain,False
+
+    def generation_fails(self, stage):
+        """A domain fault hits that role, and the single agent, whose one generation has to write every domain."""
+        if not self.kinds & GENERATION_FAULTS or not stage.startswith("agent_"): return None
+        if self.domain is not None and stage not in {"agent_"+SINGLE_AGENT, "agent_"+DOMAIN_ROLES[self.domain]}: return None
+        if "generation_failure_always" in self.kinds: return "generation_failure_always"
+        if self.fired_once: return None
+        self.fired_once = True
+        return "generation_failure_once"
+
     async def json(self, stage, *args, **kwargs):
         fault = {"synthesis":"synthesis_failure", "memory_summary":"summary_failure",
                  "understanding":"language_unavailable"}.get(stage)
@@ -128,6 +141,9 @@ class FaultModel:
             raise RuntimeError("synthetic_model_failure")
         return await self.base.json(stage,*args,**kwargs)
     async def message(self, stage, *args, **kwargs):
+        if fault := self.generation_fails(stage):
+            event("synthetic_fault_triggered", fault=fault, role=stage.removeprefix("agent_"))
+            raise AgentOutputError("synthetic_invalid_output")
         if stage.startswith("agent_") and "agent_invalid_output" in self.kinds:
             event("synthetic_fault_triggered", fault="agent_invalid_output", role=stage.removeprefix("agent_"))
             return {"content":[{"type":"text","text":json.dumps({"role":"invalid-role"})}]}
@@ -157,12 +173,15 @@ async def injected_faults(runtime, faults, turn):
                                                    for name,spec in registry.specs.items()])
             runtime.planner.tools = runtime.tools.registry
         if base_model is not None:
-            wrapper = FaultModel(base_model,kinds)
+            domain = next((fault.domain for fault in faults if fault.kind in GENERATION_FAULTS),None)
+            wrapper = FaultModel(base_model,kinds,domain)
             runtime.model = runtime.memory.model = runtime.index.model = runtime.router.model = wrapper
             for agent,_ in agent_models: agent.model = wrapper
+            if runtime.single: runtime.single.model = wrapper
         yield kinds
     finally:
         runtime.memory.available,runtime.index.collection = available,collection
         runtime.tools.registry = runtime.planner.tools = registry
         runtime.model, runtime.memory.model, runtime.index.model,runtime.router.model = base_model,memory_model,index_model,router_model
         for agent,model in agent_models: agent.model = model
+        if runtime.single: runtime.single.model = base_model

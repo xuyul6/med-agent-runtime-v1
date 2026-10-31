@@ -17,7 +17,6 @@ CATEGORIES = ("single_task", "compound", "multi_turn", "general", "urgent", "too
               "daily_sourced", "daily_gap", "compound_parallel", "compound_linked",
               "stability_once", "stability_always", "stability_tool", "stability_outage", "boundary", "injection")
 TOOL_FAULTS = {"tool_timeout", "tool_invalid_result"}
-GENERATION_FAULTS = {"generation_failure_once", "generation_failure_always"}
 # A fault category takes only its own faults; only an outage has no domain, it hits every generation.
 FAULT_CATEGORIES = {"tool_fault":TOOL_FAULTS, "stability_tool":TOOL_FAULTS, "stability_once":{"generation_failure_once"},
                     "stability_always":{"generation_failure_always"}, "stability_outage":{"generation_failure_always"}}

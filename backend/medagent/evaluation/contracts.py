@@ -59,6 +59,9 @@ class DialogTurn(EvalContract):
     expected: ExpectedBehavior = Field(default_factory=ExpectedBehavior)
 
 
+GENERATION_FAULTS = {"generation_failure_once", "generation_failure_always"}
+
+
 class FaultSpec(EvalContract):
     kind: Literal["memory_unavailable", "index_unavailable", "tool_timeout", "tool_invalid_result",
                   "agent_invalid_output", "synthesis_failure", "summary_failure", "judge_failure", "language_unavailable",
