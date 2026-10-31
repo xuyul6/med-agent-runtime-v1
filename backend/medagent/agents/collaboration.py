@@ -7,9 +7,13 @@ from ..understanding.medications import canonical
 from ..understanding.routing import LABELS
 
 
-# A role knows the whole request and may report what it left to others. Alone, that tells the user a part is missing;
-# next to the other sections it reads as a contradiction ("未处理" above the answer), so merging removes it.
-ROLE_BOUNDARY = (r"不属于本(?:次|轮|角色)|分配(?:的)?任务|原始请求(?:中|里)?(?:提到|提及)|(?:不在|未在|超出)本角色"
+# A role knows the whole request and may report what it left to others. Alone, that tells the user a part is missing,
+# so plain_wording keeps it in the user's terms; next to the other sections it reads as a contradiction ("未处理" above
+# the answer), so merging removes it.
+OWN_SCOPE = r"(?:不在|未在|超出|不属于)(?:本角色|本任务|本次(?:分配的?|通用准备)?任务|本次(?:" + "|".join(LABELS.values()) + r"))"
+SCOPE_EXCLUSION = (OWN_SCOPE + r"(?:[^，。；！？\n]{0,12}(?:范围|权限|任务))?(?:内|之内)?(?=[，。；！？\n]|$)"
+                   r"(?:，(?:本次|本回复)?(?:未(?:作(?!为)|处理|检索|查询|回答|执行|予|进行|代为)|不(?:作)?处理)[^，。；！？\n]{0,8})?")
+ROLE_BOUNDARY = (r"不属于本(?:次|轮|角色)|分配(?:的)?任务|原始请求(?:中|里)?(?:提到|提及)|" + OWN_SCOPE +
                  r"|本角色(?:不|未|无法)(?:处理|查询|代为|代答|涉及|单独|负责)|不涉及.{0,16}歧义")
 URGENT_ADVICE = r"急救|急诊|120|(?:立即|立刻|马上|尽快).{0,12}(?:就医|求医|求助|拨打)"
 
@@ -28,6 +32,18 @@ def without_role_boundary(text: str) -> str:
 
 def visible_lines(values) -> list[str]:
     return [item for item in values if not re.search(ROLE_BOUNDARY, item) or re.search(URGENT_ADVICE, item)]
+
+
+def plain_wording(text: str) -> str:
+    """Say what was left out without naming the split of work; the part itself stays named."""
+    text = re.sub(SCOPE_EXCLUSION, "这次没有处理", text)
+    text = re.sub(r"或(?:合格|相关)角色|(?:" + "|".join(LABELS.values()) + r")(?:相关)?角色或", "", text)
+    return re.sub(r"(由)?本角色(?:范围)?内?", lambda match: "在这里" if match.group(1) else "这里", text)
+
+
+def plain_answer(answer: Answer) -> Answer:
+    return answer.model_copy(update={"text":plain_wording(answer.text),
+        **{field:[plain_wording(item) for item in getattr(answer, field)] for field in ["questions", "next_steps", "limitations"]}})
 
 
 def structured_facts(result):
@@ -108,13 +124,12 @@ async def compose(decision, outputs: dict, understanding, model, timeout: float)
             and item.get("role") == decision.primary_agent and item.get("status") == "timeout"
             and item.get("handler_invoked") is True for item in log.events)
         if medication_lookup_timeout:
-            answer = Answer(text="本次药品资料查询过程中出现超时，主任务未能完成，暂时无法提供经核验的药品回答；超时不代表相关资料不存在。",
+            answer = Answer(text="本次药品资料查询超时，暂时无法提供经核验的药品回答；超时不代表相关资料不存在。",
                 next_steps=["可稍后直接重试本次查询；如有包装，可先核对药品名称（通用名称）、剂型、规格和查询地区，不清楚的内容保留未知。",
                             "如仍需自行查找，可通过当地药品监管机构或生产企业的公开渠道查找对应说明书，或带药品包装咨询药师。"],
-                limitations=["未能给出经核验的药品信息或个人用药建议。", "主任务没有切换给其他专业或通用角色代答。"])
+                limitations=["未能给出经核验的药品信息或个人用药建议。"])
         else:
-            answer = Answer(text="主任务当前未能完成可靠回答。请稍后重试，或携带问题和相关资料咨询医护人员。",
-                            limitations=["主任务没有切换给其他专业或通用角色代答。"])
+            answer = Answer(text=LABELS[decision.primary_agent]+"部分这次没能完成可靠回答。请稍后重试，或携带问题和相关资料咨询医护人员。")
         decision.collaboration_status = "partial" if valid else "failed"
         decision.fallbacks.append(RoutingFallback(role=decision.primary_agent, reason="primary_unavailable", action="transparent_guidance"))
     else:
@@ -159,14 +174,14 @@ async def compose(decision, outputs: dict, understanding, model, timeout: float)
         # Preserve completed support without presenting it as a replacement for the failed task.
         try:
             partial = sections_answer(valid)
-            combined_text = answer.text+"\n\n以下仅为已完成的辅助任务：\n"+partial.text
+            combined_text = answer.text+"\n\n以下是已完成的部分：\n"+partial.text
             answer = Answer(text=combined_text, questions=partial.questions, next_steps=unique(answer.next_steps+partial.next_steps)[:6],
                             limitations=answer.limitations+partial.limitations[:4], reference_keys=partial.reference_keys)
         except ValueError:
             decision.fallbacks.append(RoutingFallback(role=decision.primary_agent, reason="composition_size_limit", action="retain_guidance"))
             unfinished += [result.execution.role for result in valid]
     for role in unique(unfinished):
-        notice = LABELS[role]+"任务未完成；当前结果不包含该任务的可靠结论。"
+        notice = LABELS[role]+"部分未完成，当前回答不包含这部分的可靠结论。"
         answer.limitations = unique([notice]+answer.limitations)[:6]
         if role != decision.primary_agent:
             decision.fallbacks.append(RoutingFallback(role=role, reason="support_unavailable_or_deferred", action="report_unfinished_task"))
@@ -180,6 +195,7 @@ async def compose(decision, outputs: dict, understanding, model, timeout: float)
         # Conflicting identifiers cannot be exported as one authoritative citation.
         answer = Answer(text="本次资料标识存在冲突，未能完成可靠汇总。请核对资料版本后重试。", limitations=answer.limitations)
         refs = {}
+    answer = plain_answer(answer)
     checked_answer(answer.model_dump(), refs)
     references = [refs[key] for key in answer.reference_keys]
     return answer, references, degraded
