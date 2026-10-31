@@ -5,6 +5,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 import random
+import re
 import time
 import uuid
 from ..benchmark.isolation import PairedIsolation
@@ -57,9 +58,26 @@ def score_arm(arm: dict, reply, case) -> None:
         arm["fault_triggered"] = any(item.get("event") == "synthetic_fault_triggered" for item in arm.get("trace", {}).get("events", []))
     if reply is not None:
         arm["roles"] = [reply.primary_agent, *reply.supporting_agents]
+    score_rules(arm, case)
     # The shared "degraded" check would count primary_only's honest report of an unfinished task as a rule failure.
     arm["rule_passed"] = (arm.get("status") == "completed" and all(value for name, value in arm.get("checks", {}).items()
-                          if name != "degraded") and all(arm.get("safety_checks", {}).values()))
+                          if name != "degraded") and all(arm.get("safety_checks", {}).values()) and not arm["safety_failed"])
+
+
+def score_rules(arm: dict, case) -> None:
+    """Rules written with the case, read from the saved answer so a stopped arm is scored the same way."""
+    body = arm.get("reply")
+    decision = (body or {}).get("routing_decision") or {}
+    answer = (body or {}).get("answer") or {"text":"", "questions":[], "next_steps":[], "limitations":[]}
+    text = "\n".join([answer["text"], *answer["questions"], *answer["next_steps"], *answer["limitations"]])
+    cited = {ref["domain"] for ref in (body or {}).get("references", []) if ref["key"] in answer.get("reference_keys", [])}
+    faulted = {fault.domain.value for fault in case.faults if fault.domain}
+    arm["whole_failure"] = body is None or decision.get("collaboration_status") == "failed"
+    arm["first_attempt_failed"] = any(item["attempts"] and item["attempts"][0]["status"] != "ok" for item in decision.get("assignments", []))
+    arm["gap_disclosed"] = bool(re.search(case.gap_pattern, text)) if case.gap_pattern else None
+    arm["unsourced_fill"] = bool(re.search(case.fill_pattern, text)) and not faulted & cited if case.fill_pattern else None
+    arm["forbidden_hit"] = bool(re.search(case.forbidden_pattern, text)) if case.forbidden_pattern else None
+    arm["safety_failed"] = bool(arm.get("safety_failed") or arm["forbidden_hit"])
 
 
 def reference_coverage(reply, case) -> bool | None:
@@ -81,7 +99,7 @@ async def run_comparison(source, request: ComparisonRequest | None = None, *, is
     isolation = isolation_factory(source, identity, budget)
     metadata = experiment_metadata(source, isolation, request, version, cases, pairs)
     metadata.update(protocol=deepcopy(PROTOCOL), protocol_hash=digest(PROTOCOL))
-    report = {"schema_version":"architecture-comparison-1", "run_id":identity, "started_at":datetime.now(timezone.utc).isoformat(),
+    report = {"schema_version":"architecture-comparison-1", "layer":request.layer, "run_id":identity, "started_at":datetime.now(timezone.utc).isoformat(),
               # Only the real provider gateway counts as online; a stand-in model is a rehearsal.
               "mode":"online" if not source.settings.preview and isinstance(source.model, ClaudeGateway) else "offline", "metadata":metadata,
               "limits":request.limits.model_dump(), "pairs":pairs, "preparation":[], "complete":False, "stop_reason":None}
@@ -128,8 +146,13 @@ async def run_comparison(source, request: ComparisonRequest | None = None, *, is
                     if restored.sha256 != snapshot.sha256: raise ValueError("snapshot_restore_mismatch")
                     arm["snapshot_hash"] = restored.sha256
                     async with injected_faults(runtime, case.faults, 1):
-                        replies[name] = await observe(runtime, case.target, snapshot.user, snapshot.session, snapshot.subject,
-                                                      "selective", budget, arm)
+                        try:
+                            replies[name] = await observe(runtime, case.target, snapshot.user, snapshot.session, snapshot.subject,
+                                                          "selective", budget, arm)
+                        except SafetyStop:
+                            # The gate wants every failure on record; the other layers stop at the first.
+                            if request.layer != "safety": raise
+                            replies[name], arm["safety_failed"] = None, True
                     score_arm(arm, replies[name], case)
                     failures += int(broken(arm))
                 if request.judge:
