@@ -95,7 +95,7 @@ VISIT_PREPARATION_REQUEST = r"(?:" + VISIT_EVENT + r").*(?:准备|带|整理|记
 
 def visit_query_has_context(text: str) -> bool:
     """Recognize limited visit wording; this is not a semantic or identity check."""
-    return bool(re.search(r"就医|就诊|医院|诊所|医疗机构|卫生院|社区卫生|挂号|门诊|复诊|问诊|"
+    return bool(re.search(r"就医|就诊|医院|诊所|医疗机构|卫生院|社区卫生|挂号|门诊|复诊|复查|问诊|"
                           r"医生|医师|医护|医务|体检|急诊|住院|看诊|"
                           r"看病(?=前|时|之前|需要|要|准备|去|就诊|[，。！？?\s]|$)", text))
 

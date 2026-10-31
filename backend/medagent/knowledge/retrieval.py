@@ -28,6 +28,11 @@ def relevance_terms(text: str) -> set[str]:
     return result
 
 
+def visit_relevance_terms(text: str) -> set[str]:
+    """Consultation wording counts as 就医 for visit evidence only, so a report's overlap stays as it was."""
+    return relevance_terms(re.sub(r"门诊|复诊|就诊|看诊|问诊|复查", "就医", text))
+
+
 def visit_scope_rejection(ref: Reference) -> str | None:
     """Classify declared use, not source authenticity or medical accuracy."""
     if ref.domain != Intent.VISIT:
@@ -48,9 +53,11 @@ def has_query_overlap(query: str, ref: Reference) -> bool:
         return False
     if ref.domain == Intent.VISIT and not visit_query_has_context(query):
         return False
-    if ref.domain in {Intent.REPORT, Intent.VISIT}:
+    if ref.domain == Intent.VISIT:
+        return bool(visit_relevance_terms(query) & visit_relevance_terms(ref.title + " " + ref.text))
+    if ref.domain == Intent.REPORT:
         overlap = relevance_terms(query) & relevance_terms(ref.title + " " + ref.text)
-        if ref.domain == Intent.REPORT and overlap == {"报告"}:
+        if overlap == {"报告"}:
             # A shared domain label alone is insufficient when the user names a topic.
             # Keep the generic report-reading path for requests without a topic.
             generic = re.sub(r"请问|帮我|帮忙|我想|需要|看看|看下|查看|分析|解读|解释|整理|阅读|读取|"
