@@ -104,6 +104,11 @@ def visit_query_has_context(text: str) -> bool:
                           r"看病(?=前|时|之前|需要|要|准备|去|就诊|[，。！？?\s]|$)", text))
 
 
+def has_visit_context(text: str, judged: bool | None) -> bool:
+    """The understanding model's verified judgment decides; the word list stands in only when no model judged the turn."""
+    return visit_query_has_context(text) if judged is None else judged
+
+
 @dataclass(frozen=True)
 class VisitFollowupEvidence:
     current: str
@@ -307,7 +312,10 @@ def role_details(understanding, role: str) -> dict:
         return details
     if role == "drug_reference":
         details = {key:fields[key] for key in ["medication_name", "formulation", "population", "product_name", "strength", "region"] if key in fields}
-        if (understanding.tasks and positive_request(understanding.tasks[0].goal, r"具体制剂|这(?:个|种)规格|产品说明书")) or any(key in details for key in ("product_name", "strength")):
+        product = (bool(understanding.product_quote) if understanding.product_quote is not None
+                   else bool(understanding.tasks) and positive_request(understanding.tasks[0].goal, r"具体制剂|这(?:个|种)规格|产品说明书"))
+        # A named product or strength is a fact, not a judgment: only that product's label applies.
+        if product or any(key in details for key in ("product_name", "strength")):
             details["query_type"] = "product_information"
         if "medication_name" in understanding.missing_fields and "medication_name" not in details:
             details["medication_name"] = None
@@ -318,5 +326,7 @@ def role_details(understanding, role: str) -> dict:
         details = {key:fields[key] for key in ["institution", "region"] if key in fields}
         if understanding.tasks and institution_request(understanding.tasks[0].goal):
             details["institution_specific"] = True
+        if understanding.visit_quote is not None:
+            details["visit_context"] = bool(understanding.visit_quote)
         return details
     return {}

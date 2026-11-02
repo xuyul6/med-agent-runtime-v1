@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .contracts import AgentInput, ReportInput
 from ..core.contracts import AgentAssignment, AgentExecution, Answer, Intent, Risk
 from ..understanding.consultation_needs import is_fever_followup
-from ..understanding.conversation import VisitFollowupEvidence, topic_medications, visit_query_has_context
+from ..understanding.conversation import VisitFollowupEvidence, has_visit_context, topic_medications
 from ..core.observability import event
 from ..knowledge.medication_evidence import eligible_references, query_identity
 from .output_validation import AgentOutputError
@@ -246,7 +246,7 @@ class RoleAgent:
                 "本服务尚不能核验某家机构专属资料，无法确认该机构的流程或要求。", references,
                 next_steps=["请自行通过目标机构官方渠道核对预约方式、流程和所需材料。",
                             "如需一般就医准备，可先整理已有资料和向医护人员确认的问题。"])
-        if intent == Intent.VISIT and not visit_query_has_context(evidence_query):
+        if intent == Intent.VISIT and not has_visit_context(evidence_query, request.visit_context):
             workflow.complete("prepare_evidence", "evidence", skipped=True, reason="visit_context_missing")
             return self.limited_result(workflow, "needs_clarification", ["visit_purpose"],
                 "当前问题没有明确说明是否涉及就医准备，请先确认咨询目的。", references,
@@ -297,7 +297,7 @@ class RoleAgent:
             if intent == Intent.MEDICINE:
                 available = eligible_references(available, request)
             else:
-                available = [r for r in available if has_query_overlap(context.evidence_query, r)]
+                available = [r for r in available if has_query_overlap(context.evidence_query, r, getattr(request, "visit_context", None))]
             public = [r.model_dump(mode="json") for r in available]
         model_context = {"current_request":text,
                          "validated_input":json.loads(request.model_dump_json(exclude={"text"}, exclude_unset=True)),

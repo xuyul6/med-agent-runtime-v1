@@ -15,7 +15,7 @@ from ..core.observability import event
 from ..knowledge.medication_evidence import rejection_reason
 from ..knowledge.retrieval import ReferenceIndex, has_query_overlap, visit_scope_rejection
 from ..understanding.medications import canonical
-from ..understanding.conversation import visit_query_has_context
+from ..understanding.conversation import has_visit_context
 from .contracts import (
     ChecklistResult, ContextResult, EmptyArguments, FieldCheck, HandoffSummary, LookupArguments,
     LookupResult, MedicationScopeResult, ReferenceScope, ReferenceSelection,
@@ -160,7 +160,8 @@ async def lookup_reference(context: ToolContext, arguments: LookupArguments) -> 
             found = await context.index.search(query, arguments.domain.value, medication_request=context.request)
         else:
             found = await context.index.search(query, arguments.domain.value,
-                evidence_query=context.evidence_query if context.evidence_query is not None else context.request.text)
+                evidence_query=context.evidence_query if context.evidence_query is not None else context.request.text,
+                visit_context=getattr(context.request, "visit_context", None))
     else:
         found = await context.index.search(query, arguments.domain.value)
     if arguments.domain == Intent.MEDICINE:
@@ -275,9 +276,10 @@ class ToolExecutor:
                         raise ToolResultError("institution_source_not_supported")
                     if reason := visit_scope_rejection(ref):
                         raise ToolResultError(reason)
-                    if ref.domain == Intent.VISIT and not visit_query_has_context(evidence):
+                    judged = getattr(context.request, "visit_context", None)
+                    if ref.domain == Intent.VISIT and not has_visit_context(evidence, judged):
                         raise ToolResultError("visit_context_missing")
-                    if not has_query_overlap(evidence, ref):
+                    if not has_query_overlap(evidence, ref, judged):
                         raise ToolResultError("reference_without_query_overlap")
             context.references.update({ref.key:ref for ref in result.documents})
         return result

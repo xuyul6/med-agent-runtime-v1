@@ -5,7 +5,7 @@ import math
 import re
 import time
 from ..core.contracts import Intent, Reference
-from ..understanding.conversation import SPECIALTY_VISIT, institution_request, visit_query_has_context
+from ..understanding.conversation import SPECIALTY_VISIT, has_visit_context, institution_request
 from ..core.observability import event
 from .medication_evidence import rejection_reason
 
@@ -44,17 +44,19 @@ def visit_scope_rejection(ref: Reference) -> str | None:
     return None
 
 
-def has_query_overlap(query: str, ref: Reference) -> bool:
+def has_query_overlap(query: str, ref: Reference, visit_context: bool | None = None) -> bool:
     """Minimum evidence gate; shared terms do not prove semantic relevance."""
     # Institution-specific visit evidence has no verified source contract yet.
     if ref.domain == Intent.VISIT and institution_request(query):
         return False
     if visit_scope_rejection(ref):
         return False
-    if ref.domain == Intent.VISIT and not visit_query_has_context(query):
+    if ref.domain == Intent.VISIT and not has_visit_context(query, visit_context):
         return False
     if ref.domain == Intent.VISIT:
-        return bool(visit_relevance_terms(query) & visit_relevance_terms(ref.title + " " + ref.text))
+        # A visit the model quoted counts as 就医, as the listed visit words do.
+        query_terms = visit_relevance_terms(query) | ({"就医"} if visit_context else set())
+        return bool(query_terms & visit_relevance_terms(ref.title + " " + ref.text))
     if ref.domain == Intent.REPORT:
         overlap = relevance_terms(query) & relevance_terms(ref.title + " " + ref.text)
         if overlap == {"报告"}:
@@ -151,14 +153,15 @@ class ReferenceIndex:
         self.documents.update({r.key: r for r in records})
         self.cache.clear()
 
-    async def search(self, query: str, domain: str, *, medication_request=None, evidence_query: str | None = None) -> list[Reference]:
+    async def search(self, query: str, domain: str, *, medication_request=None, evidence_query: str | None = None,
+                     visit_context: bool | None = None) -> list[Reference]:
         scope_key = medication_request.model_dump_json(exclude={"text", "risk"}) if medication_request is not None else ""
         trusted_query = query if evidence_query is None else evidence_query
-        key = hashlib.sha256((domain + "\0" + query + "\0" + scope_key + "\0" + trusted_query).encode()).hexdigest()
+        key = hashlib.sha256((domain + "\0" + query + "\0" + scope_key + "\0" + trusted_query + "\0" + str(visit_context)).encode()).hexdigest()
         if domain == Intent.VISIT.value and institution_request(trusted_query):
             event("retrieval", domain=domain, cache="bypass", reason="institution_source_not_supported", ids=[])
             return []
-        if domain == Intent.VISIT.value and not visit_query_has_context(trusted_query):
+        if domain == Intent.VISIT.value and not has_visit_context(trusted_query, visit_context):
             event("retrieval", domain=domain, cache="bypass", reason="visit_context_missing", ids=[])
             return []
         cached = self.cache.get(key)
@@ -180,7 +183,7 @@ class ReferenceIndex:
             if medication_request is not None:
                 eligible = {k:r for k,r in eligible.items() if rejection_reason(r, medication_request) is None}
         else:
-            eligible = {k:r for k,r in eligible.items() if has_query_overlap(trusted_query, r)}
+            eligible = {k:r for k,r in eligible.items() if has_query_overlap(trusted_query, r, visit_context)}
         async def lexical():
             search_terms = terms(query + " " + rewritten)
             return sorted(eligible, key=lambda k: len(search_terms & terms(eligible[k].title + eligible[k].text)), reverse=True)[:5]

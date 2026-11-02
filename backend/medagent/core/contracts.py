@@ -77,6 +77,10 @@ class Understanding(BaseModel):
     context_used: bool = False
     fallbacks: list[str] = Field(default_factory=list)
     urgent_quote: str = Field(default="", exclude=True)
+    # Verified current-turn words for two semantic judgments: a specific product, and a visit. "" means the model
+    # judged there is none; None means no model judged the turn, and the word rules stand in.
+    product_quote: str | None = Field(default=None, max_length=300, exclude=True)
+    visit_quote: str | None = Field(default=None, max_length=300, exclude=True)
 
 
 class SourceProvenance(BaseModel):

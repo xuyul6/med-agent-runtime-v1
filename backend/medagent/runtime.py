@@ -45,6 +45,9 @@ def role_input(assignment, understanding, question, context, clock):
                 subject_changed=understanding.subject_changed, now=clock())
         except (TypeError, ValueError, OverflowError):
             visit_followup = None
+    if visit_followup is not None and "visit_context" in details:
+        # The recovered clause is the user's own earlier visit wording, which a quote of this turn cannot show.
+        details["visit_context"] = True
     target = scoped.entities.get("medication_name")
     query = (target.value+" 药品公开资料 "+assignment.input_text if role == "drug_reference" and target and target.state in {"provided", "topic"}
              else assignment.input_text)
