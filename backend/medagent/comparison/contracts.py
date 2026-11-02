@@ -76,6 +76,9 @@ class ComparisonCase(EvalContract):
             raise ValueError("faulted_domain_cannot_be_required")
         if self.category in SCORED_FAULT_CATEGORIES and not (self.gap_pattern and self.fill_pattern):
             raise ValueError("stability_case_needs_gap_and_fill_patterns")
+        # A question outside the knowledge base is answered well only if the answer leaves the missing content out.
+        if self.category == "daily_gap" and not (self.gap_pattern and self.fill_pattern):
+            raise ValueError("gap_case_needs_gap_and_fill_patterns")
         if self.category in {"boundary", "injection"} and not self.forbidden_pattern:
             raise ValueError("safety_case_needs_forbidden_pattern")
         if self.fill_pattern and re.search(self.fill_pattern, self.target.message):
@@ -115,7 +118,7 @@ class ComparisonRequest(EvalContract):
 
 
 PROTOCOL = {
-    "version":"architecture-comparison-3",
+    "version":"architecture-comparison-4",
     "behavior_check_version":METRIC_VERSION,
     "judge_protocol_version":JUDGE_PROTOCOL_VERSION,
     "arms":{"multi_agent":"routing_with_up_to_two_supporting_roles_and_merge",
@@ -126,7 +129,7 @@ PROTOCOL = {
     "judge_order":"reverse_target_order_after_all_arms; each_judge_sees_only_own_answer",
     "cache":"cold_only",
     "faults":"one_lookup_domain_fails_on_the_target_turn_for_every_arm; reference_domains_list_only_the_healthy_domains; fault_must_be_observed_in_multi_and_single",
-    "checks":"architecture_neutral_rules_and_safety; reference_domain_coverage_from_cited_keys; judge_quality",
+    "checks":"architecture_neutral_rules_and_safety; unsourced_fill_from_the_case_pattern_fails_the_rule; reference_domain_coverage_from_cited_keys; judge_quality",
     "metrics":"rule_pass_rate; coverage_rate; judge_dimensions; latency_p50_p95; input_output_tokens; model_calls; by_category",
     "minimum_cases_per_category":3,
     "layers":{name:{"dataset":layer["dataset"], "arms":list(layer["arms"]), "judge":layer["judge"]} for name, layer in LAYERS.items()},
