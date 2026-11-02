@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" width="760" role="img" aria-labelledby="t d">
 <title id="t">四层评测 Judge 均分：multi 与 single</title>
-<desc id="d">日常层无故障（01ac224 修复后回归）multi 0.812 single 0.833；复合层无故障（01ac224 修复后回归）multi 0.836 single 0.879；稳定性层为 f2be6c0：稳定性层一次性失败 multi 0.822 single 0.892；稳定性层工具故障 multi 0.653 single 0.742；稳定性层角色一直失败 multi 0.645 single 0.405；稳定性层全部中断 multi 0.485 single 0.392</desc>
+<desc id="d">日常层无故障（01ac224 修复后回归）multi 0.812 single 0.833；复合层无故障（01ac224 修复后回归）multi 0.836 single 0.879；稳定性层一次性失败（01ac224 修复后回归）multi 0.878 single 0.890；稳定性层工具故障 multi 0.680 single 0.781；稳定性层角色一直失败 multi 0.649 single 0.416；稳定性层全部中断 multi 0.439 single 0.397</desc>
 <style>
 .s{fill:#fcfcfb}.p{fill:#0b0b0b}.q{fill:#52514e}.g{stroke:#e4e3de}.c{stroke:#b9b8b1}.m{fill:#2a78d6}.n{fill:#eb6834}
 text{font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif}
@@ -8,7 +8,7 @@ text{font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC
 </style>
 <rect class="s" width="760" height="430" rx="8"/>
 <text class="p" x="24" y="36" font-size="18" font-weight="600">无故障时 single 仍略高、差距已缩小，一个角色持续失败时 multi 更高</text>
-<text class="q" x="24" y="60" font-size="13">Judge 均分 0–1，合成题。日常、复合层是 01ac224 修复后回归，稳定性层是 f2be6c0；各层不能合并比较。</text>
+<text class="q" x="24" y="60" font-size="13">Judge 均分 0–1，合成题。三层都是 01ac224 修复后回归；各层不能合并比较。</text>
 <circle class="m" cx="30" cy="86" r="6"/><text class="q" x="42" y="91" font-size="13">multi（多角色编排）</text>
 <circle class="n" cx="190" cy="86" r="6"/><text class="q" x="202" y="91" font-size="13">single（单 Agent 基线）</text>
 <line class="g" x1="265.7" y1="108" x2="265.7" y2="368" stroke-width="1"/>
@@ -34,31 +34,31 @@ text{font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC
 <circle class="n" cx="628.4" cy="172" r="7"/>
 <text class="p" x="640.4" y="176" font-size="12" text-anchor="start">0.879</text>
 <text class="p" x="176" y="214" font-size="13" text-anchor="end">一次性失败</text>
-<text class="q" x="176" y="229" font-size="11" text-anchor="end">稳定性层 · f2be6c0</text>
-<line class="c" x1="585.2" y1="216" x2="638.2" y2="216" stroke-width="2" stroke-linecap="round"/>
-<circle class="m" cx="585.2" cy="216" r="7"/>
-<text class="p" x="573.2" y="220" font-size="12" text-anchor="end">0.822</text>
-<circle class="n" cx="638.2" cy="216" r="7"/>
-<text class="p" x="650.2" y="220" font-size="12" text-anchor="start">0.892</text>
+<text class="q" x="176" y="229" font-size="11" text-anchor="end">稳定性层 · 01ac224</text>
+<line class="c" x1="627.6" y1="216" x2="636.7" y2="216" stroke-width="2" stroke-linecap="round"/>
+<circle class="m" cx="627.6" cy="216" r="7"/>
+<text class="p" x="615.6" y="220" font-size="12" text-anchor="end">0.878</text>
+<circle class="n" cx="636.7" cy="216" r="7"/>
+<text class="p" x="648.7" y="220" font-size="12" text-anchor="start">0.890</text>
 <text class="p" x="176" y="258" font-size="13" text-anchor="end">工具故障</text>
-<text class="q" x="176" y="273" font-size="11" text-anchor="end">稳定性层 · f2be6c0</text>
-<line class="c" x1="457.3" y1="260" x2="524.7" y2="260" stroke-width="2" stroke-linecap="round"/>
-<circle class="m" cx="457.3" cy="260" r="7"/>
-<text class="p" x="445.3" y="264" font-size="12" text-anchor="end">0.653</text>
-<circle class="n" cx="524.7" cy="260" r="7"/>
-<text class="p" x="536.7" y="264" font-size="12" text-anchor="start">0.742</text>
+<text class="q" x="176" y="273" font-size="11" text-anchor="end">稳定性层 · 01ac224</text>
+<line class="c" x1="477.7" y1="260" x2="554.2" y2="260" stroke-width="2" stroke-linecap="round"/>
+<circle class="m" cx="477.7" cy="260" r="7"/>
+<text class="p" x="465.7" y="264" font-size="12" text-anchor="end">0.680</text>
+<circle class="n" cx="554.2" cy="260" r="7"/>
+<text class="p" x="566.2" y="264" font-size="12" text-anchor="start">0.781</text>
 <text class="p" x="176" y="302" font-size="13" text-anchor="end">角色一直失败</text>
-<text class="q" x="176" y="317" font-size="11" text-anchor="end">稳定性层 · f2be6c0</text>
-<line class="c" x1="451.2" y1="304" x2="269.5" y2="304" stroke-width="2" stroke-linecap="round"/>
-<circle class="m" cx="451.2" cy="304" r="7"/>
-<text class="p" x="463.2" y="308" font-size="12" text-anchor="start">0.645</text>
-<circle class="n" cx="269.5" cy="304" r="7"/>
-<text class="p" x="257.5" y="308" font-size="12" text-anchor="end">0.405</text>
+<text class="q" x="176" y="317" font-size="11" text-anchor="end">稳定性层 · 01ac224</text>
+<line class="c" x1="454.2" y1="304" x2="277.8" y2="304" stroke-width="2" stroke-linecap="round"/>
+<circle class="m" cx="454.2" cy="304" r="7"/>
+<text class="p" x="466.2" y="308" font-size="12" text-anchor="start">0.649</text>
+<circle class="n" cx="277.8" cy="304" r="7"/>
+<text class="p" x="265.8" y="308" font-size="12" text-anchor="end">0.416</text>
 <text class="p" x="176" y="346" font-size="13" text-anchor="end">全部中断</text>
-<text class="q" x="176" y="361" font-size="11" text-anchor="end">稳定性层 · f2be6c0</text>
-<line class="c" x1="330.1" y1="348" x2="259.7" y2="348" stroke-width="2" stroke-linecap="round"/>
-<circle class="m" cx="330.1" cy="348" r="7"/>
-<text class="p" x="342.1" y="352" font-size="12" text-anchor="start">0.485</text>
-<circle class="n" cx="259.7" cy="348" r="7"/>
-<text class="p" x="247.7" y="352" font-size="12" text-anchor="end">0.392</text>
+<text class="q" x="176" y="361" font-size="11" text-anchor="end">稳定性层 · 01ac224</text>
+<line class="c" x1="295.2" y1="348" x2="263.4" y2="348" stroke-width="2" stroke-linecap="round"/>
+<circle class="m" cx="295.2" cy="348" r="7"/>
+<text class="p" x="307.2" y="352" font-size="12" text-anchor="start">0.439</text>
+<circle class="n" cx="263.4" cy="348" r="7"/>
+<text class="p" x="251.4" y="352" font-size="12" text-anchor="end">0.397</text>
 </svg>
