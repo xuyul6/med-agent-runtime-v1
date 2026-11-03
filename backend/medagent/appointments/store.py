@@ -7,7 +7,8 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time as clock_time
+from pathlib import Path
 from typing import Callable, Literal
 from zoneinfo import ZoneInfo
 
@@ -16,6 +17,8 @@ from .params import WINDOW_NAMES
 
 SUBJECT_LABELS = {"self": "本人", "mother": "母亲", "father": "父亲", "parent": "其他长辈", "child": "孩子", "other": "其他人"}
 WEEKDAY_NAMES = "一二三四五六日"
+# A booking stops being listed once its half-day is over.
+WINDOW_END = {"am": clock_time(12, 0), "pm": clock_time(18, 0)}
 SCHEMA = """
 create table if not exists bookings(appointment_id text primary key, user text, subject text, slot_id text, status text, created_at real);
 create table if not exists drafts(draft_id text primary key, kind text, user text, session text, subject text, slot_id text,
@@ -79,6 +82,8 @@ class AppointmentStore:
                  followup_ttl: float = 600, timezone: str = "Asia/Shanghai"):
         self.catalog, self.clock, self.ttl, self.followup_ttl, self.zone = catalog, clock, ttl, followup_ttl, ZoneInfo(timezone)
         self._lock = threading.Lock()
+        if path != ":memory:":
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._connection.executescript(SCHEMA)
 
@@ -120,6 +125,12 @@ class AppointmentStore:
                                             "and status = 'booked' and (? is null or subject = ?) order by created_at",
                                             (user, subject, subject)).fetchall()
         return [self._booking(row) for row in rows]
+
+    def upcoming(self, user: str) -> list[Booking]:
+        now = datetime.fromtimestamp(self.clock(), self.zone)
+        found = [booking for booking in self.bookings(user)
+                 if datetime.combine(booking.slot.day, WINDOW_END[booking.slot.window], self.zone) > now]
+        return sorted(found, key=lambda booking: (booking.slot.day, booking.slot.window))
 
     def _draft(self, kind, user, session, subject, slot: Slot, appointment_id) -> tuple[Draft, str]:
         token, now = secrets.token_urlsafe(24), self.clock()

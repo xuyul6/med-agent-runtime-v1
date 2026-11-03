@@ -135,7 +135,7 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
 
     @app.get("/appointments", response_model=list[BookingView])
     async def appointments(user: str = Query(min_length=1, max_length=100)):
-        return [booking_view(booking) for booking in app.state.runtime.appointments.bookings(user)]
+        return [booking_view(booking) for booking in app.state.runtime.appointments.upcoming(user)]
 
     @app.get("/runtime")
     @app.get("/monitor")

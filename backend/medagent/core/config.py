@@ -94,7 +94,8 @@ class Settings:
             single_agent_attempts=int(env.get("MAR_SINGLE_AGENT_ATTEMPTS", "1")),
             agent_concurrency=int(env.get("MAR_AGENT_CONCURRENCY", "2")),
             collaboration_timeout=float(env.get("MAR_COLLABORATION_TIMEOUT", "120")),
-            appointment_db=env.get("MAR_APPOINTMENT_DB", ":memory:"),
+            # The app keeps bookings across restarts in an ignored local file; tests use Settings() and stay in memory.
+            appointment_db=env.get("MAR_APPOINTMENT_DB", str(ROOT / "data" / "appointments.sqlite3")),
             appointment_followup_ttl=float(env.get("MAR_APPOINTMENT_FOLLOWUP_TTL", "600")),
             appointment_timezone=env.get("MAR_APPOINTMENT_TIMEZONE", "Asia/Shanghai"),
             **{field.name:(int if field.name in {"monitor_window_size", "monitor_min_samples", "monitor_bad_ticks", "monitor_recovery_successes", "monitor_recovery_ticks"} else float)

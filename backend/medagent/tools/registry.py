@@ -239,7 +239,9 @@ def find_bookings(context: ToolContext, arguments: EmptyArguments) -> dict:
         return {"bookings":[]}
     found = [booking for booking in store.bookings(context.user, context.request.subject)
              if resolution.hospital_id in (None, booking.slot.hospital_id) and resolution.department_id in (None, booking.slot.department_id)
-             and resolution.day in (None, booking.slot.day) and resolution.window in (None, booking.slot.window)]
+             and resolution.day in (None, booking.slot.day) and resolution.window in (None, booking.slot.window)
+             # Same rule as booking: today's and past appointments cannot be cancelled here.
+             and store.catalog.bookable(booking.slot.day, store.today())]
     context.bookings = {booking.appointment_id:booking for booking in found}
     return {"bookings":[booking_view(booking).model_dump() for booking in found]}
 
