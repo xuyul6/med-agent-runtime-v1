@@ -100,7 +100,8 @@ class MedicalRuntime:
             raise ValueError("invalid_architecture")
         if settings.single_agent_attempts not in {1, 2}:
             raise ValueError("invalid_single_agent_attempts")
-        self.single = SingleAgent(model, index, self.tools, self.registry) if settings.architecture == SINGLE_AGENT else None
+        self.single = (SingleAgent(model, index, self.tools, self.registry, self.appointments, settings.appointment_timezone)
+                       if settings.architecture == SINGLE_AGENT else None)
         if self.single:
             self.monitor.register_agent(SINGLE_INSTANCE, SINGLE_AGENT)
 
@@ -263,9 +264,10 @@ class MedicalRuntime:
         self._followup_event(reason, followup)
         state = {**state, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in understanding.entities.items()}}
         state["consultation_need"] = need[0]
+        single_pending = []
         if self.single:
-            decision, answer, refs, agent_results, outputs = await self._single_agent(
-                question, understanding, state, risk, skill_snapshot, tool_budget, log)
+            decision, answer, refs, agent_results, outputs, single_pending = await self._single_agent(
+                question, understanding, state, risk, skill_snapshot, tool_budget, log, appointment)
             degraded = degraded or decision.collaboration_status == "failed"
         else:
             decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need[0],
@@ -294,10 +296,10 @@ class MedicalRuntime:
             event("memory_error", stage="write", error=type(exc).__name__)
         booking = outputs.get("appointment")
         # The card is the only way to confirm, so an answered draft reaches the reply whatever the merge did.
-        pending_actions = booking.pending_actions if booking is not None and booking.execution.status == "answered" else []
+        pending_actions = single_pending or (booking.pending_actions if booking is not None and booking.execution.status == "answered" else [])
         return understanding, decision, answer, refs, agent_results, degraded, storage, risk, pending_actions
 
-    async def _single_agent(self, question, understanding, state, risk, skill_snapshot, tool_budget, log):
+    async def _single_agent(self, question, understanding, state, risk, skill_snapshot, tool_budget, log, appointment=None):
         """Comparison baseline: one agent answers the whole turn; no routing, role contracts or merge."""
         assignment = AgentAssignment(task_id="task:single", role=SINGLE_AGENT, intent=understanding.primary,
             goal="单个 Agent 完成本轮全部信息任务。", input_text=question.text,
@@ -309,8 +311,8 @@ class MedicalRuntime:
         for _ in range(self.settings.single_agent_attempts):
             started = time.perf_counter()
             try:
-                answer, refs, execution = await asyncio.wait_for(self.single.run(question, understanding, state, risk,
-                    skill_snapshot, tool_budget), self.settings.agent_timeout)
+                answer, refs, execution, pending = await asyncio.wait_for(self.single.run(question, understanding, state, risk,
+                    skill_snapshot, tool_budget, appointment), self.settings.agent_timeout)
                 break
             except asyncio.CancelledError:
                 raise
@@ -326,12 +328,12 @@ class MedicalRuntime:
             decision.fallbacks.append(RoutingFallback(role=SINGLE_AGENT, reason=status, action="transparent_guidance"))
             answer = Answer(text="当前未能完成可靠回答。请稍后重试，或携带问题和相关资料咨询医护人员。",
                             limitations=["未作医学判断，也未执行医院操作或人工连接。"])
-            return decision, answer, [], [], {}
+            return decision, answer, [], [], {}, []
         assignment.selected_instance, assignment.status = SINGLE_INSTANCE, execution.status
         assignment.attempts.append(ExecutionAttempt(instance=SINGLE_INSTANCE, status="ok"))
         self.monitor.record(SINGLE_INSTANCE, True, (time.perf_counter()-started)*1000)
         event("agent", instance=SINGLE_INSTANCE, task_id=assignment.task_id, status="ok")
-        return decision, answer, refs, [execution], {}
+        return decision, answer, refs, [execution], {}, pending
 
     async def _read_state(self, scope, text, ambiguous):
         """Session state for this scope; a storage failure degrades to an empty state instead of failing the turn."""

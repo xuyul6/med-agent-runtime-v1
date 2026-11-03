@@ -11,6 +11,11 @@ from ..core.observability import event
 from ..core.provider import object_from_text
 from ..tools.contracts import LookupArguments
 from ..tools.registry import ToolBudgetExceeded, ToolContext
+from ..appointments.params import WINDOW_NAMES
+from ..appointments.preparation import followup_for, prepare
+from ..appointments.resolution import pending_from_issued
+from ..appointments.store import subject_label
+from .contracts import AppointmentInput
 from ..understanding.conversation import role_details
 from .checks import checked_single_answer, explicit_reference_request, report_range_source_quotes
 from .execution import (EVIDENCE_MISSING_NOTICE, REPORT_RANGE_INSTRUCTION, REPORT_RANGE_REPAIR, ROLE_DATA_PREFACE,
@@ -29,9 +34,33 @@ PRE_RETRIEVED = (Intent.MEDICINE, Intent.REPORT, Intent.VISIT)
 ROLES_IN_PROMPT = ("general", "symptom_guide", "drug_reference", "report_explainer", "visit_guide")
 
 
+PROPOSE = {"create":"propose_appointment", "cancel":"propose_cancellation"}
+
+
 class SingleAgent:
-    def __init__(self, model, index, tools, registry=DEFAULT_REGISTRY):
+    def __init__(self, model, index, tools, registry=DEFAULT_REGISTRY, appointments=None, timezone: str = "Asia/Shanghai"):
         self.model, self.index, self.tools, self.registry = model, index, tools, registry
+        self.appointments, self.timezone = appointments, timezone
+
+    async def _booking(self, appointment, question, understanding, risk, budget):
+        """The same checks and follow-up record as the booking role; the difference is that this context also reads everything else."""
+        request = AppointmentInput.model_validate({"text":question.text, "subject":question.subject, "risk":risk, **appointment})
+        context = ToolContext(self.registry["appointment"], request, self.index, user=question.user, session=question.session,
+                              appointments=self.appointments)
+        preparation = await prepare(request, context, self.tools, budget)
+        if preparation.kind != "ready":
+            record = followup_for(preparation, request, user=question.user, session=question.session, subject=question.subject,
+                                  now=self.appointments.now(), ttl=self.appointments.followup_ttl)
+            if record is not None:
+                self.appointments.save_followup(record)
+        candidate = preparation.candidates[0] if preparation.kind == "ready" else None
+        fields = ({"hospital":candidate.hospital, "department":candidate.department, "day":candidate.day, "window":WINDOW_NAMES[candidate.window]}
+                  if candidate else {name:getattr(request, name) for name in ("institution", "department", "appointment_date", "time_window")
+                                     if getattr(request, name)})
+        data = {"action":request.action, "subject_label":subject_label(question.subject), "fields":fields, "kind":preparation.kind,
+                "questions":list(preparation.questions), "options":list(preparation.options),
+                **({"candidate":candidate.model_dump(mode="json")} if candidate else {})}
+        return context, preparation, data
 
     def _context(self, domain, question, understanding, risk):
         role = DOMAIN_ROLES[domain]
@@ -64,9 +93,12 @@ class SingleAgent:
                 + REPORT_RANGE_INSTRUCTION + "\n"
                 + common + "\n\n" + "\n\n".join(rules))
 
-    async def run(self, question, understanding, memory, risk, snapshot, budget):
-        """Answer one turn alone; returns (answer, references, execution)."""
-        contexts = {}
+    async def run(self, question, understanding, memory, risk, snapshot, budget, appointment: dict | None = None):
+        """Answer one turn alone; returns (answer, references, execution, pending_actions)."""
+        contexts, booking, booking_data, propose = {}, None, None, None
+        if appointment is not None and self.appointments is not None and not understanding.subject_ambiguous:
+            booking, preparation, booking_data = await self._booking(appointment, question, understanding, risk, budget)
+            propose = PROPOSE[booking.request.action] if preparation.kind == "ready" else None
         for task in understanding.tasks:
             if task.intent not in PRE_RETRIEVED or task.intent in contexts:
                 continue
@@ -88,12 +120,20 @@ class SingleAgent:
                 "references":[ref.model_dump(mode="json") for ref in references().values()],
                 # Like the role path, only initial lookups can become quotation candidates.
                 "report_range_evidence":report_range_source_quotes(references())}
+        if booking_data is not None:
+            data["appointment"] = booking_data
         serialized = json.dumps(data, ensure_ascii=False)
         event("context", role=SINGLE_AGENT, mode="single_agent", characters=len(serialized), reference_count=len(data["references"]))
         evidence_requested = explicit_reference_request(question.text)
         visit_task = any(task.intent == Intent.VISIT for task in understanding.tasks)
         system = self._system(snapshot)+(EVIDENCE_MISSING_NOTICE if evidence_requested and not references() else "")
+        if booking_data is not None:
+            common = "# 共享约束\n"+snapshot.common
+            system += ("\n\n# 角色规则：appointment\n"+snapshot.select("appointment").text[len(common):].lstrip("\n")
+                       +"\n数据中的 appointment 是代码核对过的预约请求；kind 不是 ready 时没有提交工具，按 questions 向用户追问。")
         definitions = [self.tools.registry.specs["lookup_reference"].definition()]
+        if propose:
+            definitions.append(self.tools.registry.specs[propose].definition())
         messages = [{"role":"user", "content":ROLE_DATA_PREFACE+"\n"+serialized}]
         repairing = False
         for turn in range(3):
@@ -108,9 +148,12 @@ class SingleAgent:
                 outputs = []
                 for call in calls:
                     try:
-                        if call["name"] != "lookup_reference":
+                        if call["name"] == propose:
+                            value = await self.tools.call(propose, call.get("input", {}), booking, budget)
+                        elif call["name"] != "lookup_reference":
                             raise PermissionError("tool_not_allowed")
-                        value = await self._lookup(call.get("input", {}), contexts, question, understanding, risk, budget)
+                        else:
+                            value = await self._lookup(call.get("input", {}), contexts, question, understanding, risk, budget)
                         outputs.append({"type":"tool_result", "tool_use_id":call["id"], "content":value.model_dump_json()})
                     except ToolBudgetExceeded:
                         raise
@@ -149,5 +192,6 @@ class SingleAgent:
             execution = AgentExecution(role=SINGLE_AGENT, instance=INSTANCE, profile_version=VERSION, status="answered",
                                        workflow=["retrieve", "generate", "validate_output"], missing_fields=[], payload={},
                                        task_id="task:single")
-            return answer, list(references().values()), execution
+            pending = pending_from_issued(booking.issued, self.timezone) if booking is not None else []
+            return answer, list(references().values()), execution, pending
         raise ValueError("tool_round_budget_exceeded")
