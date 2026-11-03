@@ -43,3 +43,49 @@ export function resetUser(storage, makeId) {
   try { storage?.setItem(USER_KEY, user) } catch { /* storage blocked: the identity lasts for this page only */ }
   return user
 }
+
+export const LOGIN_KEY = 'medagent.demo-login'
+const LOGIN_PATTERN = /^[\p{Script=Han}A-Za-z0-9_-]{1,32}$/u
+
+// Demo login: a name, no password. The same name is the same user; this is not authentication.
+export function normalizeLogin(name) {
+  const value = typeof name === 'string' ? name.trim() : ''
+  return LOGIN_PATTERN.test(value) ? value : null
+}
+
+export function loginUser(storage, name) {
+  const value = normalizeLogin(name)
+  if (!value) return null
+  try { storage?.setItem(LOGIN_KEY, value) } catch { /* storage blocked: the login lasts for this page only */ }
+  return 'demo:' + value
+}
+
+export function currentLogin(storage) {
+  try { return normalizeLogin(storage?.getItem(LOGIN_KEY)) } catch { return null }
+}
+
+export function logout(storage) {
+  try { storage?.removeItem(LOGIN_KEY) } catch { /* nothing stored */ }
+}
+
+export function activeUser(storage, makeId) {
+  const name = currentLogin(storage)
+  return name ? { user: 'demo:' + name, name } : { user: loadUser(storage, makeId), name: null }
+}
+
+export function listAppointments(request, user) {
+  return request('/appointments?' + new URLSearchParams({ user }))
+}
+
+export function loadCatalog(request) {
+  return request('/appointments/catalog')
+}
+
+export function searchSlots(request, query) {
+  const params = Object.fromEntries(Object.entries(query).filter(([, value]) => value))
+  return request('/appointments/slots?' + new URLSearchParams(params))
+}
+
+export async function createDraft(request, body) {
+  return pendingCards({ pending_actions: [await request('/appointments/drafts', body)] })[0]
+}

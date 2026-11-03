@@ -13,7 +13,8 @@ import ToolTrace from './components/ToolTrace.vue'
 import EvaluationReport from './components/EvaluationReport.vue'
 import { loadEvaluation } from './utils/evaluation.js'
 import AppointmentCard from './components/AppointmentCard.vue'
-import { confirmationError, confirmPending, loadUser, pendingCards, resetUser } from './utils/appointments.js'
+import AppointmentsPanel from './components/AppointmentsPanel.vue'
+import { activeUser, confirmationError, confirmPending, loginUser, logout, normalizeLogin, pendingCards, resetUser } from './utils/appointments.js'
 
 const request = makeClient()
 const view = ref('chat')
@@ -28,7 +29,13 @@ const messages = ref(null)
 const followMessages = ref(true)
 const session = ref('')
 const browserStorage = () => { try { return globalThis.localStorage } catch { return null } }
-const user = ref(loadUser(browserStorage(), () => crypto.randomUUID()))
+const makeId = () => crypto.randomUUID()
+const identity = ref(activeUser(browserStorage(), makeId))
+const user = computed(() => identity.value.user)
+const loginName = ref('')
+const loginError = ref('')
+// Bumped after every confirmed card so the booking list reloads.
+const bookingsVersion = ref(0)
 // Card states live here, keyed by draft, so switching views does not bring back a confirmed or dismissed card.
 const cardStates = reactive({})
 const subject = ref('self')
@@ -68,15 +75,29 @@ async function confirmCard(card) {
   try {
     await confirmPending(request, user.value, card)
     cardStates[card.draftId] = { state: 'done', message: '' }
+    bookingsVersion.value += 1
   } catch (failure) { cardStates[card.draftId] = { state: 'error', message: confirmationError(failure) } }
 }
 
 function dismissCard(card) { cardStates[card.draftId] = { state: 'dismissed', message: '' } }
 
-function resetIdentity() {
-  user.value = resetUser(browserStorage(), () => crypto.randomUUID())
+function switchIdentity(next) {
+  identity.value = next
   for (const key of Object.keys(cardStates)) delete cardStates[key]
   newSession()
+}
+
+function login() {
+  const name = normalizeLogin(loginName.value)
+  if (!name) { loginError.value = '用户名为 1–32 个汉字、字母、数字、下划线或连字符。'; return }
+  switchIdentity({ user: loginUser(browserStorage(), name), name })
+  loginName.value = ''
+  loginError.value = ''
+}
+
+function signOut() {
+  logout(browserStorage())
+  switchIdentity({ user: resetUser(browserStorage(), makeId), name: null })
 }
 
 function newSession() { session.value = ''; conversation.value = []; followMessages.value = true; last.value = null; trace.value = null; traceError.value = ''; traceLoading.value = false }
@@ -179,11 +200,11 @@ onMounted(refresh)
   <div class="workbench">
     <header class="header">
       <a href="#" class="identity" @click.prevent="show('chat')"><span class="symbol">m<span>+</span></span><span>MedAgent<small>INFORMATION RUNTIME</small></span></a>
-      <nav aria-label="工作区"><button v-for="item in [['chat', '咨询'], ['knowledge', '参考资料'], ['roles', '角色契约'], ['evaluation', '评测']]" :key="item[0]" :class="{ selected: view === item[0] }" @click="show(item[0])">{{ item[1] }}</button></nav>
+      <nav aria-label="工作区"><button v-for="item in [['chat', '咨询'], ['appointments', '预约'], ['knowledge', '参考资料'], ['roles', '角色契约'], ['evaluation', '评测']]" :key="item[0]" :class="{ selected: view === item[0] }" @click="show(item[0])">{{ item[1] }}</button></nav>
       <button class="connection" @click="refresh"><i :class="{ connected: status?.status === 'ok' }"></i>{{ connection }}</button>
     </header>
 
-    <section class="introduction"><p class="eyebrow">OBSERVABLE MULTI-AGENT · INDEPENDENT V1</p><h1>把问题整理清楚，<br class="mobile-break">让就医准备更从容。</h1><p>记录症状、查阅公开资料、理解报告文字。每个回答都能查看来源和执行过程。</p><span class="boundary">信息参考与工程演示 · 预约仅在模拟医院系统中进行，不接入真实医院</span> <button class="quiet" :disabled="busy" @click="resetIdentity">重置模拟身份</button></section>
+    <section class="introduction"><p class="eyebrow">OBSERVABLE MULTI-AGENT · INDEPENDENT V1</p><h1>把问题整理清楚，<br class="mobile-break">让就医准备更从容。</h1><p>记录症状、查阅公开资料、理解报告文字。每个回答都能查看来源和执行过程。</p><span class="boundary">信息参考与工程演示 · 预约仅在模拟医院系统中进行，不接入真实医院</span><form v-if="!identity.name" class="login" @submit.prevent="login"><label class="sr-only" for="login-name">用户名</label><input id="login-name" v-model="loginName" maxlength="32" placeholder="用户名" autocomplete="username"><button class="quiet" :disabled="busy">登录</button><small>演示登录，不设密码；同名即同一用户</small><small v-if="loginError" class="degraded">{{ loginError }}</small></form><div v-else class="login"><span>当前用户：{{ identity.name }}</span><button class="quiet" :disabled="busy" @click="signOut">退出</button></div></section>
     <p v-if="error" class="notice" role="status">{{ error }}</p>
 
     <div class="layout">
@@ -249,6 +270,7 @@ onMounted(refresh)
         </section>
 
         <section v-if="view === 'evaluation'" class="card evaluation"><div class="panel-heading"><div><span class="eyebrow">QUALITY & REGRESSION</span><h2>端到端评测</h2></div></div><p>在独立运行状态下评测合成分类与多轮咨询案例，分别记录规则检查和模型评分。评分不代表临床准确率。</p><p class="hint">在线评测会产生模型费用。以下为请求额度上限，输入 Token 与实际费用不受其限制；默认额度可能不足以完成全部内置案例，达到上限会保留未完成结果。</p><form class="evaluation-settings" @submit.prevent="runEvaluation"><div class="field-grid"><label>最多模型调用次数<input v-model="evaluationSettings.max_model_calls" type="number" min="1" max="400" step="1" required :disabled="busy"></label><label>请求输出 Token 额度<input v-model="evaluationSettings.max_output_tokens" type="number" min="1" max="400000" step="1" required :disabled="busy"></label><label>运行时限（秒）<input v-model="evaluationSettings.timeout_seconds" type="number" min="1" max="600" step="1" required :disabled="busy"></label></div><details><summary>基线选项（可选）</summary><p class="hint">填写已保存的基线名称可比较；保存需使用新名称。数据集、口径和资料条件不兼容时后端会拒绝比较，旧版本不能直接混比。</p><div class="field-grid"><label>对比基线名称<input v-model="evaluationSettings.compare_to" maxlength="64" :disabled="busy" autocomplete="off"></label><label>保存为新基线<input v-model="evaluationSettings.save_as" maxlength="64" :disabled="busy" autocomplete="off"></label></div></details><button class="primary" :disabled="busy || !status || status.preview">{{ busy ? '评测执行中…' : '运行内置评测' }}</button></form><p v-if="evaluationError" class="degraded" role="status">{{ evaluationError }}</p><EvaluationReport v-if="evaluation" :report="evaluation" /></section>
+        <section v-if="view === 'appointments'" class="card"><AppointmentsPanel :user="user" :request="request" :card-state="cardState" :version="bookingsVersion" @confirm="confirmCard" @dismiss="dismissCard" /></section>
         <section v-if="view === 'roles'" class="card roles"><RoleCatalog :profiles="roleCatalog.profiles" :skills="roleCatalog.skills" :loading="roleLoading || skillsReloading" :role-names="roleNames" @refresh="refreshRoles" /></section>
       </main>
 

@@ -896,3 +896,54 @@ footer {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.login {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.login input {
+  width: 160px;
+  max-width: 100%;
+}
+
+.login small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.booking-row {
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.booking-row p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+
+.booking-row .appointment-card {
+  flex-basis: 100%;
+}
+
+.booking-form .field-grid {
+  margin-bottom: 10px;
+}
+
+.slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.slot-list button {
+  align-self: flex-start;
+}

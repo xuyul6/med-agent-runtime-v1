@@ -78,6 +78,7 @@ class BookingView(Contract):
     department: str
     day: str
     window: Literal["am", "pm"]
+    subject: str
     subject_label: str
 
 

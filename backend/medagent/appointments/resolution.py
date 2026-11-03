@@ -64,7 +64,7 @@ def resolve_request(request: AppointmentInput, catalog: HospitalCatalog, today: 
 def booking_view(booking: Booking) -> BookingView:
     slot = booking.slot
     return BookingView(appointment_id=booking.appointment_id, hospital=slot.hospital, department=slot.department, day=slot.day.isoformat(),
-                       window=slot.window, subject_label=subject_label(booking.subject))
+                       window=slot.window, subject=booking.subject, subject_label=subject_label(booking.subject))
 
 
 def pending_from_issued(issued: dict[str, tuple[Draft, str]], timezone: str) -> list[PendingAction]:
