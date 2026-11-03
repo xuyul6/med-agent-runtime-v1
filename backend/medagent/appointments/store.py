@@ -69,6 +69,18 @@ class Followup:
     expires_at: float
 
 
+class FrozenClock:
+    """Business time for isolated runs: it moves only when a test advances it."""
+    def __init__(self, value: float):
+        self.value = value
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
+
+
 def subject_label(subject: str) -> str:
     return SUBJECT_LABELS.get(subject, "其他人")
 
@@ -210,6 +222,34 @@ class AppointmentStore:
                                      (followup.user, followup.session, followup.subject, followup.action, followup.kind,
                                       json.dumps(followup.fields, ensure_ascii=False), json.dumps(list(followup.awaiting)),
                                       json.dumps(list(followup.options), ensure_ascii=False), followup.expires_at))
+
+    def peek_followup(self, user: str, session: str) -> Followup | None:
+        with self._lock:
+            row = self._connection.execute("select * from followups where user = ? and session = ?", (user, session)).fetchone()
+        return None if row is None else Followup(row[0], row[1], row[2], row[3], row[4], json.loads(row[5]), tuple(json.loads(row[6])),
+                                                 tuple(json.loads(row[7])), row[8])
+
+    # Evaluation only: bookings and follow-ups move between isolated stores; drafts and token hashes never leave.
+    def export_state(self) -> dict:
+        with self._lock:
+            return {"bookings":[list(row) for row in self._connection.execute("select * from bookings order by appointment_id")],
+                    "followups":[list(row) for row in self._connection.execute("select * from followups order by user, session")]}
+
+    def import_state(self, state: dict) -> None:
+        with self._lock:
+            self._connection.executemany("insert into bookings values (?, ?, ?, ?, ?, ?)", [tuple(row) for row in state["bookings"]])
+            self._connection.executemany("insert into followups values (?, ?, ?, ?, ?, ?, ?, ?, ?)", [tuple(row) for row in state["followups"]])
+
+    def booking_rows(self) -> list[tuple]:
+        with self._lock:
+            return [tuple(row) for row in self._connection.execute(
+                "select appointment_id, user, subject, slot_id, status from bookings order by appointment_id")]
+
+    def draft_record(self, draft_id: str) -> dict | None:
+        with self._lock:
+            row = self._connection.execute("select kind, user, subject, slot_id, appointment_id from drafts where draft_id = ?",
+                                           (draft_id,)).fetchone()
+        return None if row is None else dict(zip(("kind", "user", "subject", "slot_id", "appointment_id"), row))
 
     def take_followup(self, user: str, session: str) -> Followup | None:
         with self._lock:

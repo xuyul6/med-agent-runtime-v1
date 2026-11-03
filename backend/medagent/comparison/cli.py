@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 from ..benchmark.cli import write_report
 from ..evaluation.metrics import digest
-from .contracts import PROTOCOL, ComparisonRequest, resolve_comparison
+from .contracts import LAYERS, ComparisonRequest, protocol_for, resolve_comparison
 from .runner import schedule
 
 
@@ -16,8 +16,9 @@ def build_plan(request: ComparisonRequest) -> dict:
     pairs = schedule(request, cases)
     body = request.model_dump(mode="json")
     body["cases"] = [case.model_dump(mode="json") for case in cases]
+    protocol = protocol_for(request.layer)
     return {"schema_version":"architecture-comparison-plan-1", "online_status":"not_run", "dataset":version,
-            "protocol":deepcopy(PROTOCOL), "protocol_hash":digest(PROTOCOL), "request":body,
+            "protocol":deepcopy(protocol), "protocol_hash":digest(protocol), "request":body,
             "cases_per_category":{category:sum(case.category == category for case in cases) for category in {c.category for c in cases}},
             "planned_pairs":len(pairs), "planned_targets":len(request.arm_names)*len(pairs), "schedule":pairs,
             "notice":"Only --execute sends requests; no arm is assumed to be better."}
@@ -44,8 +45,15 @@ def main():
     parser.add_argument("--cases", help="JSON ComparisonRequest reviewed before execution")
     parser.add_argument("--execute", action="store_true", help="Run against /comparison/run; may incur model charges")
     parser.add_argument("--no-judge", action="store_true")
+    parser.add_argument("--layer", choices=sorted(LAYERS))
+    parser.add_argument("--repetitions", type=int)
     args = parser.parse_args()
     body = json.loads(Path(args.cases).read_text()) if args.cases else {}
+    for name in ("layer", "repetitions"):
+        value = getattr(args, name)
+        if value is None: continue
+        if body.get(name) not in (None, value): raise SystemExit(f"--{name} conflicts with the reviewed request file")
+        body[name] = value
     if args.no_judge: body["judge"] = False
     request = ComparisonRequest.model_validate(body)
     if Path(args.output).exists(): raise FileExistsError("preserve_existing_comparison_report")

@@ -41,10 +41,10 @@ class SnapshotSkills:
     def snapshot(self): return self.fixed
 
 
-def isolated_appointments(source) -> AppointmentStore:
+def isolated_appointments(source, clock=None) -> AppointmentStore:
     """A fresh in-memory booking store: isolated runs never write the app's bookings or share drafts between runtimes."""
     settings = source.settings
-    return AppointmentStore(source.appointments.catalog, ":memory:", clock=source.appointments.clock, ttl=settings.appointment_ttl,
+    return AppointmentStore(source.appointments.catalog, ":memory:", clock=clock or source.appointments.clock, ttl=settings.appointment_ttl,
                             followup_ttl=settings.appointment_followup_ttl, timezone=settings.appointment_timezone)
 
 

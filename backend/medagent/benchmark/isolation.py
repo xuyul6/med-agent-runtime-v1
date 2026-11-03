@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 import json
 import time
+from ..appointments.store import FrozenClock
 from ..evaluation.budget import BudgetedModel
 from ..evaluation.isolation import EvaluationIsolation, NamespacedRedis, SnapshotSkills, isolated_appointments
 from ..evaluation.metrics import digest
@@ -23,12 +24,17 @@ class ConversationSnapshot:
     risk_seconds: float
     transcript_json: str = "[]"
     context_time: float = 0.0
+    # Permission layer only: business time, seeded bookings, follow-ups and seed aliases. Earlier layers leave it empty.
+    appointments_json: str = ""
 
     @property
     def payload(self):
-        return {"state":json.loads(self.state_json), "episodes":json.loads(self.episodes_json),
-                "subject":self.subject, "recent_risk":self.risk_seconds > 0,
-                "original_transcript":json.loads(self.transcript_json), "context_time":self.context_time}
+        payload = {"state":json.loads(self.state_json), "episodes":json.loads(self.episodes_json),
+                   "subject":self.subject, "recent_risk":self.risk_seconds > 0,
+                   "original_transcript":json.loads(self.transcript_json), "context_time":self.context_time}
+        if self.appointments_json:
+            payload["appointments"] = json.loads(self.appointments_json)
+        return payload
 
     @property
     def sha256(self): return digest(self.payload)
@@ -42,6 +48,8 @@ class PairedIsolation(EvaluationIsolation):
         super().__init__(source,run_id,budget)
         self.settings, self.vector_mode = source.settings, source.vectors.mode
         self.memory_available, self.serial = source.memory.available, 0
+        # Permission layer: (business time, store state to restore) for the next branches; None keeps the source clock.
+        self.appointment_setup = None
 
     async def branch(self, phase, snapshot=None, cache=()):
         self.serial += 1
@@ -60,7 +68,7 @@ class PairedIsolation(EvaluationIsolation):
             memory.context_clock = lambda: snapshot.context_time
         memory.available = self.memory_available
         runtime = MedicalRuntime(self.settings,model,vectors,index,memory,profiles=self.profiles,skills=SnapshotSkills(self.skills),
-                                 appointments=isolated_appointments(self.source))
+                                 appointments=self.branch_appointments())
         runtime.tools.registry = runtime.planner.tools = ToolRegistry(self.specs)
         self.runtime = runtime
         if snapshot:
@@ -76,6 +84,15 @@ class PairedIsolation(EvaluationIsolation):
             if snapshot.risk_seconds > 0:
                 runtime.risk.hints[scope] = runtime.risk.clock()+snapshot.risk_seconds
         return runtime
+
+    def branch_appointments(self):
+        if self.appointment_setup is None:
+            return isolated_appointments(self.source)
+        moment, state = self.appointment_setup
+        store = isolated_appointments(self.source, FrozenClock(moment))
+        if state:
+            store.import_state(state)
+        return store
 
     async def capture(self, runtime, user, session, subject, transcript=None):
         scope = scope_key(user,session,subject)
