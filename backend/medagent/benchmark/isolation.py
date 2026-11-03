@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import json
 import time
 from ..evaluation.budget import BudgetedModel
-from ..evaluation.isolation import EvaluationIsolation, NamespacedRedis, SnapshotSkills
+from ..evaluation.isolation import EvaluationIsolation, NamespacedRedis, SnapshotSkills, isolated_appointments
 from ..evaluation.metrics import digest
 from ..memory import SessionMemory, scope_key
 from ..knowledge.retrieval import ReferenceIndex, Vectorizer
@@ -59,7 +59,8 @@ class PairedIsolation(EvaluationIsolation):
         if snapshot and snapshot.context_time:
             memory.context_clock = lambda: snapshot.context_time
         memory.available = self.memory_available
-        runtime = MedicalRuntime(self.settings,model,vectors,index,memory,profiles=self.profiles,skills=SnapshotSkills(self.skills))
+        runtime = MedicalRuntime(self.settings,model,vectors,index,memory,profiles=self.profiles,skills=SnapshotSkills(self.skills),
+                                 appointments=isolated_appointments(self.source))
         runtime.tools.registry = runtime.planner.tools = ToolRegistry(self.specs)
         self.runtime = runtime
         if snapshot:

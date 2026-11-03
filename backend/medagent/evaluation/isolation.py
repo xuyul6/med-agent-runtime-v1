@@ -8,6 +8,7 @@ from .budget import BudgetedModel, judge_source
 from .contracts import GENERATION_FAULTS
 from ..agents.output_validation import AgentOutputError
 from ..agents.single import DOMAIN_ROLES, SINGLE_AGENT
+from ..appointments.store import AppointmentStore
 from ..memory import SessionMemory
 from ..core.observability import event
 from ..knowledge.retrieval import ReferenceIndex, Vectorizer
@@ -38,6 +39,13 @@ class NamespacedRedis:
 class SnapshotSkills:
     def __init__(self, snapshot): self.fixed = snapshot
     def snapshot(self): return self.fixed
+
+
+def isolated_appointments(source) -> AppointmentStore:
+    """A fresh in-memory booking store: isolated runs never write the app's bookings or share drafts between runtimes."""
+    settings = source.settings
+    return AppointmentStore(source.appointments.catalog, ":memory:", clock=source.appointments.clock, ttl=settings.appointment_ttl,
+                            followup_ttl=settings.appointment_followup_ttl, timezone=settings.appointment_timezone)
 
 
 class EvaluationIsolation:
@@ -80,7 +88,7 @@ class EvaluationIsolation:
     def new_case(self):
         self.index.cache.clear()
         self.runtime = MedicalRuntime(self.source.settings,self.model,self.vectors,self.index,self.memory,
-            profiles=self.profiles,skills=SnapshotSkills(self.skills))
+            profiles=self.profiles,skills=SnapshotSkills(self.skills),appointments=isolated_appointments(self.source))
         self.runtime.tools.registry = ToolRegistry(self.specs)
         self.runtime.planner.tools = self.runtime.tools.registry
         return self.runtime
