@@ -48,6 +48,7 @@ def json_schema(stage: str) -> dict | None:
             "urgent_quote":string,
             "product_quote":string,
             "visit_quote":string,
+            "appointment_quote":string,
             "scores":{"type":"object","properties":{key:{"type":"number"} for key in ["symptoms","medicine","visit","report","general"]},
                       "required":["symptoms","medicine","visit","report","general"],"additionalProperties":False},
             "tasks":{"type":"array", "items":{"type":"object", "properties":{"intent":{"type":"string", "enum":["symptoms","medicine","visit","report","general"]}, "goal":string, "quote":string},

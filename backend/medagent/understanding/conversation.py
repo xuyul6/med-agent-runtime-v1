@@ -21,6 +21,8 @@ UNCERTAIN = r"是不是|是否|会不会|可能|假如|如果|科普|什么是|[
 UNKNOWN = r"不知道|不清楚|不记得|没记住|忘了|无法确定|不确定|未知"
 MEDICATION_FIELDS = {"medication_name", "formulation", "population", "product_name", "strength", "region"}
 APPOINTMENT_FIELDS = {"department", "appointment_date", "time_window"}
+# Request parameters, not health facts: kept even when phrased as a question.
+REQUEST_FIELDS = MEDICATION_FIELDS | {"institution"} | APPOINTMENT_FIELDS
 FIELD_LABELS = {"medication_name":r"药名|什么药", "formulation":r"剂型", "population":r"人群|适用", "product_name":r"品牌|产品", "strength":r"规格|含量", "symptom":r"症状|不适",
                 "age_group":r"年龄|几岁", "onset":r"开始|时间|多久", "change":r"变化|加重", "report_item":r"项目|指标",
                 "value":r"数值|结果", "unit":r"单位", "reference_range":r"范围", "report_date":r"日期|报告时间",
@@ -178,13 +180,13 @@ def ground_update(candidate: dict, sources: dict[str, dict]) -> GroundedField | 
         if name == "value" and value and re.fullmatch(r"[\d.]+", value) and not re.search(r"(?<![\d.])"+re.escape(value)+r"(?![\d.])", quote):
             raise ValueError("partial_numeric_value")
         enclosing = next((part for part in clauses(source["text"]) if quote in part), quote)
-        if name not in MEDICATION_FIELDS | {"institution"} and state in {"provided", "negated"} and re.search(r"科普|模板|知识|介绍|解释|比如|例如|假设|想了解|学习", enclosing):
+        if name not in REQUEST_FIELDS and state in {"provided", "negated"} and re.search(r"科普|模板|知识|介绍|解释|比如|例如|假设|想了解|学习", enclosing):
             raise ValueError("general_information_is_not_patient_fact")
-        if state == "provided" and name in MEDICATION_FIELDS | {"institution"} and re.search(UNCERTAIN, enclosing):
+        if state == "provided" and name in REQUEST_FIELDS and re.search(UNCERTAIN, enclosing):
             state = "topic"
         elif state in {"provided", "negated"} and re.search(UNCERTAIN, enclosing):
             raise ValueError("question_is_not_patient_fact")
-        if state == "topic" and name not in MEDICATION_FIELDS | {"institution"}:
+        if state == "topic" and name not in REQUEST_FIELDS:
             raise ValueError("topic_is_not_patient_fact")
         if value and state != "unknown":
             offset = enclosing.find(value)
