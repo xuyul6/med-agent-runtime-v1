@@ -3,13 +3,15 @@ import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Response
 from redis.asyncio import Redis
+from datetime import date, timedelta
 from typing import Literal
-from pydantic import BaseModel, Field, ValidationError
-from .appointments.resolution import booking_view
-from .appointments.store import AppointmentError
-from .tools.contracts import BookingView
+from pydantic import BaseModel, Field, ValidationError, model_validator
+from .appointments.resolution import booking_view, pending_from_issued
+from .appointments.store import SUBJECT_LABELS, AppointmentError
+from .core.observability import event
+from .tools.contracts import BookingView, SlotView
 from .core.config import ROOT, Settings
-from .core.contracts import DocumentBatch, Question, Reference, Reply
+from .core.contracts import DocumentBatch, PendingAction, Question, Reference, Reply
 from .benchmark.contracts import BenchmarkRequest
 from .benchmark.runner import run_benchmark
 from .comparison.contracts import ComparisonRequest
@@ -34,6 +36,21 @@ class ConfirmRequest(BaseModel):
 class ConfirmResult(BaseModel):
     status: Literal["booked", "cancelled"]
     appointment: BookingView
+
+
+class ManualDraftRequest(BaseModel):
+    """A draft the user builds in the booking form; it still needs the card's confirm button."""
+    user: str = Field(min_length=1, max_length=100)
+    subject: Literal[tuple(SUBJECT_LABELS)]
+    action: Literal["create", "cancel"]
+    slot_id: str | None = Field(default=None, min_length=1, max_length=120)
+    appointment_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def target_matches_action(self):
+        if (self.action == "create") != bool(self.slot_id) or (self.action == "cancel") != bool(self.appointment_id):
+            raise ValueError("draft_target_mismatch")
+        return self
 
 
 CONFIRM_STATUS = {"draft_not_found":404, "appointment_not_found":404, "slot_not_found":404, "user_mismatch":403, "token_invalid":403,
@@ -132,6 +149,41 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
         except AppointmentError as exc:
             raise HTTPException(CONFIRM_STATUS.get(exc.code, 409), exc.code) from None
         return ConfirmResult(status=booking.status, appointment=booking_view(booking))
+
+    @app.get("/appointments/catalog")
+    async def appointment_catalog():
+        store = app.state.runtime.appointments
+        today = store.today()
+        return {"hospitals":[{"id":hospital.id, "name":hospital.name,
+                              "departments":[{"id":dept.id, "name":dept.name} for dept in hospital.departments]}
+                             for hospital in store.catalog.hospitals],
+                "subjects":[{"id":key, "label":label} for key, label in SUBJECT_LABELS.items()],
+                "first_day":(today+timedelta(days=1)).isoformat(),
+                "last_day":(today+timedelta(days=store.catalog.horizon_days)).isoformat()}
+
+    @app.get("/appointments/slots", response_model=list[SlotView])
+    async def appointment_slots(hospital_id: str = Query(max_length=64), department_id: str = Query(max_length=64), day: date = Query(),
+                                window: Literal["am", "pm"] | None = None):
+        store = app.state.runtime.appointments
+        if not store.catalog.match_department_id(hospital_id, department_id):
+            raise HTTPException(404, "department_not_found")
+        if not store.catalog.bookable(day, store.today()):
+            raise HTTPException(410, "slot_out_of_window")
+        return [SlotView(slot_id=slot.slot_id, hospital=slot.hospital, department=slot.department, day=slot.day.isoformat(),
+                         window=slot.window, remaining=remaining) for slot, remaining in store.search(hospital_id, department_id, day, window)]
+
+    @app.post("/appointments/drafts", response_model=PendingAction)
+    async def manual_draft(request: ManualDraftRequest):
+        store = app.state.runtime.appointments
+        who = {"user":request.user, "session":"manual", "subject":request.subject}
+        try:
+            draft, token = (store.propose_create(**who, slot_id=request.slot_id) if request.action == "create"
+                            else store.propose_cancel(**who, appointment_id=request.appointment_id))
+        except AppointmentError as exc:
+            raise HTTPException(CONFIRM_STATUS.get(exc.code, 409), exc.code) from None
+        event("appointment_manual_draft", draft_id=draft.draft_id, draft_kind=draft.kind)
+        [action] = pending_from_issued({draft.draft_id:(draft, token)}, app.state.runtime.settings.appointment_timezone)
+        return action
 
     @app.get("/appointments", response_model=list[BookingView])
     async def appointments(user: str = Query(min_length=1, max_length=100)):

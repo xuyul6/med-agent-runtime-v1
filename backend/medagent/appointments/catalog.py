@@ -62,6 +62,9 @@ class HospitalCatalog:
         return [hospital for hospital in self.hospitals if hospital.short_name in text or text in hospital.short_name
                 or hospital.short_name.removeprefix("演示") in text]
 
+    def match_department_id(self, hospital_id: str, department_id: str) -> bool:
+        return self._department(hospital_id, department_id) is not None
+
     def bookable(self, day: date, today: date) -> bool:
         return today < day <= today + timedelta(days=self.horizon_days)
 
