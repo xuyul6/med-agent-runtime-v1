@@ -1,9 +1,13 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from redis.asyncio import Redis
-from pydantic import ValidationError
+from typing import Literal
+from pydantic import BaseModel, Field, ValidationError
+from .appointments.resolution import booking_view
+from .appointments.store import AppointmentError
+from .tools.contracts import BookingView
 from .core.config import ROOT, Settings
 from .core.contracts import DocumentBatch, Question, Reference, Reply
 from .benchmark.contracts import BenchmarkRequest
@@ -19,6 +23,21 @@ from .core.provider import ClaudeGateway, fallback_gateway, judge_gateway
 from .knowledge.retrieval import ReferenceIndex, Vectorizer, catalog_updates
 from .runtime import MedicalRuntime
 from .agents.skills import SkillValidationError
+
+
+class ConfirmRequest(BaseModel):
+    user: str = Field(min_length=1, max_length=100)
+    draft_id: str = Field(min_length=1, max_length=64)
+    token: str = Field(min_length=1, max_length=128)
+
+
+class ConfirmResult(BaseModel):
+    status: Literal["booked", "cancelled"]
+    appointment: BookingView
+
+
+CONFIRM_STATUS = {"draft_not_found":404, "appointment_not_found":404, "slot_not_found":404, "user_mismatch":403, "token_invalid":403,
+                  "draft_expired":410, "slot_out_of_window":410, "draft_not_pending":409, "slot_full":409, "already_booked":409}
 
 
 def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=None) -> FastAPI:
@@ -104,6 +123,19 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
     @app.post("/chat", response_model=Reply)
     async def chat(question: Question):
         return await app.state.runtime.chat(question)
+
+    @app.post("/appointments/confirm", response_model=ConfirmResult)
+    async def confirm_appointment(request: ConfirmRequest):
+        # The only write into the mock hospital: a user's button press carrying the one-time token.
+        try:
+            booking = app.state.runtime.appointments.confirm(user=request.user, draft_id=request.draft_id, token=request.token)
+        except AppointmentError as exc:
+            raise HTTPException(CONFIRM_STATUS.get(exc.code, 409), exc.code) from None
+        return ConfirmResult(status=booking.status, appointment=booking_view(booking))
+
+    @app.get("/appointments", response_model=list[BookingView])
+    async def appointments(user: str = Query(min_length=1, max_length=100)):
+        return [booking_view(booking) for booking in app.state.runtime.appointments.bookings(user)]
 
     @app.get("/runtime")
     @app.get("/monitor")
