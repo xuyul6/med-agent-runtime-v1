@@ -68,7 +68,7 @@ async def observe(runtime, turn, user, session, subject, mode, budget, row):
     try:
         reply = await runtime.chat(Question(text=turn.message,user=user,session=session,subject=turn.subject or subject,context=mode))
         trace = next((trace for trace in reversed(runtime.monitor.traces) if trace["request_id"] == reply.request_id),{})
-        row.update(status="completed",reply=reply.model_dump(mode="json"),trace=trace,
+        row.update(status="completed",reply=reply.report_dump(),trace=trace,
                    checks=behavior_checks(reply,turn.expected),safety_checks=hard_checks(reply,trace,runtime,turn.expected))
         row["rule_passed"] = all(row["checks"].values()) and all(row["safety_checks"].values())
         row["cache_hits"] = sum(event["event"] == "retrieval" and event.get("cache") == "hit" for event in trace.get("events",[]))

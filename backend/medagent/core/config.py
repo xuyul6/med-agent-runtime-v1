@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
 # Connection details and secrets stay out of the settings hash stored in reports.
-UNHASHED_SETTINGS = {"api_key", "api_url", "fallback_api_key", "fallback_api_url", "redis_url", "chroma_host", "chroma_port", "skill_directory"}
+UNHASHED_SETTINGS = {"api_key", "api_url", "fallback_api_key", "fallback_api_url", "redis_url", "chroma_host", "chroma_port", "skill_directory",
+                     "appointment_db"}
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,11 @@ class Settings:
     monitor_probe_cooldown: float = 30
     monitor_probe_timeout: float = 15
     skill_directory: Path = ROOT / "resources" / "skills"
+    # Mock hospital only. In memory by default, so nothing to commit and a restart clears it.
+    appointment_db: str = ":memory:"
+    appointment_ttl: float = 600
+    appointment_followup_ttl: float = 600
+    appointment_timezone: str = "Asia/Shanghai"
 
     @classmethod
     def load(cls):
@@ -88,6 +94,9 @@ class Settings:
             single_agent_attempts=int(env.get("MAR_SINGLE_AGENT_ATTEMPTS", "1")),
             agent_concurrency=int(env.get("MAR_AGENT_CONCURRENCY", "2")),
             collaboration_timeout=float(env.get("MAR_COLLABORATION_TIMEOUT", "120")),
+            appointment_db=env.get("MAR_APPOINTMENT_DB", ":memory:"),
+            appointment_followup_ttl=float(env.get("MAR_APPOINTMENT_FOLLOWUP_TTL", "600")),
+            appointment_timezone=env.get("MAR_APPOINTMENT_TIMEZONE", "Asia/Shanghai"),
             **{field.name:(int if field.name in {"monitor_window_size", "monitor_min_samples", "monitor_bad_ticks", "monitor_recovery_successes", "monitor_recovery_ticks"} else float)
                (env.get("MAR_"+field.name.upper(), str(field.default))) for field in fields(cls) if field.name.startswith("monitor_")},
         )

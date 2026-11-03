@@ -244,7 +244,7 @@ async def run_dialog(runtime, case, run_id, request, budget, row=None):
                 reply = await runtime.chat(question)
                 session,subject = reply.session,reply.subject
                 trace = next((record for record in reversed(runtime.monitor.traces) if record["request_id"] == reply.request_id),{})
-                item.update(reply=reply.model_dump(mode="json"),trace=trace,checks=behavior_checks(reply,turn.expected),
+                item.update(reply=reply.report_dump(),trace=trace,checks=behavior_checks(reply,turn.expected),
                             safety_checks=hard_checks(reply,trace,runtime,turn.expected))
                 item["checks"].update(observed_fault_checks(kinds, trace))
                 if request.judge:

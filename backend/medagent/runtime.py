@@ -6,6 +6,11 @@ from .understanding.classification import IntentRouter
 from .core.contracts import (AgentAssignment, Answer, ExecutionAttempt, InstanceChoice, Intent, Question, Reply, RoutingDecision,
                              RoutingFallback, TaskUnderstanding, Understanding)
 from .agents.execution import RoleAgent, RiskHandoffAgent
+from .agents.appointment import AppointmentAgent
+from .appointments.catalog import HospitalCatalog
+from .appointments.continuation import appointment_request
+from .appointments.store import AppointmentStore
+from .core.config import ROOT
 from .agents.checks import checked_role_output
 from .agents.skills import Skills
 from .tools.registry import ToolBudget, ToolExecutor
@@ -25,6 +30,10 @@ from .agents.output_validation import AgentOutputError
 def role_input(assignment, understanding, question, context, clock):
     """Input for one assignment: only the fields routing granted to the role, plus role-specific flags."""
     role = assignment.role
+    if role == "appointment":
+        # The booking role reads the request resolved by code this turn, never grounded text or history.
+        details = {name:value for name, value in context["appointment_request"].items() if name != "intent"}
+        return details, context, None, assignment.input_text
     scoped = understanding.model_copy(update={"primary":assignment.intent,
         "tasks":[TaskUnderstanding(intent=assignment.intent, goal=assignment.input_text[:300])],
         "entities":{name:understanding.entities[name] for name in assignment.context_fields}})
@@ -55,8 +64,11 @@ def role_input(assignment, understanding, question, context, clock):
 
 
 class MedicalRuntime:
-    def __init__(self, settings, model, vectors, index, memory, profiles=None, skills=None, fallback_model=None, judge_model=None):
+    def __init__(self, settings, model, vectors, index, memory, profiles=None, skills=None, fallback_model=None, judge_model=None,
+                 appointments: AppointmentStore | None = None):
         self.settings, self.model, self.index, self.memory = settings, model, index, memory
+        self.appointments = appointments or AppointmentStore(HospitalCatalog.load(ROOT/"resources"/"mock-hospital.json"), settings.appointment_db,
+            ttl=settings.appointment_ttl, followup_ttl=settings.appointment_followup_ttl, timezone=settings.appointment_timezone)
         self.judge_model = judge_model
         self.monitor, self.risk = Monitor(MonitorPolicy.from_settings(settings)), RiskGate()
         self.subjects = SubjectTracker()
@@ -74,9 +86,12 @@ class MedicalRuntime:
         self.planner = RoutingPlanner(self.registry, self.tools.registry, settings.supporting_agent_limit)
         self.risk_agent = RiskHandoffAgent(self.registry, self.tools)
         # Slot 2 is a standby at another vendor when one is configured: it runs only after slot 1 failed or was excluded.
-        self.agents = {role:[RoleAgent(role, f"{role}.{slot}", fallback_model if slot == 2 and fallback_model else model, index,
-                                       self.skills, self.tools, self.registry, standby=slot == 2 and fallback_model is not None)
-                             for slot in [1,2]]
+        def agent(role, slot):
+            options = {"appointments":self.appointments, "timezone":settings.appointment_timezone} if role == "appointment" else {}
+            return (AppointmentAgent if role == "appointment" else RoleAgent)(role, f"{role}.{slot}",
+                fallback_model if slot == 2 and fallback_model else model, index, self.skills, self.tools, self.registry,
+                standby=slot == 2 and fallback_model is not None, **options)
+        self.agents = {role:[agent(role, slot) for slot in [1,2]]
                        for role, profile in self.registry.profiles.items() if not profile.deterministic}
         for role,agents in self.agents.items():
             for agent in agents: self.monitor.register_agent(agent.instance, role)
@@ -106,7 +121,7 @@ class MedicalRuntime:
                     subject=question.subject, subject_changed=understanding.subject_changed, risk=risk,
                     skill_snapshot=skill_snapshot, tool_budget=tool_budget,
                     details=details, reference_query=query, assignment=assignment, original_request=question.text,
-                    visit_followup=visit_followup),
+                    visit_followup=visit_followup, user=question.user, session=question.session),
                     min(self.settings.agent_timeout, self.monitor.policy.probe_timeout) if probe is not None else self.settings.agent_timeout)
                 if result.execution.role != role or result.instance != choice.instance or result.execution.instance != choice.instance:
                     raise ValueError("result_outside_assignment")
@@ -174,7 +189,9 @@ class MedicalRuntime:
         token = CURRENT.set(log)
         session = question.session or str(uuid.uuid4())
         resolution = self.subjects.resolve(question, session)
-        question = question.model_copy(update={"subject":resolution.subject})
+        question = question.model_copy(update={"subject":resolution.subject, "session":session})
+        # The follow-up record is taken by the very next turn of this session, whatever that turn does.
+        followup = self.appointments.take_followup(question.user, session)
         scope = scope_key(question.user, session, "__unresolved__" if resolution.ambiguous else question.subject)
         try:
             tool_budget = ToolBudget(self.settings.tool_call_limit)
@@ -182,12 +199,14 @@ class MedicalRuntime:
             event("skills_snapshot", snapshot_id=skill_snapshot.snapshot_id, common_hash=skill_snapshot.common_hash)
             risk = self.risk.screen(question.text, scope)
             event("risk", level=risk.level, reasons=risk.reasons, version=risk.rule_version)
+            pending_actions = []
             if risk.level == "CRITICAL":
+                self._followup_event("urgent", followup)
                 understanding, decision, answer, refs, agent_results = self._urgent(question, risk, skill_snapshot, tool_budget, log)
                 degraded, storage = False, "skipped"
             else:
-                understanding, decision, answer, refs, agent_results, degraded, storage, risk = await self._consult(
-                    question, resolution, scope, risk, skill_snapshot, tool_budget, log)
+                understanding, decision, answer, refs, agent_results, degraded, storage, risk, pending_actions = await self._consult(
+                    question, resolution, scope, risk, skill_snapshot, tool_budget, log, followup)
             self.monitor.observe_execution(decision, log.request_id)
             event("routing_execution", primary=decision.primary_agent, status=decision.collaboration_status, monitor_fallback=decision.monitor_fallback,
                 assignments=[{"task_id":assignment.task_id, "role":assignment.role, "status":assignment.status,
@@ -196,7 +215,8 @@ class MedicalRuntime:
             reply = Reply(request_id=log.request_id, session=session, intent=understanding, risk=risk,
                           primary_agent=decision.primary_agent, supporting_agents=decision.supporting_agents, answer=answer, references=refs,
                           degraded=degraded, storage=storage, usage=log.usage(), elapsed_ms=round(log.elapsed,1),
-                          agent_results=agent_results, subject=question.subject, routing_decision=decision)
+                          agent_results=agent_results, subject=question.subject, routing_decision=decision,
+                          pending_actions=pending_actions)
             self.monitor.finish(log, degraded)
             return reply
         finally:
@@ -221,7 +241,11 @@ class MedicalRuntime:
         decision.collaboration_status = "single"
         return understanding, decision, result.answer, [], [result.execution]
 
-    async def _consult(self, question, resolution, scope, risk, skill_snapshot, tool_budget, log):
+    @staticmethod
+    def _followup_event(reason: str, followup) -> None:
+        event("appointment_followup", reason=reason, **({"followup_kind":followup.kind} if followup is not None else {}))
+
+    async def _consult(self, question, resolution, scope, risk, skill_snapshot, tool_budget, log, followup=None):
         """Memory read, understanding, routing, role execution, merge and memory write for a non-critical turn."""
         state, storage, degraded = await self._read_state(scope, question.text, resolution.ambiguous)
         if not self.settings.preview and self.index.collection is None:
@@ -231,7 +255,12 @@ class MedicalRuntime:
         if understanding.urgent_quote:
             risk = self.risk.escalate(scope)
             event("risk", level=risk.level, reasons=risk.reasons, version=risk.rule_version)
-            return (*self._urgent(question, risk, skill_snapshot, tool_budget, log), False, "skipped", risk)
+            self._followup_event("urgent", followup)
+            return (*self._urgent(question, risk, skill_snapshot, tool_budget, log), False, "skipped", risk, [])
+        store = self.appointments
+        appointment, reason = appointment_request(text=question.text, understanding=understanding, followup=followup,
+            subject=question.subject, now=store.now(), catalog=store.catalog, today=store.today())
+        self._followup_event(reason, followup)
         state = {**state, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in understanding.entities.items()}}
         state["consultation_need"] = need[0]
         if self.single:
@@ -239,11 +268,13 @@ class MedicalRuntime:
                 question, understanding, state, risk, skill_snapshot, tool_budget, log)
             degraded = degraded or decision.collaboration_status == "failed"
         else:
-            decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need[0])
+            decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need[0],
+                                         appointment=appointment)
             event("routing", **self.planner.trace(decision))
             self.monitor.observe_routing(decision, log.request_id)
             execution_started = time.perf_counter()
-            outputs = await self._dispatch(decision, question, understanding, state, risk, skill_snapshot, tool_budget)
+            outputs = await self._dispatch(decision, question, understanding, {**state, "appointment_request":appointment},
+                                           risk, skill_snapshot, tool_budget)
             remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
             answer, refs, routing_degraded = await compose(decision, outputs, understanding,
                 self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
@@ -261,7 +292,10 @@ class MedicalRuntime:
         except Exception as exc:
             degraded, storage = True, "degraded"
             event("memory_error", stage="write", error=type(exc).__name__)
-        return understanding, decision, answer, refs, agent_results, degraded, storage, risk
+        booking = outputs.get("appointment")
+        # The card is the only way to confirm, so an answered draft reaches the reply whatever the merge did.
+        pending_actions = booking.pending_actions if booking is not None and booking.execution.status == "answered" else []
+        return understanding, decision, answer, refs, agent_results, degraded, storage, risk, pending_actions
 
     async def _single_agent(self, question, understanding, state, risk, skill_snapshot, tool_budget, log):
         """Comparison baseline: one agent answers the whole turn; no routing, role contracts or merge."""

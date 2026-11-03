@@ -1,9 +1,9 @@
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from .contracts import AgentInput, ReportInput
-from ..core.contracts import AgentAssignment, AgentExecution, Answer, Intent, Risk
+from ..core.contracts import AgentAssignment, AgentExecution, Answer, Intent, PendingAction, Risk
 from ..understanding.consultation_needs import is_fever_followup
 from ..understanding.conversation import VisitFollowupEvidence, has_visit_context, topic_medications
 from ..core.observability import event
@@ -64,6 +64,7 @@ class AgentResult:
     instance: str
     execution: AgentExecution
     model_dependency_exercised: bool = True
+    pending_actions: list[PendingAction] = field(default_factory=list)
 
 
 class HandoffRequired(RuntimeError):
@@ -99,7 +100,8 @@ class RoleAgent:
                   subject: str = "self", subject_changed: bool = False, risk: Risk | None = None, details: dict | None = None,
                   skill_snapshot: SkillSnapshot | None = None, tool_budget: ToolBudget | None = None,
                   reference_query: str = "", assignment: AgentAssignment | None = None,
-                  original_request: str = "", visit_followup: VisitFollowupEvidence | None = None) -> AgentResult:
+                  original_request: str = "", visit_followup: VisitFollowupEvidence | None = None,
+                  user: str = "", session: str = "") -> AgentResult:
         """Validate input, take a deterministic exit when one applies, otherwise gather evidence and ask the model."""
         profile = self.profile
         if assignment is not None and (assignment.role != self.role or assignment.intent != intent):
@@ -347,11 +349,12 @@ class RoleAgent:
             system += EVIDENCE_MISSING_NOTICE
         return system
 
-    async def _generate(self, system, data, intent, request, context, budget, workflow, evidence_requested) -> AgentResult:
+    async def _generate(self, system, data, intent, request, context, budget, workflow, evidence_requested,
+                        definitions: list[dict] | None = None) -> AgentResult:
         """At most two tool rounds and one narrowly scoped repair; every draft passes the same validation."""
         profile, references = self.profile, context.references
         messages = [{"role":"user", "content":ROLE_DATA_PREFACE+"\n"+data}]
-        definitions = self.tools.registry.definitions(profile)
+        definitions = self.tools.registry.definitions(profile) if definitions is None else definitions
         repairing = False
         for turn in range(3):
             result = await self.model.message("agent_"+self.role, system, messages, definitions if turn < 2 and not repairing else None, budget=1900)

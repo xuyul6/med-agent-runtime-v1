@@ -261,7 +261,8 @@ def checked_role_output(profile: AgentProfile, data: dict, references: dict) -> 
         raise AgentOutputError("institution_source_not_supported",["institution_facts"])
     if profile.role == "visit_guide" and unmatched_visit_urgency_warnings(output, references):
         add_urgency_notice(output.answer.limitations)
-    if output.status == "needs_clarification":
+    # Booking questions are written by code from the catalog and list the actual options; keep them.
+    if output.status == "needs_clarification" and profile.role != "appointment":
         output.answer.questions = [FIELD_QUESTIONS[name] for name in dict.fromkeys(output.missing_fields)]
         if profile.role in SOURCE_GAP_QUESTIONS and "source" in output.missing_fields and not references:
             output.answer.questions = [
