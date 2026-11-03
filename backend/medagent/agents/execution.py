@@ -35,7 +35,8 @@ EVIDENCE_MISSING_NOTICE = ("\n本轮明确要求查阅或引用来源，当前�
 STATUS_REPAIRS = {"report_explainer":"report_status_only", "drug_reference":"medicine_status_only"}
 FIELD_NAMES = {"medication_name":"药名", "formulation":"剂型", "population":"适用人群", "product_name":"产品名称", "strength":"规格",
                "region":"地区", "report_item":"报告项目名称", "value":"结果数值", "unit":"单位", "reference_range":"参考范围",
-               "report_date":"报告日期", "institution":"机构名称", "visit_purpose":"就医目的", "source":"可核对的资料"}
+               "report_date":"报告日期", "institution":"机构名称", "visit_purpose":"就医目的", "source":"可核对的资料",
+               "department":"科室", "appointment_date":"日期", "time_window":"时段", "slot":"可约号源", "booking":"要取消的预约", "choice":"具体选项"}
 
 
 def missing_text(fields: list[str]) -> str:

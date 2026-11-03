@@ -20,10 +20,12 @@ NEGATION = r"(?:没有|否认|不伴|并非|不是|未出现|不再|不用|不�
 UNCERTAIN = r"是不是|是否|会不会|可能|假如|如果|科普|什么是|[？?]|吗"
 UNKNOWN = r"不知道|不清楚|不记得|没记住|忘了|无法确定|不确定|未知"
 MEDICATION_FIELDS = {"medication_name", "formulation", "population", "product_name", "strength", "region"}
+APPOINTMENT_FIELDS = {"department", "appointment_date", "time_window"}
 FIELD_LABELS = {"medication_name":r"药名|什么药", "formulation":r"剂型", "population":r"人群|适用", "product_name":r"品牌|产品", "strength":r"规格|含量", "symptom":r"症状|不适",
                 "age_group":r"年龄|几岁", "onset":r"开始|时间|多久", "change":r"变化|加重", "report_item":r"项目|指标",
                 "value":r"数值|结果", "unit":r"单位", "reference_range":r"范围", "report_date":r"日期|报告时间",
-                "institution":r"医院|机构", "region":r"地区|城市"}
+                "institution":r"医院|机构", "region":r"地区|城市",
+                "department":r"科室|哪个科", "appointment_date":r"哪天|预约日期|就诊日期", "time_window":r"上午|下午|时段"}
 
 
 @dataclass(frozen=True)

@@ -16,7 +16,7 @@ LEXICON = {
     Intent.GENERAL: r"你好|功能|能做什么|谢谢",
 }
 EXAMPLES = ["描述身体症状、发生时间和就诊科室", "查询药品说明资料、禁忌与用药问题", "首次看医生之前准备资料、了解挂号流程", "理解检验报告的项目名称和参考范围", "普通生活常识问题、问候与了解助手能力"]
-CLASSES = [kind for kind in Intent if kind != Intent.URGENT]
+CLASSES = [kind for kind in Intent if kind not in {Intent.URGENT, Intent.APPOINTMENT}]
 # Semantic judgments the model makes by quoting the turn; see Understanding.
 JUDGMENTS = ("product_quote", "visit_quote")
 

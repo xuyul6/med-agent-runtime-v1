@@ -82,6 +82,23 @@ class VisitInput(AgentInput):
     visit_context: bool | None = None
 
 
+class AppointmentInput(AgentInput):
+    intent: Literal[Intent.APPOINTMENT]
+    action: Literal["create", "cancel"]
+    # quote: verified in this turn; followup: continues the code-recorded request from the previous turn.
+    origin: Literal["quote", "followup"] = "quote"
+    institution: str | None = None
+    department: str | None = None
+    appointment_date: str | None = None
+    time_window: str | None = None
+
+    def information_gaps(self) -> list[str]:
+        # Cancelling filters the user's own bookings; a non-unique match is clarified after the search.
+        if self.action == "cancel":
+            return []
+        return [name for name in ("department", "appointment_date") if not getattr(self, name)]
+
+
 class RiskInput(AgentInput):
     intent: Literal[Intent.URGENT]
 
@@ -139,6 +156,12 @@ class VisitPayload(Contract):
     needs_verification: list[str] = Field(default_factory=list)
 
 
+class AppointmentPayload(Contract):
+    action: Literal["create", "cancel"]
+    draft_ids: list[str] = Field(default_factory=list, max_length=1)
+    options: list[str] = Field(default_factory=list, max_length=6)
+
+
 class RiskPayload(Contract):
     risk_notice: str = Field(min_length=1)
     known_facts: list[str] = Field(default_factory=list)
@@ -177,6 +200,8 @@ class AgentOutput(Contract):
                 raise PydanticCustomError("report_information_required","report_information_required")
             if isinstance(payload, VisitPayload) and not payload.preparation_checklist:
                 raise PydanticCustomError("visit_checklist_required","visit_checklist_required")
+            if isinstance(payload, AppointmentPayload) and len(payload.draft_ids) != 1:
+                raise PydanticCustomError("appointment_draft_required","appointment_draft_required")
         return self
 
 
@@ -208,6 +233,12 @@ class VisitOutput(AgentOutput):
     role: Literal["visit_guide"]
     missing_fields: list[Literal["visit_purpose", "institution", "region", "source"]] = Field(default_factory=list, max_length=6)
     payload: VisitPayload
+
+
+class AppointmentOutput(AgentOutput):
+    role: Literal["appointment"]
+    missing_fields: list[Literal["institution", "department", "appointment_date", "time_window", "slot", "booking", "choice"]] = Field(default_factory=list, max_length=6)
+    payload: AppointmentPayload
 
 
 class RiskOutput(AgentOutput):

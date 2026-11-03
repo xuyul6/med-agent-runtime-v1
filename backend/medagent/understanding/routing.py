@@ -15,6 +15,7 @@ ROLE_FIELDS = {
     "drug_reference": ("medication_name", "formulation", "population", "product_name", "strength", "region"),
     "report_explainer": ("report_item", "value", "unit", "reference_range", "report_date"),
     "visit_guide": ("institution", "region"),
+    "appointment": ("institution", "department", "appointment_date", "time_window"),
 }
 GOALS = {
     "general": "回答普通生活问题，介绍服务范围或澄清本轮咨询目的。",
@@ -22,9 +23,10 @@ GOALS = {
     "drug_reference": "仅核对指定药品的公开资料、适用范围和未解决问题。",
     "report_explainer": "仅整理报告文字、原始字段、通用术语与信息缺口。",
     "visit_guide": "仅整理本次就医准备事项和需向机构核实的问题。",
+    "appointment": "仅为用户本人提出的挂号或取消请求提交待确认草稿，不读取资料。",
 }
 LABELS = {"general":"需求澄清", "symptom_guide":"症状记录", "drug_reference":"药品资料",
-          "report_explainer":"报告整理", "visit_guide":"就医准备", "risk_handoff":"风险提示"}
+          "report_explainer":"报告整理", "visit_guide":"就医准备", "appointment":"预约", "risk_handoff":"风险提示"}
 TASK_EVIDENCE = {
     Intent.SYMPTOMS: LEXICON[Intent.SYMPTOMS],
     Intent.MEDICINE: r"(?:查|核对|了解|介绍|解释).{0,12}(?:药|" + NAMES + r")|药.{0,8}(?:资料|查询)|说明书|禁忌|相互作用|用量",

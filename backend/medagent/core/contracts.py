@@ -11,6 +11,8 @@ class Intent(str, Enum):
     REPORT = "report"
     GENERAL = "general"
     URGENT = "urgent"
+    # Booking is routed from a verified request, never from the classified intent distribution.
+    APPOINTMENT = "appointment"
 
 
 class Risk(BaseModel):
@@ -28,7 +30,8 @@ class Question(BaseModel):
 
 
 FieldName = Literal["medication_name", "formulation", "population", "product_name", "strength", "symptom", "onset", "change", "age_group",
-                    "report_item", "value", "unit", "reference_range", "report_date", "institution", "region"]
+                    "report_item", "value", "unit", "reference_range", "report_date", "institution", "region",
+                    "department", "appointment_date", "time_window"]
 
 
 class FieldSource(BaseModel):
@@ -81,6 +84,7 @@ class Understanding(BaseModel):
     # judged there is none; None means no model judged the turn, and the word rules stand in.
     product_quote: str | None = Field(default=None, max_length=300, exclude=True)
     visit_quote: str | None = Field(default=None, max_length=300, exclude=True)
+    appointment_quote: str | None = Field(default=None, max_length=300, exclude=True)
 
 
 class SourceProvenance(BaseModel):
@@ -238,6 +242,15 @@ class RoutingDecision(RoutingRecord):
     monitor_fallback: list[str] = Field(default_factory=list)
 
 
+class PendingAction(BaseModel):
+    """A draft waiting for the user's button press. The token goes to the browser only, never to models or reports."""
+    kind: Literal["appointment_create", "appointment_cancel"]
+    draft_id: str
+    token: str
+    summary: str
+    expires_at: str
+
+
 class Reply(BaseModel):
     request_id: str
     session: str
@@ -255,6 +268,14 @@ class Reply(BaseModel):
     agent_results: list[AgentExecution] = Field(default_factory=list)
     subject: str = "self"
     routing_decision: RoutingDecision | None = None
+    pending_actions: list[PendingAction] = Field(default_factory=list)
+
+    def report_dump(self) -> dict:
+        """Serialization for saved reports: confirmation tokens are replaced."""
+        data = self.model_dump(mode="json")
+        for action in data["pending_actions"]:
+            action["token"] = "[redacted]"
+        return data
 
 
 class DocumentBatch(BaseModel):

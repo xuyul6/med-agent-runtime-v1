@@ -5,7 +5,7 @@ from typing import Literal
 from .contracts import (
     AgentInput, AgentOutput, GeneralInput, GeneralOutput, SymptomInput, SymptomOutput,
     MedicationInput, MedicationOutput, ReportInput, ReportOutput, VisitInput, VisitOutput,
-    RiskInput, RiskOutput,
+    AppointmentInput, AppointmentOutput, RiskInput, RiskOutput,
 )
 from ..core.contracts import Intent
 from ..core.observability import event
@@ -56,6 +56,7 @@ ROLE_CONTRACTS = {
     "drug_reference": (Intent.MEDICINE, MedicationInput, MedicationOutput),
     "report_explainer": (Intent.REPORT, ReportInput, ReportOutput),
     "visit_guide": (Intent.VISIT, VisitInput, VisitOutput),
+    "appointment": (Intent.APPOINTMENT, AppointmentInput, AppointmentOutput),
     "risk_handoff": (Intent.URGENT, RiskInput, RiskOutput),
 }
 STEP_NAMES = ("validate_input", "check_handoff", "prepare_evidence", "compose_answer", "validate_output")
@@ -74,6 +75,7 @@ def default_profiles() -> list[AgentProfile]:
         "drug_reference": ("核对药品与资料适用范围，区分证据、未知信息和需药师核实事项。", "核对药品资料查询输入", "检查风险与专业交接", "检索本药品适用来源", "整理身份、来源范围和证据", "校验药品产物与引用"),
         "report_explainer": ("整理用户提供的报告文字，解释有来源的通用术语并保留缺失字段。", "核对报告原始字段", "检查风险与信息缺口", "检索报告术语资料", "整理项目、术语和就诊问题", "校验报告产物与引用"),
         "visit_guide": ("生成通用就医准备清单，区分机构已证实事实与待核实事项。", "核对就医目的与机构信息", "检查风险与实际连接边界", "检索公开流程或沟通模板", "整理准备清单与待核实事项", "校验流程来源及未执行预约"),
+        "appointment": ("为用户本人提出的挂号或取消请求生成待确认的预约草稿，不读取资料，不直接写入。", "核对预约动作与字段", "检查风险与人工请求", "查询模拟号源或已有预约", "提交唯一候选的待确认草稿", "校验草稿与请求一致"),
         "risk_handoff": ("立即输出确定性风险提示与有限交接信息，明确没有实际连接医护。", "核对确定性风险结果", "选择立即线下求助路径", "跳过检索与存储", "构造风险提示与下一步", "校验未实际转接的风险产物"),
     }
     return [AgentProfile(
