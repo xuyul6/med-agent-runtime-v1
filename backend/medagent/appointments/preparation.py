@@ -56,7 +56,7 @@ def _missing_questions(missing: tuple[str, ...], resolution: Resolution, store) 
     questions = {
         "institution": f"这个科室两家模拟医院都有，想去哪家？可选：{'、'.join(resolution.options)}。",
         "department": f"想挂哪个科室？可选：{'、'.join(store.catalog.department_names())}。",
-        "appointment_date": f"想约哪一天？上午还是下午？（{_range(store)}）",
+        "appointment_date": f"想约哪一天？上午还是下午？{_range(store)}。",
     }
     return [questions[name] for name in missing if name in questions]
 
