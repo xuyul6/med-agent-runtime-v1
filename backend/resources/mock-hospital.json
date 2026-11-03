@@ -1,0 +1,13 @@
+{"version": "mock-hospital-1", "note": "合成数据，仅用于演示，不对应任何真实医院。", "horizon_days": 14,
+ "capacity": {"weekday_am": 3, "weekday_pm": 2, "weekend_am": 1, "weekend_pm": 0},
+ "hospitals": [
+  {"id": "demo-general", "name": "演示总医院（模拟）", "departments": [
+    {"id": "neurology", "name": "神经内科", "aliases": ["神经科"]},
+    {"id": "gastro", "name": "消化内科", "aliases": ["消化科", "胃肠科"]},
+    {"id": "respiratory", "name": "呼吸内科", "aliases": ["呼吸科"]},
+    {"id": "cardio", "name": "心血管内科", "aliases": ["心内科"]},
+    {"id": "endocrine", "name": "内分泌科", "aliases": []},
+    {"id": "derm", "name": "皮肤科", "aliases": []}]},
+  {"id": "demo-community", "name": "演示社区医院（模拟）", "departments": [
+    {"id": "general-practice", "name": "全科医学科", "aliases": ["全科"]},
+    {"id": "derm", "name": "皮肤科", "aliases": []}]}]}
