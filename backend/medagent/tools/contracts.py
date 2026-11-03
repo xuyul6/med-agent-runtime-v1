@@ -59,6 +59,48 @@ class ChecklistResult(Contract):
     needs_verification: list[str]
 
 
+class SlotView(Contract):
+    slot_id: str
+    hospital: str
+    department: str
+    day: str
+    window: Literal["am", "pm"]
+    remaining: int
+
+
+class SlotSearchResult(Contract):
+    slots: list[SlotView]
+
+
+class BookingView(Contract):
+    appointment_id: str
+    hospital: str
+    department: str
+    day: str
+    window: Literal["am", "pm"]
+    subject_label: str
+
+
+class BookingSearchResult(Contract):
+    bookings: list[BookingView]
+
+
+class ProposeAppointmentArguments(Contract):
+    slot_id: str = Field(min_length=1, max_length=120)
+
+
+class ProposeCancellationArguments(Contract):
+    appointment_id: str = Field(min_length=1, max_length=64)
+
+
+class DraftResult(Contract):
+    """What the model sees after proposing: no confirmation token."""
+    draft_id: str
+    kind: Literal["create", "cancel"]
+    summary: str
+    needs_user_confirmation: Literal[True] = True
+
+
 class HandoffSummary(Contract):
     known_facts: list[str]
     handoff_connected: Literal[False] = False

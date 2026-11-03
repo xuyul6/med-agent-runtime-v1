@@ -17,8 +17,9 @@ from ..knowledge.retrieval import ReferenceIndex, has_query_overlap, visit_scope
 from ..understanding.medications import canonical
 from ..understanding.conversation import has_visit_context
 from .contracts import (
-    ChecklistResult, ContextResult, EmptyArguments, FieldCheck, HandoffSummary, LookupArguments,
-    LookupResult, MedicationScopeResult, ReferenceScope, ReferenceSelection,
+    BookingSearchResult, ChecklistResult, ContextResult, DraftResult, EmptyArguments, FieldCheck, HandoffSummary, LookupArguments,
+    LookupResult, MedicationScopeResult, ProposeAppointmentArguments, ProposeCancellationArguments, ReferenceScope,
+    ReferenceSelection, SlotSearchResult, SlotView,
 )
 if TYPE_CHECKING:
     from ..agents.profiles import AgentProfile
@@ -67,6 +68,14 @@ class ToolContext:
     references: dict[str, Reference] = field(default_factory=dict)
     scope_filtered_count: int = 0
     evidence_query: str | None = None
+    # Appointment tools only: the caller, the store, the resolved request and what this turn queried and drafted.
+    user: str = ""
+    session: str = ""
+    appointments: object | None = None
+    resolution: object | None = None
+    slots: dict = field(default_factory=dict)
+    bookings: dict = field(default_factory=dict)
+    issued: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -79,9 +88,9 @@ class ToolSpec:
     domains: frozenset[Intent]
     handler: Callable
     timeout: float = 20
-    side_effect: Literal["compute", "read_external"] = "compute"
+    side_effect: Literal["compute", "read_external", "propose_write"] = "compute"
     dependency: bool = False
-    stage: Literal["preflight", "retrieval", "context", "handoff"] = "context"
+    stage: Literal["preflight", "retrieval", "context", "handoff", "action"] = "context"
 
     def definition(self) -> dict:
         return {"name":self.name, "description":self.description, "input_schema":self.input_contract.model_json_schema()}
@@ -98,12 +107,12 @@ class ToolRegistry:
         for spec in specs:
             if spec.name in registered or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", spec.name):
                 raise ValueError("invalid_or_duplicate_tool:"+spec.name)
-            if not spec.allowed_roles or not spec.domains or spec.timeout <= 0 or spec.side_effect not in {"compute", "read_external"}:
+            if not spec.allowed_roles or not spec.domains or spec.timeout <= 0 or spec.side_effect not in {"compute", "read_external", "propose_write"}:
                 raise ValueError("invalid_tool_spec:"+spec.name)
             if not all(isinstance(contract, type) and issubclass(contract, BaseModel)
                        for contract in [spec.input_contract, spec.output_contract]) or not callable(spec.handler):
                 raise ValueError("invalid_tool_contract:"+spec.name)
-            if spec.dependency != (spec.side_effect == "read_external") or spec.stage not in {"preflight", "retrieval", "context", "handoff"}:
+            if spec.dependency != (spec.side_effect == "read_external") or spec.stage not in {"preflight", "retrieval", "context", "handoff", "action"}:
                 raise ValueError("invalid_tool_execution_policy:"+spec.name)
             if spec.dependency and not inspect.iscoroutinefunction(spec.handler):
                 raise ValueError("dependency_handler_must_be_async:"+spec.name)
@@ -207,6 +216,62 @@ def handoff_summary(context: ToolContext, arguments: EmptyArguments) -> dict:
     return {"known_facts":["风险规则命中："+code for code in context.request.risk.reasons], "handoff_connected":False}
 
 
+def slot_view(slot, remaining: int) -> dict:
+    return SlotView(slot_id=slot.slot_id, hospital=slot.hospital, department=slot.department, day=slot.day.isoformat(),
+                    window=slot.window, remaining=remaining).model_dump()
+
+
+def search_slots(context: ToolContext, arguments: EmptyArguments) -> dict:
+    resolution, store = context.resolution, context.appointments
+    if resolution is None or store is None or not (resolution.hospital_id and resolution.department_id and resolution.day):
+        context.slots = {}
+        return {"slots":[]}
+    found = store.search(resolution.hospital_id, resolution.department_id, resolution.day, resolution.window)
+    context.slots = {slot.slot_id:slot for slot, _ in found}
+    return {"slots":[slot_view(slot, remaining) for slot, remaining in found]}
+
+
+def find_bookings(context: ToolContext, arguments: EmptyArguments) -> dict:
+    from ..appointments.resolution import booking_view
+    resolution, store = context.resolution, context.appointments
+    if resolution is None or store is None:
+        context.bookings = {}
+        return {"bookings":[]}
+    found = [booking for booking in store.bookings(context.user, context.request.subject)
+             if resolution.hospital_id in (None, booking.slot.hospital_id) and resolution.department_id in (None, booking.slot.department_id)
+             and resolution.day in (None, booking.slot.day) and resolution.window in (None, booking.slot.window)]
+    context.bookings = {booking.appointment_id:booking for booking in found}
+    return {"bookings":[booking_view(booking).model_dump() for booking in found]}
+
+
+def _propose(context: ToolContext, action: str, candidate: str, candidates: dict, propose) -> dict:
+    from ..appointments.store import AppointmentError
+    if context.request.action != action:
+        raise ToolInputError("action_mismatch")
+    if candidate not in candidates:
+        raise ToolInputError("slot_not_from_this_search" if action == "create" else "booking_not_from_this_search")
+    if len(candidates) != 1:
+        raise ToolInputError("candidate_not_unique")
+    if context.issued:
+        raise ToolInputError("one_draft_per_turn")
+    try:
+        draft, token = propose(user=context.user, session=context.session, subject=context.request.subject)
+    except AppointmentError as error:
+        raise ToolInputError(error.code) from error
+    context.issued[draft.draft_id] = (draft, token)
+    return {"draft_id":draft.draft_id, "kind":draft.kind, "summary":draft.summary, "needs_user_confirmation":True}
+
+
+def propose_appointment(context: ToolContext, arguments: ProposeAppointmentArguments) -> dict:
+    return _propose(context, "create", arguments.slot_id, context.slots,
+                    lambda **who: context.appointments.propose_create(**who, slot_id=arguments.slot_id))
+
+
+def propose_cancellation(context: ToolContext, arguments: ProposeCancellationArguments) -> dict:
+    return _propose(context, "cancel", arguments.appointment_id, context.bookings,
+                    lambda **who: context.appointments.propose_cancel(**who, appointment_id=arguments.appointment_id))
+
+
 SPECIALISTS = frozenset({"symptom_guide", "drug_reference", "report_explainer", "visit_guide"})
 DEFAULT_TOOLS = ToolRegistry([
     ToolSpec("inspect_request_context", "核对当前已验证的咨询对象和输入字段，不读取其他会话。", EmptyArguments, ContextResult,
@@ -216,7 +281,8 @@ DEFAULT_TOOLS = ToolRegistry([
       for name, role, intent in [("check_symptom_fields", "symptom_guide", Intent.SYMPTOMS),
                                  ("check_medication_fields", "drug_reference", Intent.MEDICINE),
                                  ("check_report_fields", "report_explainer", Intent.REPORT),
-                                 ("check_visit_fields", "visit_guide", Intent.VISIT)]],
+                                 ("check_visit_fields", "visit_guide", Intent.VISIT),
+                                 ("check_appointment_fields", "appointment", Intent.APPOINTMENT)]],
     ToolSpec("lookup_reference", "查找当前角色允许的公开参考资料，不访问医院记录。", LookupArguments, LookupResult,
              SPECIALISTS, frozenset({Intent.SYMPTOMS, Intent.MEDICINE, Intent.REPORT, Intent.VISIT}), lookup_reference,
              side_effect="read_external", dependency=True, stage="retrieval"),
@@ -224,6 +290,14 @@ DEFAULT_TOOLS = ToolRegistry([
              frozenset({"drug_reference"}), frozenset({Intent.MEDICINE}), medication_scope, timeout=1),
     ToolSpec("build_visit_checklist", "根据本次已取得的项目模板生成通用准备清单，不创建预约。", EmptyArguments, ChecklistResult,
              frozenset({"visit_guide"}), frozenset({Intent.VISIT}), visit_checklist, timeout=1),
+    ToolSpec("search_slots", "按代码已解析的科室、日期和时段查询模拟医院号源，模型不能传查询条件。", EmptyArguments, SlotSearchResult,
+             frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), search_slots, timeout=1, stage="retrieval"),
+    ToolSpec("find_bookings", "查询当前用户、当前咨询对象在模拟医院的已有预约，按已解析字段过滤。", EmptyArguments, BookingSearchResult,
+             frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), find_bookings, timeout=1, stage="retrieval"),
+    ToolSpec("propose_appointment", "为本次查询得到的唯一号源生成待确认的预约草稿；不会写入，需用户点击确认。", ProposeAppointmentArguments, DraftResult,
+             frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), propose_appointment, timeout=1, side_effect="propose_write", stage="action"),
+    ToolSpec("propose_cancellation", "为本次查询得到的唯一已有预约生成待确认的取消草稿；不会写入，需用户点击确认。", ProposeCancellationArguments, DraftResult,
+             frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), propose_cancellation, timeout=1, side_effect="propose_write", stage="action"),
     ToolSpec("create_handoff_summary", "同步整理已有风险规则标识，明确未连接人工，不调用外部依赖。", EmptyArguments, HandoffSummary,
              frozenset({"risk_handoff"}), frozenset({Intent.URGENT}), handoff_summary, timeout=1, stage="handoff"),
 ])
