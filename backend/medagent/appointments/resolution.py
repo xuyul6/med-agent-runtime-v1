@@ -39,9 +39,11 @@ def resolve_request(request: AppointmentInput, catalog: HospitalCatalog, today: 
             invalid.append("department")
             options = catalog.department_names()
         elif len({hospital.id for hospital, _ in matched}) > 1:
-            missing.append("institution")
-            options = [hospital.name for hospital, _ in matched]
             department_id = matched[0][1].id
+            # Cancelling searches both hospitals; a booking needs one.
+            if request.action == "create":
+                missing.append("institution")
+                options = [hospital.name for hospital, _ in matched]
         else:
             hospital_id, department_id = matched[0][0].id, matched[0][1].id
     elif request.action == "create":
