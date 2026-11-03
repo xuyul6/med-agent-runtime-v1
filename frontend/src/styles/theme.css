@@ -860,3 +860,39 @@ footer {
     font-size: 11px;
   }
 }
+
+.appointment-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  background: #fbfcfa;
+}
+
+.appointment-card h4 {
+  margin: 0 0 4px;
+}
+
+.appointment-summary {
+  margin: 0;
+  font-weight: 600;
+}
+
+.appointment-note {
+  margin: 4px 0 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.appointment-done {
+  margin: 0;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.appointment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { makeClient, safeLink, tokenLabel } from './api/client.js'
 import { buildKnowledgeDocument, emptyMedicationMetadata } from './utils/knowledge.js'
 import { reportItemsForDisplay } from './utils/report.js'
@@ -12,6 +12,8 @@ import { fetchRequestTrace } from './utils/execution.js'
 import ToolTrace from './components/ToolTrace.vue'
 import EvaluationReport from './components/EvaluationReport.vue'
 import { loadEvaluation } from './utils/evaluation.js'
+import AppointmentCard from './components/AppointmentCard.vue'
+import { confirmationError, confirmPending, loadUser, pendingCards, resetUser } from './utils/appointments.js'
 
 const request = makeClient()
 const view = ref('chat')
@@ -25,7 +27,10 @@ const conversation = ref([])
 const messages = ref(null)
 const followMessages = ref(true)
 const session = ref('')
-const user = crypto.randomUUID()
+const browserStorage = () => { try { return globalThis.localStorage } catch { return null } }
+const user = ref(loadUser(browserStorage(), () => crypto.randomUUID()))
+// Card states live here, keyed by draft, so switching views does not bring back a confirmed or dismissed card.
+const cardStates = reactive({})
 const subject = ref('self')
 const context = ref('selective')
 const last = ref(null)
@@ -43,7 +48,7 @@ const draft = ref({ key: '', title: '', domain: 'medicine', text: '', url: '', v
 const drugAliases = ref('')
 const medicationMetadata = ref(emptyMedicationMetadata())
 const visitPurpose = ref('')
-const roleNames = { symptom_guide: '症状整理', report_explainer: '报告文字', drug_reference: '药品资料', visit_guide: '就医准备', general: '咨询接待', risk_handoff: '风险提示' }
+const roleNames = { symptom_guide: '症状整理', report_explainer: '报告文字', drug_reference: '药品资料', visit_guide: '就医准备', appointment: '预约', general: '咨询接待', risk_handoff: '风险提示' }
 const connection = computed(() => !status.value ? '未连接' : status.value.preview ? '离线预览' : status.value.status === 'ok' ? '在线模型' : '依赖降级')
 
 async function refresh() {
@@ -54,6 +59,24 @@ async function refresh() {
     monitorFetchedAt.value = new Date().toLocaleString()
     error.value = ''
   } catch (failure) { error.value = `连接失败：${failure.message}` }
+}
+
+function cardState(card) { return cardStates[card.draftId] || { state: 'pending', message: '' } }
+
+async function confirmCard(card) {
+  cardStates[card.draftId] = { state: 'confirming', message: '' }
+  try {
+    await confirmPending(request, user.value, card)
+    cardStates[card.draftId] = { state: 'done', message: '' }
+  } catch (failure) { cardStates[card.draftId] = { state: 'error', message: confirmationError(failure) } }
+}
+
+function dismissCard(card) { cardStates[card.draftId] = { state: 'dismissed', message: '' } }
+
+function resetIdentity() {
+  user.value = resetUser(browserStorage(), () => crypto.randomUUID())
+  for (const key of Object.keys(cardStates)) delete cardStates[key]
+  newSession()
 }
 
 function newSession() { session.value = ''; conversation.value = []; followMessages.value = true; last.value = null; trace.value = null; traceError.value = ''; traceLoading.value = false }
@@ -78,10 +101,10 @@ async function send() {
   error.value = ''
   conversation.value.push({ type: 'question', text: message })
   try {
-    const reply = await request('/chat', { text: message, user, session: session.value, subject: subject.value, context: context.value })
+    const reply = await request('/chat', { text: message, user: user.value, session: session.value, subject: subject.value, context: context.value })
     session.value = reply.session
     subject.value = reply.subject || subject.value
-    conversation.value.push({ type: 'reply', ...reply, question: message, reportItems: reportItemsForDisplay(reply) })
+    conversation.value.push({ type: 'reply', ...reply, question: message, reportItems: reportItemsForDisplay(reply), cards: pendingCards(reply) })
     last.value = reply
     trace.value = null
     traceError.value = ''
@@ -160,7 +183,7 @@ onMounted(refresh)
       <button class="connection" @click="refresh"><i :class="{ connected: status?.status === 'ok' }"></i>{{ connection }}</button>
     </header>
 
-    <section class="introduction"><p class="eyebrow">OBSERVABLE MULTI-AGENT · INDEPENDENT V1</p><h1>把问题整理清楚，<br class="mobile-break">让就医准备更从容。</h1><p>记录症状、查阅公开资料、理解报告文字。每个回答都能查看来源和执行过程。</p><span class="boundary">信息参考与工程演示 · 未接入医院或实际预约</span></section>
+    <section class="introduction"><p class="eyebrow">OBSERVABLE MULTI-AGENT · INDEPENDENT V1</p><h1>把问题整理清楚，<br class="mobile-break">让就医准备更从容。</h1><p>记录症状、查阅公开资料、理解报告文字。每个回答都能查看来源和执行过程。</p><span class="boundary">信息参考与工程演示 · 预约仅在模拟医院系统中进行，不接入真实医院</span> <button class="quiet" :disabled="busy" @click="resetIdentity">重置模拟身份</button></section>
     <p v-if="error" class="notice" role="status">{{ error }}</p>
 
     <div class="layout">
@@ -186,6 +209,7 @@ onMounted(refresh)
               <div v-if="item.answer.questions.length"><h4>需要补充</h4><ul><li v-for="question in item.answer.questions" :key="question">{{ question }}</li></ul></div>
               <div v-if="item.answer.next_steps.length"><h4>下一步</h4><ul><li v-for="step in item.answer.next_steps" :key="step">{{ step }}</li></ul></div>
               <div v-if="item.references.length" class="references"><h4>本次引用</h4><a v-for="source in item.references" :key="source.key" :href="safeLink(source.url)" target="_blank" rel="noopener noreferrer"><span>{{ source.title }} ↗</span><small>{{ source.version }} · {{ source.scope }}</small><small v-if="source.provenance?.updated_on || source.provenance?.checked_on">{{ source.provenance?.updated_on ? `资料更新：${source.provenance.updated_on}` : '' }}{{ source.provenance?.updated_on && source.provenance?.checked_on ? ' · ' : '' }}{{ source.provenance?.checked_on ? `项目核对：${source.provenance.checked_on}` : '' }}</small></a></div>
+              <AppointmentCard v-for="card in item.cards || []" :key="card.draftId" :card="card" :state="cardState(card).state" :message="cardState(card).message" @confirm="confirmCard(card)" @dismiss="dismissCard(card)" />
               <p v-for="limit in item.answer.limitations" :key="limit" class="limitation">{{ limit }}</p>
               <p v-if="item.degraded" class="degraded">本次存在运行降级，请查看执行详情。</p>
             </template>
