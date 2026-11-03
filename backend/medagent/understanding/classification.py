@@ -4,6 +4,7 @@ import uuid
 from ..core.contracts import Intent, Understanding, TaskUnderstanding
 from .conversation import (FIELD_NAMES, VISIT_EVENT, VISIT_PREPARATION_REQUEST, ground_update, institution_request,
                            local_updates, merge_fields, user_sources)
+from ..tools.audit import observe_model_input
 from ..core.observability import event
 from .medications import NAMES
 from .risk import grounded_quote
@@ -65,6 +66,7 @@ class IntentRouter:
             payload = {"current":sources[-1], "history":sources[:-1],
                        "known_fields":[{"name":fact.name, "value":fact.value, "state":fact.state,
                                         "source_turn_id":fact.source.turn_id} for fact in preliminary.values()]}
+            observe_model_input("understanding", "understanding", 1, payload)
             result = await self.model.json("understanding", "理解当前医疗信息任务，类别为" + ",".join(x.value for x in CLASSES) +
                 "。普通生活常识及非医疗问题属于general，不要仅因项目是医疗助手而归入医疗类别。返回scores、tasks（intent、goal和quote）、updates（name,value,state,quote,turn_id），"
                 "以及topic_relation：当前轮明确是独立新话题时为new，继续或指代前文为followup，无法确定为uncertain。历史只用于指代和补充，不压过明确的新任务。"

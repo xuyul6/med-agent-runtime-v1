@@ -6,6 +6,7 @@ from .contracts import AgentInput, ReportInput
 from ..core.contracts import AgentAssignment, AgentExecution, Answer, Intent, PendingAction, Risk
 from ..understanding.consultation_needs import is_fever_followup
 from ..understanding.conversation import VisitFollowupEvidence, has_visit_context, topic_medications
+from ..tools.audit import appointment_attempts, observe_model_input
 from ..core.observability import event
 from ..knowledge.medication_evidence import eligible_references, query_identity
 from .output_validation import AgentOutputError
@@ -357,6 +358,7 @@ class RoleAgent:
         definitions = self.tools.registry.definitions(profile) if definitions is None else definitions
         repairing = False
         for turn in range(3):
+            observe_model_input(self.role, self.instance, turn + 1, messages)
             result = await self.model.message("agent_"+self.role, system, messages, definitions if turn < 2 and not repairing else None, budget=1900)
             try:
                 blocks = model_blocks(result)
@@ -365,16 +367,17 @@ class RoleAgent:
                 raise
             calls = [block for block in blocks if block.get("type") == "tool_use"]
             if calls:
-                if repairing:
-                    exc = AgentOutputError("unexpected_tools_during_repair")
-                    event("agent_output_validation",role=self.role,instance=self.instance,model_round=turn+1,repair_requested=False,**exc.diagnostic())
-                    raise exc
-                if turn >= 2 or len(calls) > 3:
-                    event("tool_batch", role=self.role, status="round_or_batch_limit", call_count=len(calls))
-                    raise ToolBudgetExceeded("tool_round_or_batch_limit")
-                messages.append({"role":"assistant", "content":blocks})
-                messages.append({"role":"user", "content":await self._tool_results(calls, context, budget)})
-                continue
+                with appointment_attempts(calls, self.role, self.instance, turn + 1, getattr(request, "action", None)) as attempts:
+                    if repairing:
+                        exc = AgentOutputError("unexpected_tools_during_repair")
+                        event("agent_output_validation",role=self.role,instance=self.instance,model_round=turn+1,repair_requested=False,**exc.diagnostic())
+                        raise exc
+                    if turn >= 2 or len(calls) > 3:
+                        event("tool_batch", role=self.role, status="round_or_batch_limit", call_count=len(calls))
+                        raise ToolBudgetExceeded("tool_round_or_batch_limit")
+                    messages.append({"role":"assistant", "content":blocks})
+                    messages.append({"role":"user", "content":await self._tool_results(calls, context, budget, attempts)})
+                    continue
             text_result = "".join(block.get("text", "") for block in blocks if block.get("type") == "text")
             try:
                 output = validate_draft(profile,text_result,request,references,evidence_requested)
@@ -391,15 +394,17 @@ class RoleAgent:
             return completed
         raise ValueError("tool_round_budget_exceeded")
 
-    async def _tool_results(self, calls, context, budget) -> list[dict]:
+    async def _tool_results(self, calls, context, budget, attempts) -> list[dict]:
         outputs = []
-        for call in calls:
+        for index, call in enumerate(calls):
             try:
                 value = await self.tools.call(call["name"], call.get("input", {}), context, budget)
+                attempts.result(index)
                 outputs.append({"type":"tool_result","tool_use_id":call["id"],"content":value.model_dump_json()})
             except ToolBudgetExceeded:
                 raise
-            except Exception:
+            except Exception as exc:
+                attempts.result(index, exc)
                 outputs.append({"type":"tool_result","tool_use_id":call["id"],"content":"工具不可用或参数不被允许。","is_error":True})
         return outputs
 

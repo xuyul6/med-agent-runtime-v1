@@ -7,6 +7,7 @@ contracts, parallel role execution and merging. One prompt carries the shared ru
 import json
 from pydantic import ValidationError
 from ..core.contracts import AgentExecution, Intent
+from ..tools.audit import appointment_attempts, observe_model_input
 from ..core.observability import event
 from ..core.provider import object_from_text
 from ..tools.contracts import LookupArguments
@@ -137,30 +138,34 @@ class SingleAgent:
         messages = [{"role":"user", "content":ROLE_DATA_PREFACE+"\n"+serialized}]
         repairing = False
         for turn in range(3):
+            observe_model_input(SINGLE_AGENT, INSTANCE, turn + 1, messages)
             result = await self.model.message("agent_"+SINGLE_AGENT, system, messages,
                                               definitions if turn < 2 and not repairing else None, budget=1900)
             blocks = model_blocks(result)
             calls = [block for block in blocks if block.get("type") == "tool_use"]
             if calls:
-                if repairing or turn >= 2 or len(calls) > 3:
-                    raise ToolBudgetExceeded("tool_round_or_batch_limit")
-                messages.append({"role":"assistant", "content":blocks})
-                outputs = []
-                for call in calls:
-                    try:
-                        if call["name"] == propose:
-                            value = await self.tools.call(propose, call.get("input", {}), booking, budget)
-                        elif call["name"] != "lookup_reference":
-                            raise PermissionError("tool_not_allowed")
-                        else:
-                            value = await self._lookup(call.get("input", {}), contexts, question, understanding, risk, budget)
-                        outputs.append({"type":"tool_result", "tool_use_id":call["id"], "content":value.model_dump_json()})
-                    except ToolBudgetExceeded:
-                        raise
-                    except Exception:
-                        outputs.append({"type":"tool_result", "tool_use_id":call["id"], "content":"工具不可用或参数不被允许。", "is_error":True})
-                messages.append({"role":"user", "content":outputs})
-                continue
+                with appointment_attempts(calls, SINGLE_AGENT, INSTANCE, turn + 1, booking.request.action if booking else None) as attempts:
+                    if repairing or turn >= 2 or len(calls) > 3:
+                        raise ToolBudgetExceeded("tool_round_or_batch_limit")
+                    messages.append({"role":"assistant", "content":blocks})
+                    outputs = []
+                    for index, call in enumerate(calls):
+                        try:
+                            if call["name"] == propose:
+                                value = await self.tools.call(propose, call.get("input", {}), booking, budget)
+                            elif call["name"] != "lookup_reference":
+                                raise PermissionError("tool_not_allowed")
+                            else:
+                                value = await self._lookup(call.get("input", {}), contexts, question, understanding, risk, budget)
+                            attempts.result(index)
+                            outputs.append({"type":"tool_result", "tool_use_id":call["id"], "content":value.model_dump_json()})
+                        except ToolBudgetExceeded:
+                            raise
+                        except Exception as exc:
+                            attempts.result(index, exc)
+                            outputs.append({"type":"tool_result", "tool_use_id":call["id"], "content":"工具不可用或参数不被允许。", "is_error":True})
+                    messages.append({"role":"user", "content":outputs})
+                    continue
             text = "".join(block.get("text", "") for block in blocks if block.get("type") == "text")
             try:
                 try:

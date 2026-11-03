@@ -7,6 +7,7 @@ from ..appointments.resolution import pending_from_issued
 from ..appointments.store import AppointmentStore, subject_label
 from ..appointments.params import WINDOW_NAMES
 from ..core.contracts import Intent, Risk
+from ..tools.audit import appointment_attempts, observe_model_input
 from ..core.observability import event
 from ..tools.registry import ToolBudget, ToolBudgetExceeded, ToolContext
 from .contracts import AppointmentInput, AgentInput
@@ -85,14 +86,16 @@ class AppointmentAgent(RoleAgent):
         definitions = [self.tools.registry.specs[TOOL[request.action]].definition()]
         messages = [{"role": "user", "content": ROLE_DATA_PREFACE + "\n" + data}]
         # The tool round runs without the output schema: with it, the model wrote the final JSON and skipped the tool.
+        observe_model_input(self.role, self.instance, 0, messages)
         blocks = model_blocks(await self.model.message("agent_appointment_action", system, messages, definitions, budget=1900))
         calls = [block for block in blocks if block.get("type") == "tool_use"]
         if not calls:
             raise AgentOutputError("appointment_draft_missing")
-        if len(calls) > 3:
-            raise ToolBudgetExceeded("tool_round_or_batch_limit")
-        # Extra calls get error results: the tool itself allows one draft per turn.
-        messages += [{"role": "assistant", "content": blocks}, {"role": "user", "content": await self._tool_results(calls, context, budget)}]
+        with appointment_attempts(calls, self.role, self.instance, 0, request.action) as attempts:
+            if len(calls) > 3:
+                raise ToolBudgetExceeded("tool_round_or_batch_limit")
+            # Extra calls get error results: the tool itself allows one draft per turn.
+            messages += [{"role": "assistant", "content": blocks}, {"role": "user", "content": await self._tool_results(calls, context, budget, attempts)}]
         result = await self._generate(system, data, intent, request, context, budget, workflow, False, definitions=[], messages=messages)
         payload = result.execution.payload
         # With one checked candidate the only valid outcome is its draft; a model clarification here is a failure.
