@@ -1,12 +1,14 @@
 """Decide this turn's appointment request: a verified request of this turn, or a valid answer to the previous turn's follow-up."""
+import re
 from datetime import date
 
 from ..core.contracts import Intent, Understanding
 from .catalog import HospitalCatalog
-from .params import WINDOW_NAMES, abandons, appointment_action, asks_question, parse_day, parse_window
+from .params import REPLACEMENT, WINDOW_NAMES, abandons, appointment_action, asks_question, parse_day, parse_window
 from .store import Followup
 
 FIELDS = ("institution", "department", "appointment_date", "time_window")
+ANSWER_TAIL = r"(?:可以|行|好)吗[?？]?$"
 
 
 def _normal_day(value: str | None, today: date) -> str | None:
@@ -24,6 +26,9 @@ def _fresh(action: str, understanding: Understanding, today: date) -> dict:
 
 def _reply_fields(text: str, followup: Followup, catalog: HospitalCatalog, today: date) -> tuple[dict, set[str]]:
     """Values this reply gives, read by code from the user's own words, and which of them cannot be used."""
+    # In “不约11月8日了，改后天下午” only the words after 改 are the new condition.
+    replaced = re.search(REPLACEMENT, text)
+    text = text[replaced.end():] if replaced else text
     given, invalid = {}, set()
     hospitals = catalog.match_hospital(text)
     if len(hospitals) == 1:
@@ -60,9 +65,11 @@ def appointment_request(*, text: str, understanding: Understanding, followup: Fo
         return None, "subject_changed"
     if abandons(text):
         return None, "abandoned"
-    if understanding.primary not in {Intent.GENERAL, Intent.VISIT} or asks_question(text):
-        return None, "new_task"
     given, invalid = _reply_fields(text, followup, catalog, today)
+    # “明天上午可以吗” answers the follow-up; a question without an awaited value is a new task.
+    answering = bool(re.search(ANSWER_TAIL, text.strip())) and any(name in given for name in followup.awaiting)
+    if understanding.primary not in {Intent.GENERAL, Intent.VISIT} or asks_question(text) and not answering:
+        return None, "new_task"
     details = {"intent": Intent.APPOINTMENT, "action": followup.action, "origin": "followup", **followup.fields, **given}
     if invalid:
         return details, "followup_invalid"

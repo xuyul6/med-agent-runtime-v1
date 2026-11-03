@@ -11,9 +11,15 @@ DAY_PATTERN = re.compile(r"(?P<iso>\d{4}-\d{1,2}-\d{1,2})|(?P<month>\d{1,2})月(
 AM, PM, UNSUPPORTED_WINDOW = r"上午|早上|早晨", r"下午|午后", r"晚上|夜里|夜间|中午|凌晨"
 HOW_TO = r"怎么|如何|流程|步骤|方式"
 NEGATED = r"不(?:用|要|想|需要)?(?:挂|约|预约)|算了"
-CANCEL = r"(?:取消|退掉?)[^，。,.]{0,8}(?:预约|号|门诊)|退号"
-# A date, a time of day and a department can sit between 挂 and 号: 挂11月8日下午神经内科的号.
-CREATE = r"挂号|挂[^，。,.]{0,16}号|预约|约.{0,6}(?:号|门诊|医生|科)"
+# The booking may come before or after the verb: 取消明天的预约 / 把明天的号退了 / 明天的预约不要了.
+CANCEL = (r"(?:取消|退掉?)[^，。,.]{0,12}(?:预约|号|门诊|科)|(?:预约|号|门诊)[^，。,.]{0,12}(?:取消|退了|退掉|不要了)"
+          r"|把[^，。,.]{0,12}(?:预约|号)(?:退|取消)|退号")
+# A date, a time of day and a department can sit between 挂 and 号, and the 号 may be left out: 挂明天上午的神经内科.
+CREATE = r"挂号|挂(?:个|一个)?[^，。,.]{0,16}(?:号|科|门诊)|预约|约[^，。,.]{0,10}(?:号|门诊|医生|科)"
+# Agreement in chat after a card is not a request; only the button confirms.
+CONFIRM_ONLY = r"^(?:确认|好的?|可以|行)[，,]?(?:预约|挂号)?吧?[。！!]?$"
+# 不约明天了，改后天下午 replaces a condition; it does not give up the booking.
+REPLACEMENT = r"改(?:约|成|到)?|换(?:成|到)?"
 ABANDON = r"不(?:用|要|想)?(?:挂|约|预约)了?|算了|先不(?:挂|约)?了?|不用了|不需要了|取消吧"
 QUESTION = r"[?？]|吗|什么|怎么|如何|为什么|哪些|能不能|是否|多少"
 
@@ -63,7 +69,9 @@ def parse_window(text: str | None) -> Parsed:
 
 
 def appointment_action(quote: str | None) -> Literal["create", "cancel"] | None:
-    if not quote or re.search(HOW_TO, quote) or re.search(NEGATED, quote):
+    if not quote or re.search(HOW_TO, quote) or re.fullmatch(CONFIRM_ONLY, quote.strip()):
+        return None
+    if re.search(NEGATED, quote) and not re.search(CANCEL, quote):
         return None
     if re.search(CANCEL, quote):
         return "cancel"
@@ -71,7 +79,7 @@ def appointment_action(quote: str | None) -> Literal["create", "cancel"] | None:
 
 
 def abandons(text: str) -> bool:
-    return bool(re.search(ABANDON, text or ""))
+    return bool(re.search(ABANDON, text or "")) and not re.search(REPLACEMENT, text or "")
 
 
 def asks_question(text: str) -> bool:

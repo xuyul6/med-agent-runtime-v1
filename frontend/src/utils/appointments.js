@@ -1,6 +1,7 @@
 export const USER_KEY = 'medagent.simulated-user'
 
 const STATUS_TEXT = {
+  404: '草稿已失效，请重新发起',
   409: '这张卡片已经处理过，或号源已满',
   410: '确认已过期或号源日期已不可约，请重新发起',
   403: '确认凭证无效'

@@ -136,7 +136,7 @@ class RoutingPlanner:
                    or not (kind == Intent.SYMPTOMS and past_symptoms_only(text) or outside_scope(text, kind))}
         # A booking request keeps the information tasks already admitted; only a VISIT that came from booking words goes.
         if appointment is not None and not understanding.subject_ambiguous:
-            if not (positive_request(text, VISIT_PREPARATION_REQUEST) or cross_clause_visit_preparation(text)):
+            if not (positive_request(text, VISIT_PREPARATION_REQUEST) or cross_clause_visit_preparation(text) or institution_request(text)):
                 domains.discard(Intent.VISIT)
             domains.add(Intent.APPOINTMENT)
         if not domains:

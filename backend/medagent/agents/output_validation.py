@@ -6,6 +6,9 @@ ERRORS = {
     "invalid_output_json": ("json", True),
     "invalid_output_shape": ("schema", False),
     "invalid_model_envelope": ("envelope", False),
+    # Booking role: the draft must be the one checked candidate; neither is repairable by the model.
+    "appointment_draft_missing": ("appointment", False),
+    "appointment_draft_mismatch": ("appointment", False),
     "unconfirmed_medication_identity": ("identity", True),
     "unconfirmed_medication_name": ("identity", True),
     "medication_identity_target_mismatch": ("identity", True),

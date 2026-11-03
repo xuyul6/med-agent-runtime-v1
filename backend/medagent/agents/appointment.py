@@ -85,6 +85,9 @@ class AppointmentAgent(RoleAgent):
         definitions = [self.tools.registry.specs[TOOL[request.action]].definition()]
         result = await self._generate(system, data, intent, request, context, budget, workflow, False, definitions=definitions)
         payload = result.execution.payload
+        # With one checked candidate the only valid outcome is its draft; a model clarification here is a failure.
+        if result.execution.status != "answered" or len(context.issued) != 1:
+            raise AgentOutputError("appointment_draft_missing")
         if payload["action"] != request.action or payload["draft_ids"] != list(context.issued):
             raise AgentOutputError("appointment_draft_mismatch")
         result.pending_actions = pending_from_issued(context.issued, self.timezone)
