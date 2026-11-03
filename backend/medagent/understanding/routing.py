@@ -98,7 +98,8 @@ class RoutingPlanner:
             raise ValueError("invalid_supporting_agent_limit")
         self.registry, self.tools, self.supporting_limit = registry, tools, supporting_limit
 
-    def plan(self, text: str, understanding: Understanding, agents: dict, monitor, *, consultation_need: str | None = None) -> RoutingDecision:
+    def plan(self, text: str, understanding: Understanding, agents: dict, monitor, *, consultation_need: str | None = None,
+             appointment: dict | None = None) -> RoutingDecision:
         if understanding.primary == Intent.URGENT:
             return RoutingDecision(primary_agent="risk_handoff", routing_reason="critical_risk_override", routing_confidence=1,
                 assignments=[AgentAssignment(task_id="task:urgent", role="risk_handoff", intent=Intent.URGENT,
@@ -133,6 +134,11 @@ class RoutingPlanner:
         # Support is for current work: a resolved past symptom or a task outside "只想…" stays context.
         domains = {kind for kind in domains if kind in (understanding.primary, Intent.GENERAL)
                    or not (kind == Intent.SYMPTOMS and past_symptoms_only(text) or outside_scope(text, kind))}
+        # A booking request keeps the information tasks already admitted; only a VISIT that came from booking words goes.
+        if appointment is not None and not understanding.subject_ambiguous:
+            if not (positive_request(text, VISIT_PREPARATION_REQUEST) or cross_clause_visit_preparation(text)):
+                domains.discard(Intent.VISIT)
+            domains.add(Intent.APPOINTMENT)
         if not domains:
             domains = {Intent.GENERAL}
         if len(domains) > 1:
@@ -191,6 +197,11 @@ class RoutingPlanner:
                 components=components, score=round(score, 6) if not reasons else 0, instances=choices))
         eligible = sorted([item for item in candidates if item.eligible],
                           key=lambda item:(-item.score, item.intent != understanding.primary, item.role))
+        # Booking does not compete on score: it leads only when alone, otherwise it is second, so capacity defers information roles.
+        booking = next((item for item in eligible if item.intent == Intent.APPOINTMENT), None)
+        if booking is not None:
+            eligible.remove(booking)
+            eligible.insert(min(1, len(eligible)), booking)
         requested = self.registry.role_for_intent[understanding.primary]
         monitor_fallback = [item.role for item in candidates if item.intent in domains and "monitor_penalty_threshold" in item.reasons]
         monitor_reason = ";monitor_fallback=["+",".join(monitor_fallback)+"]" if monitor_fallback else ""
@@ -201,7 +212,7 @@ class RoutingPlanner:
                 fallbacks=[RoutingFallback(role=requested, reason="monitor_penalty_threshold" if monitor_fallback else "no_qualified_role", action="transparent_guidance")])
         chosen, deferred = eligible[:1+self.supporting_limit], eligible[1+self.supporting_limit:]
         unavailable = [item.role for item in candidates if item.intent in domains and not item.eligible]
-        assignments = [self._assignment(text, understanding, item) for item in chosen]
+        assignments = [self._assignment(text, understanding, item, appointment) for item in chosen]
         for assignment in assignments:
             assignment.other_goals = [item.goal for item in assignments if item is not assignment]
         return RoutingDecision(primary_agent=chosen[0].role, supporting_agents=[item.role for item in chosen[1:]],
@@ -213,7 +224,13 @@ class RoutingPlanner:
                       +[RoutingFallback(role=item.role, reason=";".join(item.reasons), action="report_unfinished_task")
                         for item in candidates if item.role in unavailable])
 
-    def _assignment(self, text: str, understanding: Understanding, candidate: RoutingCandidate) -> AgentAssignment:
+    def _assignment(self, text: str, understanding: Understanding, candidate: RoutingCandidate, appointment: dict | None = None) -> AgentAssignment:
+        if candidate.intent == Intent.APPOINTMENT:
+            # The role reads the resolved request, not the text; the excerpt only records which words asked for it.
+            excerpt = understanding.appointment_quote if appointment.get("origin") == "quote" and understanding.appointment_quote else text
+            return AgentAssignment(task_id="task:appointment", role=candidate.role, intent=candidate.intent, goal=GOALS[candidate.role],
+                input_text=(GOALS[candidate.role]+"\n用户相关原文：\n"+excerpt)[:6000],
+                context_fields=[name for name in ROLE_FIELDS[candidate.role] if appointment.get(name)], instances=candidate.instances)
         fields = [name for name in ROLE_FIELDS[candidate.role] if name in understanding.entities]
         selected = [part for part in clauses(text) if re.search(LEXICON[candidate.intent], part)
                     or candidate.intent == Intent.VISIT and institution_request(part)]
