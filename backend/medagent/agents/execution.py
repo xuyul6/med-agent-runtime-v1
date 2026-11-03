@@ -350,10 +350,10 @@ class RoleAgent:
         return system
 
     async def _generate(self, system, data, intent, request, context, budget, workflow, evidence_requested,
-                        definitions: list[dict] | None = None) -> AgentResult:
+                        definitions: list[dict] | None = None, messages: list[dict] | None = None) -> AgentResult:
         """At most two tool rounds and one narrowly scoped repair; every draft passes the same validation."""
         profile, references = self.profile, context.references
-        messages = [{"role":"user", "content":ROLE_DATA_PREFACE+"\n"+data}]
+        messages = messages or [{"role":"user", "content":ROLE_DATA_PREFACE+"\n"+data}]
         definitions = self.tools.registry.definitions(profile) if definitions is None else definitions
         repairing = False
         for turn in range(3):

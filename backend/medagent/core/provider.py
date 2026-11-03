@@ -38,6 +38,9 @@ def json_schema(stage: str) -> dict | None:
     if stage == "agent_single_agent":
         # The single-agent baseline returns a plain answer, not a role contract.
         return strict_schema(Answer)
+    if stage == "agent_appointment_action":
+        # Under an output schema the model answered without calling the booking tool; this round only calls it.
+        return None
     if stage.startswith("agent_"):
         return role_json_schema(stage.removeprefix("agent_"))
     string = {"type":"string"}
