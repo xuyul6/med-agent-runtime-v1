@@ -8,7 +8,8 @@ import re
 import uuid
 from ..core.observability import event
 
-PROPOSALS = {'propose_appointment': ('create', 'slot_id'), 'propose_cancellation': ('cancel', 'appointment_id')}
+PROPOSALS = {'propose_appointment': ('create', 'slot_id'), 'propose_cancellation': ('cancel', 'appointment_id'),
+             'open_propose_appointment': ('create', 'slot_id'), 'open_propose_cancellation': ('cancel', 'appointment_id')}
 PATTERNS = {'create': r'[a-z0-9-]+:[a-z0-9-]+:\d{4}-\d{2}-\d{2}:(?:am|pm)', 'cancel': r'apt-[0-9a-f]{12}'}
 MATERIALS = ContextVar('synthetic_exposure_materials', default=())
 SAFE_ERRORS = frozenset({'action_mismatch', 'slot_not_from_this_search', 'booking_not_from_this_search',

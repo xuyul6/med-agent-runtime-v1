@@ -38,6 +38,8 @@ class Settings:
     supporting_agent_limit: int = 2
     # "single_agent" is the comparison baseline only; the workbench and default runs use "multi_agent".
     architecture: str = "multi_agent"
+    # Comparison only: the single agent holds every booking tool on every turn, with no request admission.
+    single_agent_open_tools: bool = False
     single_agent_attempts: int = 1
     agent_concurrency: int = 2
     collaboration_timeout: float = 120

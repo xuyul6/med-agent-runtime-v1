@@ -100,7 +100,8 @@ class MedicalRuntime:
             raise ValueError("invalid_architecture")
         if settings.single_agent_attempts not in {1, 2}:
             raise ValueError("invalid_single_agent_attempts")
-        self.single = (SingleAgent(model, index, self.tools, self.registry, self.appointments, settings.appointment_timezone)
+        self.single = (SingleAgent(model, index, self.tools, self.registry, self.appointments, settings.appointment_timezone,
+                                   open_tools=settings.single_agent_open_tools)
                        if settings.architecture == SINGLE_AGENT else None)
         if self.single:
             self.monitor.register_agent(SINGLE_INSTANCE, SINGLE_AGENT)

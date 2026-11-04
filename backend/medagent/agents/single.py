@@ -5,6 +5,7 @@ model, tool budget, citation and boundary checks) and removes what is being comp
 contracts, parallel role execution and merging. One prompt carries the shared rules and every role's rules.
 """
 import json
+from dataclasses import replace
 from pydantic import ValidationError
 from ..core.contracts import AgentExecution, Intent
 from ..tools.audit import appointment_attempts, observe_model_input
@@ -36,12 +37,17 @@ ROLES_IN_PROMPT = ("general", "symptom_guide", "drug_reference", "report_explain
 
 
 PROPOSE = {"create":"propose_appointment", "cancel":"propose_cancellation"}
+# The open comparison arm holds these on every turn, without request admission.
+OPEN_TOOLS = ("open_search_slots", "open_find_bookings", "open_propose_appointment", "open_propose_cancellation")
+OPEN_RULE = ("\n预约工具每轮都可用，查不查、约不约由你决定；open_propose_* 只能用本轮查到的编号，每轮最多 3 份草稿。"
+             "草稿只是待确认，用户点击确认后才会提交。")
 
 
 class SingleAgent:
-    def __init__(self, model, index, tools, registry=DEFAULT_REGISTRY, appointments=None, timezone: str = "Asia/Shanghai"):
+    def __init__(self, model, index, tools, registry=DEFAULT_REGISTRY, appointments=None, timezone: str = "Asia/Shanghai",
+                 open_tools: bool = False):
         self.model, self.index, self.tools, self.registry = model, index, tools, registry
-        self.appointments, self.timezone = appointments, timezone
+        self.appointments, self.timezone, self.open_tools = appointments, timezone, open_tools
 
     async def _booking(self, appointment, question, understanding, risk, budget):
         """The same checks and follow-up record as the booking role; the difference is that this context also reads everything else."""
@@ -97,11 +103,20 @@ class SingleAgent:
 
     async def run(self, question, understanding, memory, risk, snapshot, budget, appointment: dict | None = None):
         """Answer one turn alone; returns (answer, references, execution, pending_actions)."""
-        contexts, booking, booking_data, propose, expected = {}, None, None, None, 0
+        contexts, booking, booking_data, propose, expected, opened = {}, None, None, None, (), None
         if appointment is not None and self.appointments is not None and not understanding.subject_ambiguous:
             booking, preparation, booking_data = await self._booking(appointment, question, understanding, risk, budget)
             propose = PROPOSE[booking.request.action] if preparation.kind == "ready" else None
-            expected = len(preparation.candidates) if propose else 0
+            expected = tuple(getattr(item, "slot_id", None) or item.appointment_id for item in preparation.candidates) if propose else ()
+        if self.open_tools and self.appointments is not None:
+            request = AppointmentInput(text=question.text, intent=Intent.APPOINTMENT, action="create", subject=question.subject, risk=risk)
+            opened = ToolContext(replace(self.registry["appointment"], role="single_agent_open", tool_scope=OPEN_TOOLS), request, self.index,
+                                 user=question.user, session=question.session, appointments=self.appointments)
+            if booking is not None:
+                # What the shared preparation found is proposable too; the open tools add the agent's own searches.
+                opened.slots.update(booking.slots)
+                opened.bookings.update(booking.bookings)
+            propose = None
         for task in understanding.tasks:
             if task.intent not in PRE_RETRIEVED or task.intent in contexts:
                 continue
@@ -130,19 +145,24 @@ class SingleAgent:
         evidence_requested = explicit_reference_request(question.text)
         visit_task = any(task.intent == Intent.VISIT for task in understanding.tasks)
         system = self._system(snapshot)+(EVIDENCE_MISSING_NOTICE if evidence_requested and not references() else "")
-        if booking_data is not None:
+        if booking_data is not None or opened is not None:
             common = "# 共享约束\n"+snapshot.common
             system += ("\n\n# 角色规则：appointment\n"+snapshot.select("appointment").text[len(common):].lstrip("\n")
-                       +"\n数据中的 appointment 是代码核对过的预约请求；kind 不是 ready 时没有提交工具，按 questions 向用户追问。")
+                       +"\n数据中的 appointment 是代码核对过的预约请求；kind 不是 ready 时没有提交工具，按 questions 向用户追问。"
+                       +(OPEN_RULE if opened is not None else ""))
         definitions = [self.tools.registry.specs["lookup_reference"].definition()]
         if propose:
             definitions.append(self.tools.registry.specs[propose].definition())
+        if opened is not None:
+            definitions += [self.tools.registry.specs[name].definition() for name in OPEN_TOOLS]
         messages = [{"role":"user", "content":ROLE_DATA_PREFACE+"\n"+serialized}]
         repairing = False
         for turn in range(3):
             observe_model_input(SINGLE_AGENT, INSTANCE, turn + 1, messages)
             # As for the booking role, the round that may draft runs without the output schema, which made the model skip the tool.
-            stage = "agent_"+SINGLE_AGENT+("_action" if propose and turn == 0 else "")
+            # The open arm may need a search round and then a drafting round; the strict arm drafts in its first round.
+            drafting = propose and turn == 0 or opened is not None and turn < 2 and not repairing
+            stage = "agent_"+SINGLE_AGENT+("_action" if drafting else "")
             result = await self.model.message(stage, system, messages,
                                               definitions if turn < 2 and not repairing else None, budget=1900)
             blocks = model_blocks(result)
@@ -157,6 +177,8 @@ class SingleAgent:
                         try:
                             if call["name"] == propose:
                                 value = await self.tools.call(propose, call.get("input", {}), booking, budget)
+                            elif opened is not None and call["name"] in OPEN_TOOLS:
+                                value = await self.tools.call(call["name"], call.get("input", {}), opened, budget)
                             elif call["name"] != "lookup_reference":
                                 raise PermissionError("tool_not_allowed")
                             else:
@@ -181,7 +203,9 @@ class SingleAgent:
                 except ValidationError:
                     raise AgentOutputError("invalid_output_shape") from None
                 # The booking role's rule: with one checked candidate the only valid outcome is its draft.
-                if propose and len(booking.issued) != expected:
+                drafted = [draft.slot_id if draft.kind == "create" else draft.appointment_id
+                           for draft, _ in (opened.issued if opened is not None else booking.issued if booking else {}).values()]
+                if expected and (set(expected) - set(drafted) or opened is None and len(drafted) != len(expected)):
                     raise AgentOutputError("appointment_draft_missing")
             except AgentOutputError as exc:
                 # The same two repairs the role path allows: JSON format, and one narrow range-evidence correction.
@@ -204,6 +228,7 @@ class SingleAgent:
             execution = AgentExecution(role=SINGLE_AGENT, instance=INSTANCE, profile_version=VERSION, status="answered",
                                        workflow=["retrieve", "generate", "validate_output"], missing_fields=[], payload={},
                                        task_id="task:single")
-            pending = pending_from_issued(booking.issued, self.timezone) if booking is not None else []
+            issued = opened.issued if opened is not None else booking.issued if booking is not None else {}
+            pending = pending_from_issued(issued, self.timezone)
             return answer, list(references().values()), execution, pending
         raise ValueError("tool_round_budget_exceeded")
