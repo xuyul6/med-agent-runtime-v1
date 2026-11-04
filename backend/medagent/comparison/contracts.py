@@ -15,7 +15,8 @@ from ..evaluation.metrics import METRIC_VERSION
 
 ARMS = ("multi_agent", "primary_only", "single_agent")
 # Each arm differs from multi_agent only in these runtime settings.
-ARM_SETTINGS = {"multi_agent":{}, "primary_only":{"supporting_agent_limit":0}, "single_agent":{"architecture":"single_agent", "single_agent_attempts":2}}
+ARM_SETTINGS = {"multi_agent":{}, "primary_only":{"supporting_agent_limit":0}, "single_agent":{"architecture":"single_agent", "single_agent_attempts":2},
+                "single_agent_open":{"architecture":"single_agent", "single_agent_attempts":2, "single_agent_open_tools":True}}
 CATEGORIES = ("single_task", "compound", "multi_turn", "general", "urgent", "tool_fault",
               "daily_sourced", "daily_gap", "compound_parallel", "compound_linked",
               "stability_once", "stability_always", "stability_tool", "stability_outage", "boundary", "injection",
@@ -35,7 +36,8 @@ LAYERS = {"daily":{"dataset":"comparison-daily-v1.json", "arms":("multi_agent", 
           "compound":{"dataset":"comparison-compound-v1.json", "arms":ARMS, "judge":True},
           "stability":{"dataset":"comparison-stability-v1.json", "arms":("multi_agent", "single_agent"), "judge":True},
           "safety":{"dataset":"comparison-safety-v1.json", "arms":("multi_agent", "single_agent"), "judge":False},
-          "permission":{"dataset":"comparison-permission-v1.json", "arms":("multi_agent", "single_agent"), "judge":False}}
+          # v1 (two arms, four repeats) was run on 80f8906 and 635113c; v2 adds several-slot cases and the open arm.
+          "permission":{"dataset":"comparison-permission-v2.json", "arms":("multi_agent", "single_agent", "single_agent_open"), "judge":False}}
 # These name what an orchestrated run must produce; they cannot be satisfied or compared by the single agent.
 ARCHITECTURE_SPECIFIC = ("role", "status", "missing_fields", "supporting_agents")
 DATASET = ROOT/"resources"/"comparison-cases-v1.json"
@@ -222,9 +224,11 @@ PROTOCOL = {
 
 # The permission layer has its own protocol; the four earlier layers keep theirs and their hash unchanged.
 PERMISSION_PROTOCOL = {
-    "version":"architecture-comparison-5",
+    "version":"architecture-comparison-6",
     "layer":"permission",
-    "arms":{"multi_agent":PROTOCOL["arms"]["multi_agent"], "single_agent":PROTOCOL["arms"]["single_agent"]},
+    "arms":{"multi_agent":PROTOCOL["arms"]["multi_agent"], "single_agent":PROTOCOL["arms"]["single_agent"],
+            "single_agent_open":"single_agent_with_every_booking_tool_on_every_turn; model_chosen_searches; drafts_only_for_slots_found_this_turn; at_most_three_drafts; writes_only_by_user_confirmation"},
+    "drafts":"several_slots_in_one_verified_quote_get_one_draft_each; strict_arms_cap_drafts_at_the_requested_slots; open_arm_caps_at_three",
     "shared":"same_model_skills_references_and_frozen_business_time; preparation_runs_once_under_multi_agent; seeded_bookings_and_followups_restored_per_arm_into_isolated_in_memory_stores",
     "order":PROTOCOL["order"],
     "judge":"none",

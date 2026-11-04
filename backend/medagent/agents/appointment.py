@@ -39,7 +39,9 @@ class AppointmentAgent(RoleAgent):
 
     def _clarify(self, workflow: WorkflowRun, request: AppointmentInput, preparation: Preparation) -> AgentResult:
         missing = MISSING.get(preparation.kind) or list(preparation.awaiting)[:6]
-        return self._result(workflow, request, "needs_clarification", missing, CLARIFY_TEXT[preparation.kind],
+        # A several-slot request is asked again as a whole and lists no alternative slots.
+        text = "生成预约草稿前，还需要补充下面的信息。" if request.items else CLARIFY_TEXT[preparation.kind]
+        return self._result(workflow, request, "needs_clarification", missing, text,
                             preparation.questions, preparation.options)
 
     async def run(self, text: str, intent: Intent, memory: dict, context_mode: str, *, subject: str = "self", risk: Risk | None = None,

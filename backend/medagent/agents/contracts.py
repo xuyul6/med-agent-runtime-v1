@@ -103,7 +103,9 @@ class AppointmentInput(AgentInput):
         # Cancelling filters the user's own bookings; a non-unique match is clarified after the search.
         if self.action == "cancel":
             return []
-        return [name for name in ("department", "appointment_date") if not getattr(self, name)]
+        # Slots read from the quote give the dates even when no single date field was grounded.
+        return [name for name in ("department", "appointment_date") if not getattr(self, name)
+                and not (name == "appointment_date" and self.items)]
 
 
 class RiskInput(AgentInput):
