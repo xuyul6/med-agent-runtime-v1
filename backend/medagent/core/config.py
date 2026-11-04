@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass, fields
+from dataclasses import replace, dataclass, fields
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -67,10 +67,24 @@ class Settings:
     appointment_followup_ttl: float = 600
     appointment_timezone: str = "Asia/Shanghai"
 
+    def on_vendor(self, vendor: str) -> "Settings":
+        """Move every call to one vendor. The comparison layers use it to run a whole experiment on the second vendor."""
+        if vendor in {"", "anthropic"}:
+            return self
+        if vendor != "deepseek":
+            raise ValueError("unknown_primary_vendor")
+        # No standby and no separate judge: a run on the second vendor never mixes vendors.
+        return replace(self, api_key=self.fallback_api_key, model=self.fallback_model, api_url=self.fallback_api_url,
+                       structured_output=False, fallback_api_key="", judge_model="")
+
     @classmethod
     def load(cls):
         load_dotenv(ROOT / ".env.local", override=False)
         env = os.environ
+        return cls._from(env).on_vendor(env.get("MAR_PRIMARY_VENDOR", "").lower())
+
+    @classmethod
+    def _from(cls, env):
         return cls(
             api_key=env.get("ANTHROPIC_API_KEY", ""),
             model=env.get("ANTHROPIC_MODEL", ""),
