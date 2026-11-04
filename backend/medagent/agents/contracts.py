@@ -82,6 +82,11 @@ class VisitInput(AgentInput):
     visit_context: bool | None = None
 
 
+class AppointmentItem(Contract):
+    appointment_date: str = Field(min_length=1, max_length=40)
+    time_window: str | None = Field(default=None, max_length=20)
+
+
 class AppointmentInput(AgentInput):
     intent: Literal[Intent.APPOINTMENT]
     action: Literal["create", "cancel"]
@@ -91,6 +96,8 @@ class AppointmentInput(AgentInput):
     department: str | None = None
     appointment_date: str | None = None
     time_window: str | None = None
+    # Two or more slots read by code from the verified quote; creating only. Up to three are bookable in one turn.
+    items: list[AppointmentItem] = Field(default_factory=list, max_length=6)
 
     def information_gaps(self) -> list[str]:
         # Cancelling filters the user's own bookings; a non-unique match is clarified after the search.
@@ -158,7 +165,7 @@ class VisitPayload(Contract):
 
 class AppointmentPayload(Contract):
     action: Literal["create", "cancel"]
-    draft_ids: list[str] = Field(default_factory=list, max_length=1)
+    draft_ids: list[str] = Field(default_factory=list, max_length=3)
     options: list[str] = Field(default_factory=list, max_length=6)
 
 
@@ -200,7 +207,7 @@ class AgentOutput(Contract):
                 raise PydanticCustomError("report_information_required","report_information_required")
             if isinstance(payload, VisitPayload) and not payload.preparation_checklist:
                 raise PydanticCustomError("visit_checklist_required","visit_checklist_required")
-            if isinstance(payload, AppointmentPayload) and len(payload.draft_ids) != 1:
+            if isinstance(payload, AppointmentPayload) and not (1 <= len(payload.draft_ids) == len(set(payload.draft_ids))):
                 raise PydanticCustomError("appointment_draft_required","appointment_draft_required")
         return self
 

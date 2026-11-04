@@ -21,6 +21,8 @@ class Resolution:
     missing: tuple[str, ...]
     invalid: tuple[str, ...]
     options: tuple[str, ...]
+    # One (day, window) per requested slot when the request names several.
+    items: tuple[tuple[date, str | None], ...] = ()
 
 
 def resolve_request(request: AppointmentInput, catalog: HospitalCatalog, today: date) -> Resolution:
@@ -49,6 +51,8 @@ def resolve_request(request: AppointmentInput, catalog: HospitalCatalog, today: 
     elif request.action == "create":
         missing.append("department")
         options = catalog.department_names()
+    if request.items and request.action == "create":
+        return _resolve_items(request, catalog, today, hospital_id, department_id, missing, invalid, options)
     day = parse_day(request.appointment_date, today)
     if day.state == "invalid" or day.state == "valid" and not catalog.bookable(day.value, today):
         invalid.append("appointment_date")
@@ -59,6 +63,26 @@ def resolve_request(request: AppointmentInput, catalog: HospitalCatalog, today: 
         invalid.append("time_window")
     return Resolution(hospital_id, department_id, day.value if "appointment_date" not in invalid and day.state == "valid" else None,
                       window.value if window.state == "valid" else None, tuple(missing), tuple(invalid), tuple(options))
+
+
+MAX_ITEMS = 3
+
+
+def _resolve_items(request, catalog, today, hospital_id, department_id, missing, invalid, options) -> Resolution:
+    items = []
+    for item in request.items:
+        day, window = parse_day(item.appointment_date, today), parse_window(item.time_window)
+        if day.state != "valid" or not catalog.bookable(day.value, today):
+            invalid.append("appointment_date")
+        if window.state == "invalid":
+            invalid.append("time_window")
+        items.append((day.value if day.state == "valid" else None, window.value if window.state == "valid" else None))
+    if len(items) > MAX_ITEMS:
+        invalid.append("appointment_date")
+    invalid = list(dict.fromkeys(invalid))
+    first = items[0] if not invalid else (None, None)
+    return Resolution(hospital_id, department_id, first[0], first[1], tuple(missing), tuple(invalid), tuple(options),
+                      tuple(items) if not invalid else ())
 
 
 def booking_view(booking: Booking) -> BookingView:

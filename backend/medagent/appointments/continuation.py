@@ -4,7 +4,7 @@ from datetime import date
 
 from ..core.contracts import Intent, Understanding
 from .catalog import HospitalCatalog
-from .params import REPLACEMENT, WINDOW_NAMES, abandons, appointment_action, asks_question, parse_day, parse_window
+from .params import REPLACEMENT, WINDOW_NAMES, abandons, appointment_action, asks_question, parse_day, parse_items, parse_window
 from .store import Followup
 
 FIELDS = ("institution", "department", "appointment_date", "time_window")
@@ -21,6 +21,9 @@ def _fresh(action: str, understanding: Understanding, today: date) -> dict:
               and entity.state in {"provided", "topic"} and entity.source.turn_id == understanding.turn_id}
     if "appointment_date" in fields:
         fields["appointment_date"] = _normal_day(fields["appointment_date"], today)
+    items = parse_items(understanding.appointment_quote) if action == "create" else []
+    if items:
+        fields["items"] = [{"appointment_date": _normal_day(day, today), "time_window": window} for day, window in items]
     return {"intent": Intent.APPOINTMENT, "action": action, "origin": "quote", **fields}
 
 

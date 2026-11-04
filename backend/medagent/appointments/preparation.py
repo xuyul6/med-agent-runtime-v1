@@ -43,6 +43,9 @@ def _range(store) -> str:
 
 
 def _invalid_questions(request: AppointmentInput, resolution: Resolution, store) -> list[str]:
+    if request.items:
+        named = "、".join(item.appointment_date + (item.time_window or "") for item in request.items)
+        return [f"“{named}”里有约不了的时段：{_range(store)}，只有上午和下午的号，一次最多约 3 个时段。" + EXAMPLE]
     questions = {
         "institution": f"没有找到“{request.institution}”，模拟医院可选：{'、'.join(h.name for h in store.catalog.hospitals)}。",
         "department": f"模拟医院没有“{request.department}”，可选：{'、'.join(store.catalog.department_names())}。",
@@ -90,6 +93,8 @@ async def prepare(request: AppointmentInput, context: ToolContext, tools: ToolEx
                            options=resolution.options, awaiting=missing)
     if request.action == "create":
         slots = (await tools.call("search_slots", {}, context, budget)).slots
+        if resolution.items:
+            return _several(resolution, slots, context.slot_groups)
         if not slots:
             options = tuple(slot_text(slot) for slot in _next_slots(store, resolution))
             when = day_text(resolution.day.isoformat()) + (WINDOW_NAMES[resolution.window] if resolution.window else "")
@@ -110,9 +115,26 @@ async def prepare(request: AppointmentInput, context: ToolContext, tools: ToolEx
     return Preparation("ready", resolution, tuple(bookings))
 
 
+def _several(resolution: Resolution, slots, groups) -> Preparation:
+    """Every requested slot needs exactly one number; otherwise the whole request is asked again, nothing is drafted."""
+    views = {slot.slot_id: slot for slot in slots}
+    problems = []
+    for (day, window), group in zip(resolution.items, groups):
+        when = day_text(day.isoformat()) + (WINDOW_NAMES[window] if window else "")
+        if not group:
+            problems.append(f"{when}没有号")
+        elif len(group) > 1:
+            problems.append(f"{when}上午和下午都有号，需要说明哪个时段")
+    if problems:
+        question = "；".join(problems) + "。这次没有生成任何草稿，" + EXAMPLE.removeprefix("请")
+        return Preparation("ambiguous" if all("都有号" in item for item in problems) else "no_slot", resolution, questions=(question,))
+    return Preparation("ready", resolution, tuple(views[group[0]] for group in groups))
+
+
 def followup_for(preparation: Preparation, request: AppointmentInput, *, user: str, session: str, subject: str, now: float,
                  ttl: float) -> Followup | None:
-    if preparation.kind == "ready" or preparation.kind == "invalid" and request.origin == "followup":
+    # A several-slot request is asked again as a whole in this version, so nothing waits for the next turn.
+    if preparation.kind == "ready" or preparation.kind == "invalid" and request.origin == "followup" or request.items:
         return None
     resolution = preparation.resolution
     fields = {"institution": request.institution if resolution.hospital_id and "institution" not in resolution.invalid else None,

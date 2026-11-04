@@ -15,7 +15,8 @@ NEGATED = r"不(?:用|要|想|需要)?(?:挂|约|预约)|算了"
 CANCEL = (r"(?:取消|退掉?)[^，。,.]{0,12}(?:预约|号|门诊|科)|(?:预约|号|门诊)[^，。,.]{0,12}(?:取消|退了|退掉|不要了)"
           r"|把[^，。,.]{0,12}(?:预约|号)(?:退|取消)|退号")
 # A date, a time of day and a department can sit between 挂 and 号, and the 号 may be left out: 挂明天上午的神经内科.
-CREATE = r"挂号|挂(?:个|一个)?[^，。,.]{0,16}(?:号|科|门诊)|预约|约[^，。,.]{0,10}(?:号|门诊|医生|科)"
+# Several slots (11月5日上午和11月6日上午) make the span longer; 大约 is not a booking.
+CREATE = r"挂号|挂(?:个|一个)?[^，。,.]{0,30}(?:号|科|门诊)|预约|(?<!大)约[^，。,.]{0,24}(?:号|门诊|医生|科)"
 # Agreement in chat after a card is not a request; only the button confirms.
 CONFIRM_ONLY = r"^(?:确认|好的?|可以|行)[，,]?(?:预约|挂号)?吧?[。！!]?$"
 # 不约明天了，改后天下午 replaces a condition; it does not give up the booking.
@@ -54,6 +55,23 @@ def parse_day(text: str | None, today: date) -> Parsed:
     if None in days or len(days) > 1:
         return Parsed("invalid", "、".join(match[0] for match in matches))
     return Parsed("valid", days.pop())
+
+
+def parse_items(quote: str | None) -> list[tuple[str, str | None]]:
+    """Two or more slots in one verified quote: each date with the time of day in its own segment.
+
+    Only the last segment naming a time of day, as in 11月5日和11月6日下午, means both. One slot returns [] and keeps the single path.
+    """
+    matches = list(DAY_PATTERN.finditer(quote or ""))
+    windows = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(quote)
+        found = re.search(AM + "|" + PM + "|" + UNSUPPORTED_WINDOW, quote[match.end():end])
+        windows.append(found[0] if found else None)
+    if len(windows) > 1 and windows[-1] and not any(windows[:-1]):
+        windows = [windows[-1]] * len(windows)
+    items = list(dict.fromkeys(zip((match[0] for match in matches), windows)))
+    return items if len(items) > 1 else []
 
 
 def parse_window(text: str | None) -> Parsed:

@@ -76,11 +76,11 @@ class AppointmentAgent(RoleAgent):
             return self._clarify(workflow, request, preparation)
         if self.model is None:
             return self._result(workflow, request, "needs_clarification", ["choice"], "离线预览仅展示执行结构，不生成预约草稿。")
-        [candidate] = preparation.candidates
+        candidates = preparation.candidates
         data = json.dumps({"action": request.action, "subject_label": subject_label(subject),
-                           "fields": {"hospital": candidate.hospital, "department": candidate.department,
-                                      "day": candidate.day, "window": WINDOW_NAMES[candidate.window]},
-                           "candidate": candidate.model_dump(mode="json")}, ensure_ascii=False)
+                           "fields": [{"hospital": item.hospital, "department": item.department,
+                                       "day": item.day, "window": WINDOW_NAMES[item.window]} for item in candidates],
+                           "candidates": [item.model_dump(mode="json") for item in candidates]}, ensure_ascii=False)
         event("context", role=self.role, mode="structured", characters=len(data), reference_count=0)
         system = self._system_prompt(snapshot, "selective", intent, False)
         definitions = [self.tools.registry.specs[TOOL[request.action]].definition()]
@@ -98,8 +98,8 @@ class AppointmentAgent(RoleAgent):
             messages += [{"role": "assistant", "content": blocks}, {"role": "user", "content": await self._tool_results(calls, context, budget, attempts)}]
         result = await self._generate(system, data, intent, request, context, budget, workflow, False, definitions=[], messages=messages)
         payload = result.execution.payload
-        # With one checked candidate the only valid outcome is its draft; a model clarification here is a failure.
-        if result.execution.status != "answered" or len(context.issued) != 1:
+        # With checked candidates the only valid outcome is one draft for each; a model clarification here is a failure.
+        if result.execution.status != "answered" or len(context.issued) != len(candidates):
             raise AgentOutputError("appointment_draft_missing")
         if payload["action"] != request.action or payload["draft_ids"] != list(context.issued):
             raise AgentOutputError("appointment_draft_mismatch")

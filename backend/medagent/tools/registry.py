@@ -76,6 +76,8 @@ class ToolContext:
     slots: dict = field(default_factory=dict)
     bookings: dict = field(default_factory=dict)
     issued: dict = field(default_factory=dict)
+    # One list of slot ids per requested slot; a draft must be the only slot of its group.
+    slot_groups: list = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -226,8 +228,12 @@ def search_slots(context: ToolContext, arguments: EmptyArguments) -> dict:
     if resolution is None or store is None or not (resolution.hospital_id and resolution.department_id and resolution.day):
         context.slots = {}
         return {"slots":[]}
-    found = store.search(resolution.hospital_id, resolution.department_id, resolution.day, resolution.window)
-    context.slots = {slot.slot_id:slot for slot, _ in found}
+    found, groups = [], []
+    for day, window in resolution.items or ((resolution.day, resolution.window),):
+        part = store.search(resolution.hospital_id, resolution.department_id, day, window)
+        found += part
+        groups.append([slot.slot_id for slot, _ in part])
+    context.slots, context.slot_groups = {slot.slot_id:slot for slot, _ in found}, groups
     return {"slots":[slot_view(slot, remaining) for slot, remaining in found]}
 
 
@@ -252,10 +258,13 @@ def _propose(context: ToolContext, action: str, candidate: str, candidates: dict
         raise ToolInputError("action_mismatch")
     if candidate not in candidates:
         raise ToolInputError("slot_not_from_this_search" if action == "create" else "booking_not_from_this_search")
-    if len(candidates) != 1:
+    groups = (context.slot_groups or [list(candidates)]) if action == "create" else [list(candidates)]
+    if len(next(group for group in groups if candidate in group)) != 1:
         raise ToolInputError("candidate_not_unique")
-    if context.issued:
-        raise ToolInputError("one_draft_per_turn")
+    if len(context.issued) >= len(groups):
+        raise ToolInputError("one_draft_per_turn" if len(groups) == 1 else "draft_limit_per_turn")
+    if candidate in {draft.slot_id for draft, _ in context.issued.values()}:
+        raise ToolInputError("slot_already_drafted")
     try:
         draft, token = propose(user=context.user, session=context.session, subject=context.request.subject)
     except AppointmentError as error:

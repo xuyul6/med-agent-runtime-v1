@@ -54,13 +54,13 @@ class SingleAgent:
                                   now=self.appointments.now(), ttl=self.appointments.followup_ttl)
             if record is not None:
                 self.appointments.save_followup(record)
-        candidate = preparation.candidates[0] if preparation.kind == "ready" else None
-        fields = ({"hospital":candidate.hospital, "department":candidate.department, "day":candidate.day, "window":WINDOW_NAMES[candidate.window]}
-                  if candidate else {name:getattr(request, name) for name in ("institution", "department", "appointment_date", "time_window")
-                                     if getattr(request, name)})
+        candidates = preparation.candidates if preparation.kind == "ready" else ()
+        fields = ([{"hospital":item.hospital, "department":item.department, "day":item.day, "window":WINDOW_NAMES[item.window]}
+                   for item in candidates] if candidates else
+                  [{name:getattr(request, name) for name in ("institution", "department", "appointment_date", "time_window") if getattr(request, name)}])
         data = {"action":request.action, "subject_label":subject_label(question.subject), "fields":fields, "kind":preparation.kind,
                 "questions":list(preparation.questions), "options":list(preparation.options),
-                **({"candidate":candidate.model_dump(mode="json")} if candidate else {})}
+                **({"candidates":[item.model_dump(mode="json") for item in candidates]} if candidates else {})}
         return context, preparation, data
 
     def _context(self, domain, question, understanding, risk):
@@ -96,10 +96,11 @@ class SingleAgent:
 
     async def run(self, question, understanding, memory, risk, snapshot, budget, appointment: dict | None = None):
         """Answer one turn alone; returns (answer, references, execution, pending_actions)."""
-        contexts, booking, booking_data, propose = {}, None, None, None
+        contexts, booking, booking_data, propose, expected = {}, None, None, None, 0
         if appointment is not None and self.appointments is not None and not understanding.subject_ambiguous:
             booking, preparation, booking_data = await self._booking(appointment, question, understanding, risk, budget)
             propose = PROPOSE[booking.request.action] if preparation.kind == "ready" else None
+            expected = len(preparation.candidates) if propose else 0
         for task in understanding.tasks:
             if task.intent not in PRE_RETRIEVED or task.intent in contexts:
                 continue
@@ -179,7 +180,7 @@ class SingleAgent:
                 except ValidationError:
                     raise AgentOutputError("invalid_output_shape") from None
                 # The booking role's rule: with one checked candidate the only valid outcome is its draft.
-                if propose and len(booking.issued) != 1:
+                if propose and len(booking.issued) != expected:
                     raise AgentOutputError("appointment_draft_missing")
             except AgentOutputError as exc:
                 # The same two repairs the role path allows: JSON format, and one narrow range-evidence correction.

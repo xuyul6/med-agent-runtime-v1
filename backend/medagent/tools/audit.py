@@ -12,7 +12,7 @@ PROPOSALS = {'propose_appointment': ('create', 'slot_id'), 'propose_cancellation
 PATTERNS = {'create': r'[a-z0-9-]+:[a-z0-9-]+:\d{4}-\d{2}-\d{2}:(?:am|pm)', 'cancel': r'apt-[0-9a-f]{12}'}
 MATERIALS = ContextVar('synthetic_exposure_materials', default=())
 SAFE_ERRORS = frozenset({'action_mismatch', 'slot_not_from_this_search', 'booking_not_from_this_search',
-    'candidate_not_unique', 'one_draft_per_turn', 'invalid_tool_arguments', 'slot_not_found', 'slot_full',
+    'candidate_not_unique', 'one_draft_per_turn', 'draft_limit_per_turn', 'slot_already_drafted', 'invalid_tool_arguments', 'slot_not_found', 'slot_full',
     'already_booked', 'appointment_not_found', 'slot_out_of_window'})
 
 
