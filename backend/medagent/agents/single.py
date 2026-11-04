@@ -139,7 +139,9 @@ class SingleAgent:
         repairing = False
         for turn in range(3):
             observe_model_input(SINGLE_AGENT, INSTANCE, turn + 1, messages)
-            result = await self.model.message("agent_"+SINGLE_AGENT, system, messages,
+            # As for the booking role, the round that may draft runs without the output schema, which made the model skip the tool.
+            stage = "agent_"+SINGLE_AGENT+("_action" if propose and turn == 0 else "")
+            result = await self.model.message(stage, system, messages,
                                               definitions if turn < 2 and not repairing else None, budget=1900)
             blocks = model_blocks(result)
             calls = [block for block in blocks if block.get("type") == "tool_use"]
@@ -176,6 +178,9 @@ class SingleAgent:
                     answer = checked_single_answer(draft, references(), visit_task=visit_task, evidence_requested=evidence_requested)
                 except ValidationError:
                     raise AgentOutputError("invalid_output_shape") from None
+                # The booking role's rule: with one checked candidate the only valid outcome is its draft.
+                if propose and len(booking.issued) != 1:
+                    raise AgentOutputError("appointment_draft_missing")
             except AgentOutputError as exc:
                 # The same two repairs the role path allows: JSON format, and one narrow range-evidence correction.
                 range_repair = (exc.code == "report_range_claim_without_exact_source"
