@@ -206,6 +206,10 @@ class MedicalRuntime:
                 self._followup_event("urgent", followup)
                 understanding, decision, answer, refs, agent_results = self._urgent(question, risk, skill_snapshot, tool_budget, log)
                 degraded, storage = False, "skipped"
+            elif "urgent_hint_cleared:correction" in risk.reasons:
+                # Like the alarm itself, lifting it touches no model, retrieval or storage; the user asks again afresh.
+                understanding, decision, answer, refs, agent_results = self._clarified(question, log)
+                degraded, storage = False, "skipped"
             else:
                 understanding, decision, answer, refs, agent_results, degraded, storage, risk, pending_actions = await self._consult(
                     question, resolution, scope, risk, skill_snapshot, tool_budget, log, followup)
@@ -242,6 +246,17 @@ class MedicalRuntime:
         result.execution.task_id = assignment.task_id
         decision.collaboration_status = "single"
         return understanding, decision, result.answer, [], [result.execution]
+
+    def _clarified(self, question, log):
+        understanding = Understanding(primary=Intent.GENERAL, confidence=1, subject=question.subject, turn_id=log.request_id)
+        decision = RoutingDecision(primary_agent="general", routing_reason="urgent_hint_cleared_by_correction", routing_confidence=1,
+                                   collaboration_status="single")
+        event("routing", primary="general", support=[], reason=decision.routing_reason, confidence=1, monitor_fallback=[],
+              confidence_kind="engineering_score", candidates=[])
+        answer = Answer(text=("已按你的说明解除上一轮的急症提示，这一轮没有处理其他内容。需要咨询的话，请把问题重新发一次；"
+                              f"如果这些情况正在发生，请立即联系{self.settings.emergency_phone}或就近急诊。"),
+                        limitations=["只根据你的说明解除提示，没有作医学判断。"])
+        return understanding, decision, answer, [], []
 
     @staticmethod
     def _followup_event(reason: str, followup) -> None:

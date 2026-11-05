@@ -472,6 +472,9 @@ class RiskHandoffAgent:
         next_steps = ["向医护说明症状开始时间、当前状态及已知用药。"]
         if "self_harm" in risk.reasons:
             next_steps.insert(0, "如果有伤害自己的想法，请让身边可信任的人陪着你，并联系当地心理危机干预热线。")
+        else:
+            # Not offered on self-harm: an invitation to call it a quote could help someone wave the alarm away.
+            next_steps.append("如果你是在引用或讨论，而不是描述正在发生的情况，可以直接说明，例如“这是我在引用的文字”。")
         return finish_result(profile, self.instance, workflow,
             {"role":"risk_handoff", "status":"handoff_required", "missing_fields":[],
              "answer":{"text":notice, "next_steps":next_steps,

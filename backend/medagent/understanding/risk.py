@@ -73,6 +73,11 @@ CURRENT = r"(?:现在|目前|此刻|再次|又)(?!.{0,3}(?:好了|正常|没事|
 CLAUSES = r"[，,。！!？?；;\n]|但是|不过(?=我|现在|目前)|但"
 FOLLOWUP = r"更严重|加重|还是这样|越来越|又发作|比刚才|比之前|更厉害|还在" + PAIN + r"|没有?好转|没缓解|更难受|更" + PAIN
 RESOLVED = r"已就医|已经到医院|到医院了|已经缓解|已恢复|症状消失"
+# The user says the alarmed words were quoted, fictional, past or not theirs. Matched by code; a model can never lower a risk.
+CORRECTION = (r"(?:是|只是|刚才是|刚刚是)在(?:引用|转述|举例|讨论|学习)|只是(?:引用|转述|举例|打个比方|问问)|"
+              r"(?:这|那|刚才)是(?:小说|电视剧|电影|剧情|游戏|书|课本)里|说的是(?:以前|之前|去年|别人|小说|电视剧|电影)|"
+              r"误会了|理解错了|不是(?:我|我的)?(?:现在|目前|正在发生)的?(?:情况|症状)")
+QUOTED = r"“[^”]*”|「[^」]*」|『[^』]*』|\"[^\"]*\""
 CAUTION = (r"怀孕|孕妇|备孕|哺乳|婴儿|新生儿|宝宝|幼儿|儿童|孩子|小朋友|过量|多吃了|吃多了|吃重了|又吃了一次|重复吃|相互作用|一起吃|同时吃|"
            r"再加一种|肝功能|肾功能|肝肾|透析|华法林|抗凝")
 
@@ -97,10 +102,18 @@ def context_excludes(text: str) -> bool:
     return any(re.search(pattern, text) for pattern in (EDUCATIONAL, HYPOTHETICAL))
 
 
+def corrects(text: str) -> bool:
+    """A correction in the user's own words: not inside quotation marks, and naming no one's current state."""
+    own = re.sub(QUOTED, "", text)
+    return bool(re.search(CORRECTION, own)) and not re.search(PRESENT, re.sub(CORRECTION, "", own))
+
+
 class RiskGate:
     def __init__(self, clock=time.monotonic):
         self.clock = clock
         self.hints = {}
+        # Hints raised by self-harm are never lifted by a correction; only resolution or expiry ends them.
+        self.self_harm = set()
 
     def findings(self, text: str) -> list[str]:
         text = normalize(text)
@@ -133,14 +146,26 @@ class RiskGate:
     def screen(self, text: str, scope: str) -> Risk:
         now = self.clock()
         self.hints = {k: v for k, v in self.hints.items() if v > now}
+        self.self_harm &= set(self.hints)
         if found := self.findings(text):
             self.hints[scope] = now + HINT_SECONDS
+            if "self_harm" in found:
+                self.self_harm.add(scope)
             return Risk(level="CRITICAL", reasons=found, rule_version=RULE_VERSION)
         normalized = normalize(text)
-        if re.search(RESOLVED, normalized):
-            self.hints.pop(scope, None)
-        elif scope in self.hints and re.search(FOLLOWUP, normalized):
-            return Risk(level="CRITICAL", reasons=["recent_urgent_followup"], rule_version=RULE_VERSION)
+        cleared = None
+        if scope in self.hints:
+            if re.search(RESOLVED, normalized):
+                cleared = "resolved"
+            elif scope not in self.self_harm and corrects(normalized):
+                cleared = "correction"
+            elif re.search(FOLLOWUP, normalized):
+                return Risk(level="CRITICAL", reasons=["recent_urgent_followup"], rule_version=RULE_VERSION)
+            if cleared:
+                self.hints.pop(scope)
+        reasons = [f"urgent_hint_cleared:{cleared}"] if cleared else []
+        if cleared == "correction":
+            return Risk(reasons=reasons, rule_version=RULE_VERSION)
         if re.search(CAUTION, normalized):
-            return Risk(level="CAUTION", reasons=["professional_review_needed"], rule_version=RULE_VERSION)
-        return Risk(rule_version=RULE_VERSION)
+            return Risk(level="CAUTION", reasons=["professional_review_needed", *reasons], rule_version=RULE_VERSION)
+        return Risk(reasons=reasons, rule_version=RULE_VERSION)
