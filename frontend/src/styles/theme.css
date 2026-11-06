@@ -136,8 +136,7 @@ button {
 }
 
 .introduction {
-  padding: 38px 0 28px;
-  position: relative;
+  padding: 22px 0;
 }
 
 .eyebrow {
@@ -147,32 +146,16 @@ button {
   color: var(--muted);
 }
 
-h1 {
-  font-size: 32px;
-  letter-spacing: -1.2px;
-  margin: 10px 0;
-  line-height: 1.5;
-  font-weight: 600;
-}
-
-.introduction>p:not(.eyebrow) {
-  color: var(--muted);
-  margin: 0 0 15px;
-}
-
-.boundary {
-  font-size: 11px;
-  border: 1px solid var(--line);
-  padding: 6px 10px;
-  border-radius: 6px;
-  color: #64796e;
-}
-
 .layout {
   display: grid;
   grid-template-columns: minmax(0,1fr) 300px;
   gap: 24px;
   align-items: start;
+}
+
+/* User mode has no sidebar; the selector keeps it single-column at every width. */
+.layout.single {
+  grid-template-columns: minmax(0,1fr);
 }
 
 .card {
@@ -219,6 +202,37 @@ h4 {
 
 .panel-heading h2 {
   margin-bottom: 0;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-actions button {
+  white-space: nowrap;
+}
+
+/* On narrow screens the subject selector and new-session button move below the title instead of squeezing it. */
+.consultation .panel-heading {
+  flex-wrap: wrap;
+}
+
+.panel-actions .subject {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.panel-actions select {
+  width: auto;
+  margin-top: 0;
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 .quiet {
@@ -747,10 +761,6 @@ footer {
   letter-spacing: .5px;
 }
 
-.mobile-break {
-  display: none;
-}
-
 @media (max-width:1000px) {
   .workbench {
     padding: 0 22px;
@@ -764,9 +774,6 @@ footer {
   }
   .header nav button {
     padding: 7px 16px;
-  }
-  h1 {
-    font-size: 29px;
   }
 }
 
@@ -801,9 +808,6 @@ footer {
   .connection {
     margin-left: auto;
   }
-  .introduction {
-    padding: 24px 0;
-  }
   .identity {
     font-size: 21px;
   }
@@ -822,15 +826,6 @@ footer {
   .card {
     padding: 18px;
   }
-  .mobile-break {
-    display: initial;
-  }
-  h1 {
-    font-size: 27px;
-  }
-  .introduction>p:not(.eyebrow) {
-    font-size: 12px;
-  }
   .eyebrow {
     font-size: 9px;
   }
@@ -839,9 +834,6 @@ footer {
   }
   .field-grid {
     grid-template-columns: 1fr;
-  }
-  .boundary {
-    font-size: 10px;
   }
   .question p,.answer-text {
     font-size: 13px;
@@ -902,7 +894,6 @@ footer {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
 }
 
 .login input {

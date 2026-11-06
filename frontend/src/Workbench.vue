@@ -14,6 +14,7 @@ import EvaluationReport from './components/EvaluationReport.vue'
 import { loadEvaluation } from './utils/evaluation.js'
 import AppointmentCard from './components/AppointmentCard.vue'
 import AppointmentsPanel from './components/AppointmentsPanel.vue'
+import { connectionLabel, degradedNotice, developerMode, visibleView, workspaceViews } from './utils/developer.js'
 import { activeUser, confirmationError, confirmPending, loginUser, logout, normalizeLogin, pendingCards, resetUser } from './utils/appointments.js'
 
 const request = makeClient()
@@ -56,13 +57,15 @@ const drugAliases = ref('')
 const medicationMetadata = ref(emptyMedicationMetadata())
 const visitPurpose = ref('')
 const roleNames = { symptom_guide: '症状整理', report_explainer: '报告文字', drug_reference: '药品资料', visit_guide: '就医准备', appointment: '预约', general: '咨询接待', risk_handoff: '风险提示' }
-const connection = computed(() => !status.value ? '未连接' : status.value.preview ? '离线预览' : status.value.status === 'ok' ? '在线模型' : '依赖降级')
+const developer = computed(() => developerMode(status.value))
+const connection = computed(() => connectionLabel(status.value, developer.value))
 
 async function refresh() {
   try {
-    const [health, runtime] = await Promise.all([request('/health'), request('/runtime')])
+    const health = await request('/health')
     status.value = health
-    metrics.value = runtime
+    // Monitor views exist only on a developer deployment; a user deployment answers 404 there.
+    metrics.value = developerMode(health) ? await request('/runtime') : null
     monitorFetchedAt.value = new Date().toLocaleString()
     error.value = ''
   } catch (failure) { error.value = `连接失败：${failure.message}` }
@@ -129,17 +132,20 @@ async function send() {
     last.value = reply
     trace.value = null
     traceError.value = ''
-    traceLoading.value = true
-    const result = await fetchRequestTrace(request, reply.request_id)
-    trace.value = result.trace
-    traceError.value = result.error
-    traceLoading.value = false
+    if (developer.value) {
+      traceLoading.value = true
+      const result = await fetchRequestTrace(request, reply.request_id)
+      trace.value = result.trace
+      traceError.value = result.error
+      traceLoading.value = false
+    }
     await refresh()
   } catch (failure) { error.value = `本次请求未完成：${failure.message}` }
   finally { busy.value = false }
 }
 
 async function show(next) {
+  next = visibleView(next, developer.value)
   view.value = next
   error.value = ''
   if (next === 'knowledge') {
@@ -193,29 +199,32 @@ async function reloadSkills() {
   }
 }
 
+// Leaving developer mode (a restart without the switch) drops any developer view that was open.
+watch(developer, on => { view.value = visibleView(view.value, on) })
+
 onMounted(refresh)
 </script>
 
 <template>
   <div class="workbench">
     <header class="header">
-      <a href="#" class="identity" @click.prevent="show('chat')"><span class="symbol">m<span>+</span></span><span>MedAgent<small>INFORMATION RUNTIME</small></span></a>
-      <nav aria-label="工作区"><button v-for="item in [['chat', '咨询'], ['appointments', '预约'], ['knowledge', '参考资料'], ['roles', '角色契约'], ['evaluation', '评测']]" :key="item[0]" :class="{ selected: view === item[0] }" @click="show(item[0])">{{ item[1] }}</button></nav>
+      <a href="#" class="identity" @click.prevent="show('chat')"><span class="symbol">m<span>+</span></span><span>MedAgent<small>健康信息助手</small></span></a>
+      <nav aria-label="工作区"><button v-for="item in workspaceViews(developer)" :key="item[0]" :class="{ selected: view === item[0] }" @click="show(item[0])">{{ item[1] }}</button></nav>
       <button class="connection" @click="refresh"><i :class="{ connected: status?.status === 'ok' }"></i>{{ connection }}</button>
     </header>
 
-    <section class="introduction"><p class="eyebrow">OBSERVABLE MULTI-AGENT · INDEPENDENT V1</p><h1>把问题整理清楚，<br class="mobile-break">让就医准备更从容。</h1><p>记录症状、查阅公开资料、理解报告文字。每个回答都能查看来源和执行过程。</p><span class="boundary">信息参考与工程演示 · 预约仅在模拟医院系统中进行，不接入真实医院</span><form v-if="!identity.name" class="login" @submit.prevent="login"><label class="sr-only" for="login-name">用户名</label><input id="login-name" v-model="loginName" maxlength="32" placeholder="用户名" autocomplete="username"><button class="quiet" :disabled="busy">登录</button><small>演示登录，不设密码；同名即同一用户</small><small v-if="loginError" class="degraded">{{ loginError }}</small></form><div v-else class="login"><span>当前用户：{{ identity.name }}</span><button class="quiet" :disabled="busy" @click="signOut">退出</button></div></section>
+    <section class="introduction"><form v-if="!identity.name" class="login" @submit.prevent="login"><label class="sr-only" for="login-name">用户名</label><input id="login-name" v-model="loginName" maxlength="32" placeholder="用户名" autocomplete="username"><button class="quiet" :disabled="busy">登录</button><small>演示登录，不设密码；同名即同一用户</small><small v-if="loginError" class="degraded">{{ loginError }}</small></form><div v-else class="login"><span>当前用户：{{ identity.name }}</span><button class="quiet" :disabled="busy" @click="signOut">退出</button></div></section>
     <p v-if="error" class="notice" role="status">{{ error }}</p>
 
-    <div class="layout">
+    <div :class="['layout', { single: !developer }]">
       <main class="main-panel">
         <section v-if="view === 'chat'" class="card consultation">
-          <div class="panel-heading"><div><span class="eyebrow">CONSULTATION</span><h2>咨询记录</h2></div><button class="quiet" :disabled="busy" @click="newSession">新会话</button></div>
-          <div v-if="!conversation.length" class="empty"><h3>从一个具体问题开始</h3><p>请使用虚构资料演示，避免输入身份信息。</p><div class="examples"><button v-for="example in ['你好，能帮我做什么？', '看医生之前应该记录什么、准备哪些已有资料？', '成人布洛芬的公开资料适用于哪些人群？']" :key="example" @click="text = example">{{ example }} <span>↗</span></button></div></div>
+          <div class="panel-heading"><div><span class="eyebrow">CONSULTATION</span><h2>咨询记录</h2></div><div class="panel-actions"><label class="subject">咨询对象<select v-model="subject" :disabled="busy" @change="newSession"><option value="self">本人</option><option value="mother">母亲</option><option value="father">父亲</option><option value="parent">其他长辈</option><option value="child">孩子</option><option value="other">其他人</option></select></label><button class="quiet" :disabled="busy" @click="newSession">新会话</button></div></div>
+          <div v-if="!conversation.length" class="empty"><h3>从一个具体问题开始</h3><p>请使用虚构信息，不要输入真实姓名、证件号等身份信息。</p><div class="examples"><button v-for="example in ['你好，能帮我做什么？', '看医生之前应该记录什么、准备哪些已有资料？', '成人布洛芬的公开资料适用于哪些人群？']" :key="example" @click="text = example">{{ example }} <span>↗</span></button></div></div>
           <div v-else ref="messages" class="messages" role="region" aria-label="咨询对话" aria-live="polite" tabindex="0" @scroll="updateMessageFollow"><article v-for="(item, index) in conversation" :key="index" :class="['message', item.type]">
             <template v-if="item.type === 'question'"><span class="message-label">你的问题</span><p>{{ item.text }}</p></template>
             <template v-else>
-              <div class="answer-heading"><span>{{ roleNames[item.primary_agent] }}</span><span>{{ Math.round(item.elapsed_ms) }} ms</span></div>
+              <div class="answer-heading"><span>{{ roleNames[item.primary_agent] }}</span><span v-if="developer">{{ Math.round(item.elapsed_ms) }} ms</span></div>
               <div v-if="item.risk.level === 'CRITICAL'" class="urgent">需要立即线下帮助 · 未实际连接急救或人工服务</div>
               <p class="answer-text">{{ answerTextForDisplay(item) }}</p>
               <section v-if="item.reportItems?.length" class="report-items" aria-label="用户提供的报告字段">
@@ -232,7 +241,7 @@ onMounted(refresh)
               <div v-if="item.references.length" class="references"><h4>本次引用</h4><a v-for="source in item.references" :key="source.key" :href="safeLink(source.url)" target="_blank" rel="noopener noreferrer"><span>{{ source.title }} ↗</span><small>{{ source.version }} · {{ source.scope }}</small><small v-if="source.provenance?.updated_on || source.provenance?.checked_on">{{ source.provenance?.updated_on ? `资料更新：${source.provenance.updated_on}` : '' }}{{ source.provenance?.updated_on && source.provenance?.checked_on ? ' · ' : '' }}{{ source.provenance?.checked_on ? `项目核对：${source.provenance.checked_on}` : '' }}</small></a></div>
               <AppointmentCard v-for="card in item.cards || []" :key="card.draftId" :card="card" :state="cardState(card).state" :message="cardState(card).message" @confirm="confirmCard(card)" @dismiss="dismissCard(card)" />
               <p v-for="limit in item.answer.limitations" :key="limit" class="limitation">{{ limit }}</p>
-              <p v-if="item.degraded" class="degraded">本次存在运行降级，请查看执行详情。</p>
+              <p v-if="item.degraded" class="degraded">{{ degradedNotice(developer) }}</p>
             </template>
           </article></div>
           <form class="composer" @submit.prevent="send"><label class="sr-only" for="question">咨询问题</label><textarea id="question" v-model="text" maxlength="6000" rows="3" placeholder="输入问题，或选择上方的示例…" @keydown.ctrl.enter.prevent="send" @keydown.meta.enter.prevent="send"></textarea><div class="composer-footer"><small>⌘ / Ctrl + Enter</small><button class="primary" :disabled="busy || !text.trim()">{{ busy ? '执行中…' : '发送问题 →' }}</button></div></form>
@@ -274,10 +283,10 @@ onMounted(refresh)
         <section v-if="view === 'roles'" class="card roles"><RoleCatalog :profiles="roleCatalog.profiles" :skills="roleCatalog.skills" :loading="roleLoading || skillsReloading" :role-names="roleNames" @refresh="refreshRoles" /></section>
       </main>
 
-      <aside class="sidebar"><section class="card session"><span class="eyebrow">SESSION</span><h2>咨询设置</h2><label>咨询对象<select v-model="subject" :disabled="busy" @change="newSession"><option value="self">本人</option><option value="mother">母亲</option><option value="father">父亲</option><option value="parent">其他长辈</option><option value="child">孩子</option><option value="other">其他人</option></select></label><label>上下文策略<select v-model="context" :disabled="busy"><option value="selective">按需装配</option><option value="full">全量可用上下文（实验）</option></select></label><dl><dt>模型</dt><dd>{{ status?.model || '未配置 / 预览' }}</dd><dt>会话</dt><dd>{{ session ? session.slice(0, 8) : '发送后建立' }}</dd></dl></section>
+      <aside v-if="developer" class="sidebar"><section class="card session"><span class="eyebrow">SESSION</span><h2>咨询设置</h2><label>上下文策略<select v-model="context" :disabled="busy"><option value="selective">按需装配</option><option value="full">全量可用上下文（实验）</option></select></label><dl><dt>模型</dt><dd>{{ status?.model || '未配置 / 预览' }}</dd><dt>会话</dt><dd>{{ session ? session.slice(0, 8) : '发送后建立' }}</dd></dl></section>
         <section class="card execution"><span class="eyebrow">EXECUTION TRACE</span><h2>最近一次执行</h2><p v-if="!last" class="hint">发送问题后展示路由、来源及真实用量。</p><template v-else><dl><dt>主角色</dt><dd>{{ roleNames[last.primary_agent] || last.primary_agent }}</dd><dt>辅助角色</dt><dd>{{ last.supporting_agents.map(role => roleNames[role] || role).join('、') || '无' }}</dd><dt>意图</dt><dd>{{ last.intent.primary }}</dd><dt>融合置信度</dt><dd>{{ (last.intent.confidence * 100).toFixed(1) }}%</dd><dt>风险</dt><dd>{{ last.risk.level }}</dd><dt>存储</dt><dd>{{ last.storage }}</dd><dt>输入 Token</dt><dd>{{ tokenLabel(last.usage) }}</dd></dl><ExecutionDetails :decision="last.routing_decision" :role-names="roleNames" /><ToolTrace :trace="trace" :request-id="last.request_id" :loading="traceLoading" :role-names="roleNames" /><p v-if="traceError" class="hint" role="status">{{ traceError }}</p><details v-if="trace"><summary>查看脱敏执行详情</summary><pre>{{ JSON.stringify(trace, null, 2) }}</pre></details></template></section>
         <section class="card runtime"><span class="eyebrow">RUNTIME HEALTH</span><h2>运行概览</h2><div class="counters"><div><strong>{{ metrics?.requests ?? '—' }}</strong><span>已处理请求</span></div><div><strong>{{ metrics?.degraded ?? '—' }}</strong><span>降级请求</span></div></div><button class="quiet" @click="refresh">刷新监控快照</button><MonitorDetails :snapshot="metrics" :fetched-at="monitorFetchedAt" :role-names="roleNames" /><button class="quiet monitor-reload" :disabled="skillsReloading || roleLoading" @click="reloadSkills">{{ skillsReloading ? '重载中…' : '重载角色规则' }}</button></section>
       </aside>
-    </div><footer>MedAgent Runtime · 独立实现 v1 · 使用虚构资料演示</footer>
+    </div><footer>MedAgent · 仅供信息参考，不做诊断、不开处方 · 预约只在模拟医院系统中进行 · 出现急症请立即就医</footer>
   </div>
 </template>

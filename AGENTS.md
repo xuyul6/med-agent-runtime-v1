@@ -12,7 +12,7 @@ This is one repository with a Python backend and Vue frontend. Run Git commands 
 
 ## Development Commands
 
-From `backend/`, install with `python -m pip install -r requirements-dev.txt`, run `python -m pytest tests/ -q`, and start `python -m uvicorn medagent.app:app --reload --port 8000`. Copy `.env.example` to ignored `.env.local` and configure your model and storage first.
+From `backend/`, install with `python -m pip install -r requirements-dev.txt`, run `python -m pytest tests/ -q`, and start `python -m uvicorn medagent.app:app --reload --port 8000`. Copy `.env.example` to ignored `.env.local` and configure your model and storage first. Developer routes and workbench views need `MAR_DEVELOPER_TOOLS=true`; the default is user mode, where they answer 404.
 
 From the root, `docker compose --env-file backend/.env.local up -d redis chroma` starts storage. Add `--build` without service names to build the full stack.
 

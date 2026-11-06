@@ -1,7 +1,7 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from redis.asyncio import Redis
 from datetime import date, timedelta
 from typing import Literal
@@ -129,10 +129,16 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
     app.state.evaluation_lock = asyncio.Lock()
     app.state.baseline_store = BaselineStore()
 
+    def developer_only():
+        # Same answer as a route that does not exist, so a user deployment does not advertise these.
+        if not settings.developer_tools:
+            raise HTTPException(404, "Not Found")
+    developer = [Depends(developer_only)]
+
     @app.get("/health")
     async def health():
         return {"status":"degraded" if "unavailable" in app.state.services.values() else "ok",
-                "implementation":"independent-v1","preview":settings.preview,"model":settings.model,
+                "implementation":"independent-v1","preview":settings.preview,"developer_tools":settings.developer_tools,"model":settings.model,
                 "standby_model":settings.fallback_model if settings.fallback_api_key and not settings.preview else None,
                 "judge_model":(settings.judge_model if settings.fallback_api_key else "") or settings.model,
                 "embedding":app.state.runtime.vectors.identity,"services":app.state.services}
@@ -189,42 +195,42 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
     async def appointments(user: str = Query(min_length=1, max_length=100)):
         return [booking_view(booking) for booking in app.state.runtime.appointments.upcoming(user)]
 
-    @app.get("/runtime")
-    @app.get("/monitor")
+    @app.get("/runtime", dependencies=developer)
+    @app.get("/monitor", dependencies=developer)
     async def status():
         return app.state.runtime.monitor.snapshot()
 
-    @app.get("/agents")
+    @app.get("/agents", dependencies=developer)
     async def agent_profiles():
         return {"agents":[profile.describe() for profile in app.state.runtime.registry.profiles.values()]}
 
-    @app.get("/tools")
+    @app.get("/tools", dependencies=developer)
     async def tool_catalog():
         return {"tools":[spec.describe() for spec in app.state.runtime.tools.registry.specs.values()]}
 
-    @app.get("/traces/{request_id}")
+    @app.get("/traces/{request_id}", dependencies=developer)
     async def trace(request_id: str):
         found = next((trace for trace in app.state.runtime.monitor.traces if trace["request_id"] == request_id), None)
         if found is None:
             raise HTTPException(404, "trace_not_found")
         return found
 
-    @app.get("/knowledge")
+    @app.get("/knowledge", dependencies=developer)
     async def knowledge():
         return {"documents":[r.model_dump(mode="json") for r in app.state.runtime.index.documents.values()]}
 
-    @app.post("/knowledge")
+    @app.post("/knowledge", dependencies=developer)
     async def add_knowledge(batch: DocumentBatch):
         if settings.preview:
             raise HTTPException(409, "preview_is_read_only")
         await app.state.runtime.index.upsert(batch.documents)
         return {"saved":len(batch.documents)}
 
-    @app.get("/skills")
+    @app.get("/skills", dependencies=developer)
     async def skills():
         return app.state.runtime.skills.snapshot().describe()
 
-    @app.post("/skills/reload")
+    @app.post("/skills/reload", dependencies=developer)
     async def reload_skills():
         try:
             return await asyncio.to_thread(app.state.runtime.skills.reload)
@@ -232,7 +238,7 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
             raise HTTPException(422, {"code":"invalid_skills", "reason":str(exc),
                                       "active_snapshot_id":app.state.runtime.skills.snapshot().snapshot_id}) from exc
 
-    @app.post("/eval/run")
+    @app.post("/eval/run", dependencies=developer)
     async def run_evaluation(request: EvaluationRequest | None = None):
         request = request or EvaluationRequest()
         if settings.preview and request.judge:
@@ -251,7 +257,7 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
             except ValueError as exc:
                 raise HTTPException(422,{"code":"invalid_evaluation_cases","reason":type(exc).__name__}) from exc
 
-    @app.post("/benchmark/run")
+    @app.post("/benchmark/run", dependencies=developer)
     async def run_context_benchmark(request: BenchmarkRequest | None = None):
         request = request or BenchmarkRequest()
         if settings.preview and request.judge:
@@ -260,7 +266,7 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
         async with app.state.evaluation_lock:
             return await run_benchmark(app.state.runtime,request)
 
-    @app.post("/comparison/run")
+    @app.post("/comparison/run", dependencies=developer)
     async def run_architecture_comparison(request: ComparisonRequest | None = None):
         request = request or ComparisonRequest()
         if settings.preview and request.judge:

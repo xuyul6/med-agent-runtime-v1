@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[2]
 # Connection details and secrets stay out of the settings hash stored in reports.
 UNHASHED_SETTINGS = {"api_key", "api_url", "fallback_api_key", "fallback_api_url", "redis_url", "chroma_host", "chroma_port", "skill_directory",
-                     "appointment_db"}
+                     "appointment_db", "developer_tools"}
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,8 @@ class Settings:
     chroma_host: str = "localhost"
     chroma_port: int = 8001
     preview: bool = False
+    # Developer routes: reference writes, Skills reload, paid evaluation runs, traces and monitor views. Off for user deployments.
+    developer_tools: bool = False
     embeddings: str = "onnx"
     emergency_phone: str = "当地急救电话"
     model_timeout: float = 35
@@ -97,6 +99,7 @@ class Settings:
             chroma_host=env.get("CHROMA_HOST", "localhost"),
             chroma_port=int(env.get("CHROMA_PORT", "8001")),
             preview=env.get("MAR_PREVIEW", "false").lower() == "true",
+            developer_tools=env.get("MAR_DEVELOPER_TOOLS", "false").lower() == "true",
             embeddings=env.get("MAR_EMBEDDINGS", "onnx"),
             emergency_phone=env.get("MAR_EMERGENCY_PHONE", "当地急救电话"),
             model_timeout=float(env.get("MAR_MODEL_TIMEOUT", "35")),
