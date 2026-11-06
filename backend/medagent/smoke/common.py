@@ -6,6 +6,13 @@ from pathlib import Path
 import httpx
 
 STOP_AFTER_FAILURES = 2
+DEVELOPER_TOOLS_REQUIRED = "developer_tools_required: start the backend with MAR_DEVELOPER_TOOLS=true"
+
+
+def require_developer_tools(health: dict) -> None:
+    """These scripts read traces or run evaluations, which a user deployment answers with 404."""
+    if health.get("developer_tools") is not True:
+        raise ValueError(DEVELOPER_TOOLS_REQUIRED)
 
 
 def new_report(dataset: str, **fields) -> dict:
@@ -30,6 +37,7 @@ class OnlineSmoke:
             health = response.json()
             if health.get("preview") is not False or health.get("status") != "ok":
                 raise ValueError("healthy_online_runtime_required")
+            require_developer_tools(health)
         except BaseException:
             await self.client.aclose()
             raise

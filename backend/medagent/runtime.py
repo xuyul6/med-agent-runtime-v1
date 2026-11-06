@@ -14,7 +14,7 @@ from .core.config import ROOT
 from .agents.checks import checked_role_output
 from .agents.skills import Skills
 from .tools.registry import ToolBudget, ToolExecutor
-from .memory import scope_key
+from .memory import owner_key, scope_key
 from .core.observability import CURRENT, RunLog, event
 from .understanding.risk import RiskGate
 from .agents.profiles import DEFAULT_REGISTRY, ProfileRegistry
@@ -264,7 +264,8 @@ class MedicalRuntime:
 
     async def _consult(self, question, resolution, scope, risk, skill_snapshot, tool_budget, log, followup=None):
         """Memory read, understanding, routing, role execution, merge and memory write for a non-critical turn."""
-        state, storage, degraded = await self._read_state(scope, question.text, resolution.ambiguous)
+        owner = None if resolution.ambiguous else owner_key(question.user, question.subject)
+        state, storage, degraded = await self._read_state(scope, question.text, resolution.ambiguous, owner)
         if not self.settings.preview and self.index.collection is None:
             degraded = True
             event("storage_fallback", service="reference_index")
@@ -351,7 +352,7 @@ class MedicalRuntime:
         event("agent", instance=SINGLE_INSTANCE, task_id=assignment.task_id, status="ok")
         return decision, answer, refs, [execution], {}, pending
 
-    async def _read_state(self, scope, text, ambiguous):
+    async def _read_state(self, scope, text, ambiguous, owner=None):
         """Session state for this scope; a storage failure degrades to an empty state instead of failing the turn."""
         if ambiguous:
             return {"messages":[], "summary":""}, "skipped", False
@@ -359,12 +360,20 @@ class MedicalRuntime:
             if not self.memory.available:
                 raise ConnectionError("memory_unavailable")
             state = await asyncio.wait_for(self.memory.read(scope), timeout=3)
-            if state.get("summary"):
-                state["episodes"] = await asyncio.wait_for(self.memory.recall(scope, text), timeout=3)
-            return state, "memory_preview" if self.settings.preview else "available", False
+            if not isinstance(state, dict):
+                raise ValueError("invalid_session_state")
         except Exception as exc:
             event("memory_error", stage="read", error=type(exc).__name__)
             return {"messages":[], "summary":""}, "degraded", True
+        # Every turn looks for this user's and subject's earlier summaries, so a new session starts with them too.
+        # A recall failure costs only the summaries, not the session state already read.
+        try:
+            state["episodes"] = await asyncio.wait_for(
+                self.memory.recall(scope, text, owner, exclude=state.get("summary", "")), timeout=3)
+        except Exception as exc:
+            event("memory_error", stage="recall", error=type(exc).__name__)
+            return state, "degraded", True
+        return state, "memory_preview" if self.settings.preview else "available", False
 
     async def _understand(self, question, resolution, state, storage, scope, log):
         """Fused intent and grounded fields; an open fever food/medicine question keeps the turn on symptoms."""
@@ -402,4 +411,5 @@ class MedicalRuntime:
                 "source_turn_id":previous_need["source_turn_id"] if previous_need else request_id,
                 "continuations":previous_need["continuations"]+1 if previous_need else 0}
         await asyncio.wait_for(self.memory.remember(scope, question.text, answer.text, understanding,
-            pending, state.get("last_intent_turn_id")), timeout=self.settings.memory_timeout)
+            pending, state.get("last_intent_turn_id"), owner=owner_key(question.user, question.subject)),
+            timeout=self.settings.memory_timeout)

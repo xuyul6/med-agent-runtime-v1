@@ -4,12 +4,14 @@ import asyncio
 import json
 from pathlib import Path
 import httpx
+from .smoke.common import require_developer_tools
 
 
 async def run(url, output, request=None):
     target = Path(output)
     if target.exists(): raise FileExistsError("preserve_existing_evaluation_report")
     async with httpx.AsyncClient(timeout=620) as client:
+        require_developer_tools((await client.get(url.rstrip("/")+"/health")).raise_for_status().json())
         response = await client.post(url.rstrip("/")+"/eval/run",json=request or {})
         response.raise_for_status()
         result = response.json()

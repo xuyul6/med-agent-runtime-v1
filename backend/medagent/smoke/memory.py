@@ -7,8 +7,9 @@ from pathlib import Path
 import httpx
 from redis.asyncio import Redis
 from ..core.config import Settings
-from ..memory import SessionMemory, scope_key
+from ..memory import SessionMemory, owner_key, scope_key
 from ..knowledge.retrieval import Vectorizer
+from .common import require_developer_tools
 
 
 async def verify(url, output):
@@ -23,6 +24,7 @@ async def verify(url, output):
     try:
         await redis.set("mar2:session:"+scope,json.dumps({"messages":messages,"summary":""},ensure_ascii=False),ex=1800)
         async with httpx.AsyncClient(timeout=150) as http:
+            require_developer_tools((await http.get(url.rstrip("/")+"/health")).raise_for_status().json())
             result = await http.post(url.rstrip("/")+"/chat",json={"text":"看医生前还要记录哪些信息？","user":user,"session":session})
             result.raise_for_status()
             reply = result.json()
@@ -33,7 +35,7 @@ async def verify(url, output):
         client = chromadb.HttpClient(host=settings.chroma_host,port=settings.chroma_port,settings=CS(anonymized_telemetry=False))
         vectors = Vectorizer(settings.embeddings)
         collection = client.get_collection("mar2_episodes_"+vectors.identity)
-        recalled = await SessionMemory(redis,collection,vectors).recall(scope,"就医准备")
+        recalled = await SessionMemory(redis,collection,vectors).recall(scope,"就医准备",owner_key(user,"self"))
         checks = {"runtime_healthy":not reply["degraded"] and reply["storage"]=="available",
                   "recent_messages":len(state["messages"])==4,"summary_present":bool(state["summary"]),
                   "episodic_recall":bool(recalled),"summary_model_call":any(event.get("stage")=="memory_summary" for event in trace["events"])}

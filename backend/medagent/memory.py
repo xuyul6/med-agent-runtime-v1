@@ -4,6 +4,8 @@ import json
 import time
 import uuid
 import weakref
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from .core.observability import event
 
 _UNCHANGED = object()
@@ -14,11 +16,18 @@ def scope_key(user: str, session: str, subject: str) -> str:
     return hashlib.sha256(json.dumps([user, session, subject], ensure_ascii=False).encode()).hexdigest()
 
 
+def owner_key(user: str, subject: str) -> str:
+    """Who a summary belongs to across sessions: one user and one consultation subject, never another person's record."""
+    return hashlib.sha256(json.dumps(["episode-owner", user, subject], ensure_ascii=False).encode()).hexdigest()
+
+
 class SessionMemory:
-    def __init__(self, redis=None, episodes=None, vectors=None, model=None, episode_ttl: float = EPISODE_TTL_SECONDS):
+    def __init__(self, redis=None, episodes=None, vectors=None, model=None, episode_ttl: float = EPISODE_TTL_SECONDS,
+                 timezone: str = "Asia/Shanghai"):
         if not episode_ttl > 0:
             raise ValueError("invalid_episode_ttl")
         self.redis, self.episodes, self.vectors, self.model = redis, episodes, vectors, model
+        self.timezone = ZoneInfo(timezone)
         self.episode_ttl, self.purged_at = episode_ttl, None
         self.local = {}
         self.locks = weakref.WeakValueDictionary()
@@ -45,7 +54,7 @@ class SessionMemory:
         return state
 
     async def remember(self, scope: str, user: str, assistant: str, understanding=None,
-                       pending_consultation=_UNCHANGED, expected_pending_turn=_UNCHANGED) -> None:
+                       pending_consultation=_UNCHANGED, expected_pending_turn=_UNCHANGED, owner: str | None = None) -> None:
         async with self.locks.setdefault(scope, asyncio.Lock()):
             state = await self.read(scope)
             pending_current = expected_pending_turn is _UNCHANGED or state.get("last_intent_turn_id") == expected_pending_turn
@@ -81,7 +90,7 @@ class SessionMemory:
                 if self.episodes is not None:
                     encoded = await self.vectors.encode([state["summary"]])
                     await asyncio.to_thread(self.episodes.add, ids=[str(uuid.uuid4())],
-                        documents=[state["summary"]], embeddings=encoded, metadatas=[self.episode_metadata(scope)])
+                        documents=[state["summary"]], embeddings=encoded, metadatas=[self.episode_metadata(scope, owner)])
                     await self._purge_if_due()
                 event("memory_compressed", kept=len(state["messages"]))
             if self.redis is None:
@@ -91,10 +100,16 @@ class SessionMemory:
             else:
                 await self.redis.set("mar2:session:"+scope, json.dumps(state, ensure_ascii=False), ex=86400)
 
-    def episode_metadata(self, scope: str) -> dict:
-        return {"scope": scope, "created_at": float(self.context_clock())}
+    def episode_metadata(self, scope: str, owner: str | None = None) -> dict:
+        # Chroma metadata has no null; summaries written before owners existed carry the session scope only.
+        return {"scope": scope, "created_at": float(self.context_clock()), **({"owner": owner} if owner else {})}
 
-    async def recall(self, scope: str, query: str) -> list[str]:
+    async def recall(self, scope: str, query: str, owner: str | None = None, exclude: str = "") -> list[str]:
+        """The summaries most relevant to the query, at most two, each labelled with the day it was written.
+
+        With an owner, every session of that user and subject counts, so a new session can use earlier ones; the
+        session scope still matches summaries written before owners existed. `exclude` drops the session's current
+        summary, which the caller already has."""
         if self.episodes is None:
             return []
         count = await asyncio.to_thread(self.episodes.count)
@@ -102,9 +117,16 @@ class SessionMemory:
             return []
         encoded = await self.vectors.encode([query])
         cutoff = self.context_clock()-self.episode_ttl
-        result = await asyncio.to_thread(self.episodes.query, query_embeddings=encoded, n_results=min(2,count),
-                                         where={"$and":[{"scope":scope}, {"created_at":{"$gte":cutoff}}]})
-        return result["documents"][0]
+        belongs = {"$or":[{"owner":owner}, {"scope":scope}]} if owner else {"scope":scope}
+        result = await asyncio.to_thread(self.episodes.query, query_embeddings=encoded, n_results=min(3,count),
+                                         where={"$and":[belongs, {"created_at":{"$gte":cutoff}}]},
+                                         include=["documents", "metadatas"])
+        rows = zip(result["documents"][0], result["metadatas"][0])
+        return [f"历史摘要（{self.written_on(metadata)}）：{document}" for document, metadata in rows
+                if document != exclude][:2]
+
+    def written_on(self, metadata) -> str:
+        return datetime.fromtimestamp(metadata["created_at"], self.timezone).date().isoformat()
 
     async def purge_expired_episodes(self) -> int:
         """Delete summaries past the retention window, including older ones stored without a creation time."""

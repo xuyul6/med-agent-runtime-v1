@@ -8,7 +8,7 @@ from ..appointments.store import FrozenClock
 from ..evaluation.budget import BudgetedModel
 from ..evaluation.isolation import EvaluationIsolation, NamespacedRedis, SnapshotSkills, isolated_appointments
 from ..evaluation.metrics import digest
-from ..memory import SessionMemory, scope_key
+from ..memory import SessionMemory, owner_key, scope_key
 from ..knowledge.retrieval import ReferenceIndex, Vectorizer
 from ..runtime import MedicalRuntime
 from ..tools.registry import ToolRegistry
@@ -80,7 +80,7 @@ class PairedIsolation(EvaluationIsolation):
             if rows:
                 await asyncio.to_thread(episodes.add,ids=[row["id"] for row in rows],
                     documents=[row["document"] for row in rows],embeddings=[row["embedding"] for row in rows],
-                    metadatas=[memory.episode_metadata(scope) for row in rows])
+                    metadatas=[memory.episode_metadata(scope, owner_key(snapshot.user,snapshot.subject)) for row in rows])
             if snapshot.risk_seconds > 0:
                 runtime.risk.hints[scope] = runtime.risk.clock()+snapshot.risk_seconds
         return runtime
