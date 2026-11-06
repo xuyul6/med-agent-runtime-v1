@@ -13,3 +13,11 @@ export function answerTextForDisplay(reply) {
   if (match[4] && ![source.provenance?.updated_on, source.provenance?.checked_on, source.provenance?.published_on].includes(match[4])) return text
   return text.slice(match[0].length).trimStart()
 }
+
+// Earlier summaries are context the model was given, not sources: say so beside the answer, apart from citations.
+export function recalledNote(days) {
+  const valid = (Array.isArray(days) ? days : []).filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day))
+  if (!valid.length) return ''
+  const labels = [...new Set(valid)].sort().map(day => `${Number(day.slice(5, 7))} 月 ${Number(day.slice(8, 10))} 日`)
+  return `本次带上了你以往的咨询摘要（${labels.join('、')}），回答可能参考了其中内容。摘要是对你之前说过的话的整理，不是资料来源。`
+}

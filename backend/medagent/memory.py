@@ -105,7 +105,15 @@ class SessionMemory:
         return {"scope": scope, "created_at": float(self.context_clock()), **({"owner": owner} if owner else {})}
 
     async def recall(self, scope: str, query: str, owner: str | None = None, exclude: str = "") -> list[str]:
-        """The summaries most relevant to the query, at most two, each labelled with the day it was written.
+        """The recalled summaries as model context, each labelled with the day it was written."""
+        return [self.label(item) for item in await self.recall_episodes(scope, query, owner, exclude)]
+
+    @staticmethod
+    def label(item: dict) -> str:
+        return f"历史摘要（{item['written_on']}）：{item['text']}"
+
+    async def recall_episodes(self, scope: str, query: str, owner: str | None = None, exclude: str = "") -> list[dict]:
+        """The summaries most relevant to the query, at most two, as {"written_on", "text"}.
 
         With an owner, every session of that user and subject counts, so a new session can use earlier ones; the
         session scope still matches summaries written before owners existed. `exclude` drops the session's current
@@ -122,7 +130,7 @@ class SessionMemory:
                                          where={"$and":[belongs, {"created_at":{"$gte":cutoff}}]},
                                          include=["documents", "metadatas"])
         rows = zip(result["documents"][0], result["metadatas"][0])
-        return [f"历史摘要（{self.written_on(metadata)}）：{document}" for document, metadata in rows
+        return [{"written_on":self.written_on(metadata), "text":document} for document, metadata in rows
                 if document != exclude][:2]
 
     def written_on(self, metadata) -> str:

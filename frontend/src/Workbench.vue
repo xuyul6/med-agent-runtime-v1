@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { makeClient, safeLink, tokenLabel } from './api/client.js'
 import { buildKnowledgeDocument, emptyMedicationMetadata } from './utils/knowledge.js'
 import { reportItemsForDisplay } from './utils/report.js'
-import { answerTextForDisplay } from './utils/answer.js'
+import { answerTextForDisplay, recalledNote } from './utils/answer.js'
 import MonitorDetails from './components/MonitorDetails.vue'
 import RoleCatalog from './components/RoleCatalog.vue'
 import { loadRoleCatalog } from './utils/roles.js'
@@ -249,6 +249,7 @@ onMounted(refresh)
               <div v-if="item.answer.questions.length"><h4>需要补充</h4><ul><li v-for="question in item.answer.questions" :key="question">{{ question }}</li></ul></div>
               <div v-if="item.answer.next_steps.length"><h4>下一步</h4><ul><li v-for="step in item.answer.next_steps" :key="step">{{ step }}</li></ul></div>
               <div v-if="item.references.length" class="references"><h4>本次引用</h4><a v-for="source in item.references" :key="source.key" :href="safeLink(source.url)" target="_blank" rel="noopener noreferrer"><span>{{ source.title }} ↗</span><small>{{ source.version }} · {{ source.scope }}</small><small v-if="source.provenance?.updated_on || source.provenance?.checked_on">{{ source.provenance?.updated_on ? `资料更新：${source.provenance.updated_on}` : '' }}{{ source.provenance?.updated_on && source.provenance?.checked_on ? ' · ' : '' }}{{ source.provenance?.checked_on ? `项目核对：${source.provenance.checked_on}` : '' }}</small></a></div>
+              <p v-if="recalledNote(item.recalled_summaries)" class="recalled">{{ recalledNote(item.recalled_summaries) }}</p>
               <AppointmentCard v-for="card in item.cards || []" :key="card.draftId" :card="card" :state="cardState(card).state" :message="cardState(card).message" @confirm="confirmCard(card)" @dismiss="dismissCard(card)" />
               <p v-for="limit in item.answer.limitations" :key="limit" class="limitation">{{ limit }}</p>
               <p v-if="item.degraded" class="degraded">{{ degradedNotice(developer) }}</p>

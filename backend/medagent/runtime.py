@@ -15,6 +15,11 @@ from .agents.checks import checked_role_output
 from .agents.skills import Skills
 from .tools.registry import ToolBudget, ToolExecutor
 from .memory import owner_key, scope_key
+
+
+def recalled_days(log) -> list[str]:
+    """Days of the earlier summaries this turn handed to the model, read from its own recall event."""
+    return next((item["written_on"] for item in log.events if item["event"] == "memory_recalled"), [])
 from .core.observability import CURRENT, RunLog, event
 from .understanding.risk import RiskGate
 from .agents.profiles import DEFAULT_REGISTRY, ProfileRegistry
@@ -222,7 +227,7 @@ class MedicalRuntime:
                           primary_agent=decision.primary_agent, supporting_agents=decision.supporting_agents, answer=answer, references=refs,
                           degraded=degraded, storage=storage, usage=log.usage(), elapsed_ms=round(log.elapsed,1),
                           agent_results=agent_results, subject=question.subject, routing_decision=decision,
-                          pending_actions=pending_actions)
+                          pending_actions=pending_actions, recalled_summaries=recalled_days(log))
             self.monitor.finish(log, degraded)
             return reply
         finally:
@@ -368,11 +373,14 @@ class MedicalRuntime:
         # Every turn looks for this user's and subject's earlier summaries, so a new session starts with them too.
         # A recall failure costs only the summaries, not the session state already read.
         try:
-            state["episodes"] = await asyncio.wait_for(
-                self.memory.recall(scope, text, owner, exclude=state.get("summary", "")), timeout=3)
+            recalled = await asyncio.wait_for(
+                self.memory.recall_episodes(scope, text, owner, exclude=state.get("summary", "")), timeout=3)
         except Exception as exc:
             event("memory_error", stage="recall", error=type(exc).__name__)
             return state, "degraded", True
+        state["episodes"] = [self.memory.label(item) for item in recalled]
+        # Counts and days only: the trace never holds the summaries themselves.
+        event("memory_recalled", count=len(recalled), written_on=sorted({item["written_on"] for item in recalled}))
         return state, "memory_preview" if self.settings.preview else "available", False
 
     async def _understand(self, question, resolution, state, storage, scope, log):

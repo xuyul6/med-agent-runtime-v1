@@ -269,6 +269,8 @@ class Reply(BaseModel):
     subject: str = "self"
     routing_decision: RoutingDecision | None = None
     pending_actions: list[PendingAction] = Field(default_factory=list)
+    # Days of earlier consultation summaries given to the model this turn; they are context, never cited sources.
+    recalled_summaries: list[str] = Field(default_factory=list)
 
     def report_dump(self) -> dict:
         """Serialization for saved reports: confirmation tokens are replaced."""

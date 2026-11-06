@@ -459,6 +459,14 @@ dd {
   color: var(--muted);
 }
 
+.recalled {
+  font-size: 11px;
+  color: var(--muted);
+  background: #f3f5f1;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
 .urgent {
   background: #fff1ed;
   color: #a33824;
