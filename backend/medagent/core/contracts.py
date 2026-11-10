@@ -227,7 +227,7 @@ class RoutingFallback(RoutingRecord):
 
 
 class RoutingDecision(RoutingRecord):
-    version: str = "routing-3"
+    version: str = "routing-4"
     primary_agent: str
     supporting_agents: list[str] = Field(default_factory=list)
     routing_reason: str

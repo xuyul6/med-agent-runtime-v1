@@ -279,7 +279,7 @@ class Monitor:
             for name,state in self.agent_series.items():
                 if self.roles[name] != candidate.role: continue
                 position, choice = ranked.get(name, (None,None))
-                score = candidate.score-.15*candidate.components["health"]+.15*choice.health if choice and candidate.eligible else None
+                score = candidate.score if choice and candidate.eligible else None
                 state.routing = {"request_id":request_id, "recorded_at":now, "role_score":candidate.score,
                     "routing_score":round(score,6) if score is not None else None,
                     "eligible":candidate.eligible and choice is not None, "instance_rank":position,

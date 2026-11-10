@@ -189,22 +189,13 @@ class RoutingPlanner:
                                        for name in monitor_blocked if name not in {choice.instance for choice in choices}]
                 if probes:
                     instance_fallbacks.append(RoutingFallback(role=role, reason="monitor_recovery_probe", action="bounded_probe_then_same_role"))
-            fields = [understanding.entities[name] for name in ROLE_FIELDS[role] if name in understanding.entities]
-            known = sum(fact.state in {"provided", "topic"} for fact in fields)
-            components = {
-                "intent":bounded_score(understanding.scores.get(kind.value, understanding.confidence if kind == understanding.primary else 0)),
-                "task_fit":1.0 if kind == understanding.primary else .85,
-                "entity_fit":min(1.0, known / (2 if role in {"symptom_guide", "report_explainer"} else 1)),
-                "business_rule":1.0 if role == "visit_guide" and (
-                    positive_request(text, VISIT_PREPARATION_REQUEST)
-                    or cross_clause_visit_preparation(text)) else .5,
-                "health":max(choice.health for choice in choices) if choices else 0,
-            }
-            score = sum(components[key]*weight for key,weight in {"intent":.4, "task_fit":.2, "entity_fit":.15, "business_rule":.1, "health":.15}.items())
+            # The fused intent score is the only ranking signal; health acts through admission and instance order.
+            intent = bounded_score(understanding.scores.get(kind.value, understanding.confidence if kind == understanding.primary else 0))
             candidates.append(RoutingCandidate(role=role, intent=kind, eligible=not reasons, reasons=reasons,
-                components=components, score=round(score, 6) if not reasons else 0, instances=choices))
+                components={"intent":intent}, score=round(intent, 6) if not reasons else 0, instances=choices))
+        # The primary intent leads when admitted; the other admitted roles follow by intent score.
         eligible = sorted([item for item in candidates if item.eligible],
-                          key=lambda item:(-item.score, item.intent != understanding.primary, item.role))
+                          key=lambda item:(item.intent != understanding.primary, -item.score, item.role))
         # Booking does not compete on score: it leads only when alone, otherwise it is second, so capacity defers information roles.
         booking = next((item for item in eligible if item.intent == Intent.APPOINTMENT), None)
         if booking is not None:
@@ -224,7 +215,7 @@ class RoutingPlanner:
         for assignment in assignments:
             assignment.other_goals = [item.goal for item in assignments if item is not assignment]
         return RoutingDecision(primary_agent=chosen[0].role, supporting_agents=[item.role for item in chosen[1:]],
-            routing_reason="domain_and_tool_admission_then_weighted_score"+monitor_reason, routing_confidence=chosen[0].score,
+            routing_reason="domain_and_tool_admission_then_primary_intent"+monitor_reason, routing_confidence=chosen[0].score,
             monitor_fallback=monitor_fallback,
             candidates=candidates, assignments=assignments, deferred_roles=[item.role for item in deferred]+unavailable,
             collaboration_status="single" if len(chosen) == 1 else "planned",
