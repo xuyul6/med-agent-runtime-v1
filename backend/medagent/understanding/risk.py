@@ -74,7 +74,8 @@ CLAUSES = r"[，,。！!？?；;\n]|但是|不过(?=我|现在|目前)|但"
 FOLLOWUP = r"更严重|加重|还是这样|越来越|又发作|比刚才|比之前|更厉害|还在" + PAIN + r"|没有?好转|没缓解|更难受|更" + PAIN
 RESOLVED = r"已就医|已经到医院|到医院了|已经缓解|已恢复|症状消失"
 # The user says the alarmed words were quoted, fictional, past or not theirs. Matched by code; a model can never lower a risk.
-CORRECTION = (r"(?:是|只是|刚才是|刚刚是)在(?:引用|转述|举例|讨论|学习)|只是(?:引用|转述|举例|打个比方|问问)|"
+# “这是我在引用…” names the speaker; a preceding 不/没 (“我不是在引用”) denies the correction instead.
+CORRECTION = (r"(?<![不没])(?:是|只是|刚才是|刚刚是|刚才只是|刚刚只是)我?在(?:引用|转述|举例|讨论|学习)|(?<![不没])只是(?:引用|转述|举例|打个比方|问问)|"
               r"(?:这|那|刚才)是(?:小说|电视剧|电影|剧情|游戏|书|课本)里|说的是(?:以前|之前|去年|别人|小说|电视剧|电影)|"
               r"误会了|理解错了|不是(?:我|我的)?(?:现在|目前|正在发生)的?(?:情况|症状)")
 QUOTED = r"“[^”]*”|「[^」]*」|『[^』]*』|\"[^\"]*\""
