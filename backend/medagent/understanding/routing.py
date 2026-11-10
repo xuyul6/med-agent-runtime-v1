@@ -83,9 +83,17 @@ def past_symptoms_only(text: str) -> bool:
 
 
 def outside_scope(text: str, kind: Intent) -> bool:
-    """A support task is outside the scope when the user narrowed the turn and the scoped clause does not ask for it."""
-    scoped = [clause for clause in clauses(text) if re.search(SCOPE, clause)]
-    return bool(scoped) and not any(positive_request(clause, TASK_EVIDENCE[kind]) for clause in scoped)
+    """A support task is outside the scope when the user narrowed the turn and no clause asks for it.
+
+    The scoped clause may name the task; another clause widens the scope only with asking wording
+    ("顺便查…说明书"), not with a background, negated or past mention ("我在吃…", "之前查过…").
+    """
+    parts = list(clauses(text))
+    scoped = [clause for clause in parts if re.search(SCOPE, clause)]
+    if not scoped or any(positive_request(clause, TASK_EVIDENCE[kind]) for clause in scoped):
+        return False
+    return not any(positive_request(clause, TASK_EVIDENCE[kind]) and positive_request(clause, REQUEST_FORM)
+                   and not re.search(HISTORICAL, clause) for clause in parts if clause not in scoped)
 
 
 def bounded_score(value: float) -> float:
