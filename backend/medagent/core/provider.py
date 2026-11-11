@@ -47,7 +47,6 @@ def json_schema(stage: str) -> dict | None:
     arrays = {"type":"array", "items":string}
     properties = {
         "understanding": {
-            "topic_relation":{"type":"string", "enum":["new", "followup", "uncertain"]},
             "urgent_quote":string,
             "product_quote":string,
             "visit_quote":string,

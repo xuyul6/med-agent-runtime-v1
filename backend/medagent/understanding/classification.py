@@ -16,7 +16,6 @@ LEXICON = {
     Intent.REPORT: r"报告|化验|检验|指标|参考范围|血常规|升高|偏低",
     Intent.GENERAL: r"你好|功能|能做什么|谢谢",
 }
-EXAMPLES = ["描述身体症状、发生时间和就诊科室", "查询药品说明资料、禁忌与用药问题", "首次看医生之前准备资料、了解挂号流程", "理解检验报告的项目名称和参考范围", "普通生活常识问题、问候与了解助手能力"]
 CLASSES = [kind for kind in Intent if kind not in {Intent.URGENT, Intent.APPOINTMENT}]
 # Semantic judgments the model makes by quoting the turn; see Understanding.
 JUDGMENTS = ("product_quote", "visit_quote", "appointment_quote")
@@ -52,13 +51,6 @@ class IntentRouter:
         explicit_new_topic = bool(re.match(r"^(?:另外|另一个问题|换个话题|换个问题|再问一个问题)", text.strip()))
         if not any(hits.values()) and text.strip() and len(text) <= 80 and not explicit_new_topic:
             followup = prior in {kind.value for kind in CLASSES if kind != Intent.GENERAL}
-        classification_text = text
-        if followup and not any(hits[kind.value] for kind in CLASSES if kind != Intent.GENERAL) and prior in {kind.value for kind in CLASSES}:
-            classification_text += "\n同一咨询对象上一任务："+EXAMPLES[CLASSES.index(Intent(prior))]
-        medication = preliminary.get("medication_name")
-        if followup and medication and medication.state in {"provided", "topic"} and not any(hits[kind.value] for kind in [Intent.VISIT, Intent.REPORT, Intent.SYMPTOMS]):
-            classification_text += "\n本轮指代药品："+medication.value
-        keyword = distribution({kind.value:len(re.findall(pattern, classification_text)) for kind,pattern in LEXICON.items()})
         async def language():
             if self.model is None:
                 raise RuntimeError("preview")
@@ -67,8 +59,8 @@ class IntentRouter:
                                         "source_turn_id":fact.source.turn_id} for fact in preliminary.values()]}
             observe_model_input("understanding", "understanding", 1, payload)
             result = await self.model.json("understanding", "理解当前医疗信息任务，类别为" + ",".join(x.value for x in CLASSES) +
-                "。普通生活常识及非医疗问题属于general，不要仅因项目是医疗助手而归入医疗类别。返回scores、tasks（intent、goal和quote）、updates（name,value,state,quote,turn_id），"
-                "以及topic_relation：当前轮明确是独立新话题时为new，继续或指代前文为followup，无法确定为uncertain。历史只用于指代和补充，不压过明确的新任务。"
+                "。普通生活常识及非医疗问题属于general，不要仅因项目是医疗助手而归入医疗类别。返回scores、tasks（intent、goal和quote）、updates（name,value,state,quote,turn_id）。"
+                "历史只用于指代和补充，不压过明确的新任务。"
                 "updates只引用提供的用户原话，quote须为对应轮次的连续原文，value须为quote中的原值；不知道时value=null,state=unknown。"
                 "字段name只允许："+",".join(FIELD_NAMES)+"。strength是包装规格，不是推荐剂量；product_name是明确出现的产品名，不由药名猜测品牌。"
                 "药品名可为topic，不能因此断言用户正在服药；疑问、假设和推测不能成为症状或病史事实。没有diagnosis字段。"
@@ -88,8 +80,8 @@ class IntentRouter:
             return {"scores":distribution(result["scores"]), "tasks":result.get("tasks", []), "updates":result.get("updates", []),
                     "urgent_quote":result.get("urgent_quote"),
                     "judgments":{name:result.get(name) for name in JUDGMENTS}}
-        signals = {"keywords": keyword, "prior": {item.value: 1/len(CLASSES) for item in CLASSES}}
-        weights = {"keywords": .35, "prior": PRIOR_WEIGHT}
+        signals = {"prior": {item.value: 1/len(CLASSES) for item in CLASSES}}
+        weights = {"prior": PRIOR_WEIGHT}
         fallbacks, semantic_tasks, semantic_updates, urgent_quote = [], [], [], ""
         judgments = dict.fromkeys(JUDGMENTS)
         try:
@@ -112,9 +104,13 @@ class IntentRouter:
                 else:
                     judgments[name] = verified[:300]
             signals["language"], weights["language"] = value["scores"], .45
+        # A turn without any keyword gives the keyword channel nothing to say, so it votes only when it hit something;
+        # with no model either, the empty vote still means general. The prior is a constant and never changes the order.
+        if any(hits.values()) or "language" not in signals:
+            signals["keywords"], weights["keywords"] = distribution(hits), .35
         # The fused score decides the primary intent. The model reads the history and known fields, so it follows a
         # short follow-up itself; only without it can keywords and the prior not see the previous task.
-        fused = distribution({key: sum(weights[ch]*scores[key] for ch,scores in signals.items()) for key in keyword})
+        fused = distribution({key: sum(weights[ch]*scores[key] for ch,scores in signals.items()) for key in signals["prior"]})
         primary = Intent(max(fused, key=fused.get))
         if ("language" not in signals and followup and not any(hits[kind.value] for kind in CLASSES if kind != Intent.GENERAL)
                 and prior in {kind.value for kind in CLASSES}):
