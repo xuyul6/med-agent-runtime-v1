@@ -167,9 +167,6 @@ class RoleAgent:
         workflow.complete("prepare_evidence", "evidence", reference_count=len(references))
         if required and not references:
             return self._source_gap(workflow, request, intent, references, report_payload)
-        if report_request and (result := report_sources.direct_answer(self, workflow, current, memory, subject_changed,
-                                                                      references, report_payload)):
-            return result
 
         data = self._model_data(text, memory, context_mode, request, intent, context, notes, assignment,
                                 original_request, exclude_range_definition)
