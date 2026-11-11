@@ -146,9 +146,6 @@ class IntentRouter:
                     tasks.append(TaskUnderstanding(intent=kind, goal="本轮涉及的辅助信息任务", priority="support", confidence=fused[kind.value],
                                                    source="keywords"))
         medication = entities.get("medication_name")
-        query = text
-        if primary == Intent.MEDICINE and medication and medication.state in {"provided", "topic"}:
-            query = medication.value+" 药品公开资料 "+("相互作用" if "相互作用" in text or "一起" in text else "说明资料")
         missing = []
         if primary == Intent.MEDICINE and (not medication or medication.state in {"unknown", "negated"}):
             missing.append("medication_name")
@@ -157,5 +154,5 @@ class IntentRouter:
               judgments={name:"rules" if quote is None else "quoted" if quote else "none" for name, quote in judgments.items()})
         return Understanding(primary=primary, scores=fused, confidence=fused[primary.value], signals=signals,
             subject=subject, turn_id=turn_id, entities=entities, updates=updates, tasks=tasks[:3], missing_fields=missing,
-            retrieval_query=query[:6000], context_used=len(sources)>1 or bool(state.get("entities")), fallbacks=fallbacks,
+            fallbacks=fallbacks,
             urgent_quote=urgent_quote, **judgments)

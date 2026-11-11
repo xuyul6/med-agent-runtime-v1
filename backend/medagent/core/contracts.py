@@ -76,8 +76,6 @@ class Understanding(BaseModel):
     updates: list[GroundedField] = Field(default_factory=list, exclude=True)
     tasks: list[TaskUnderstanding] = Field(default_factory=list)
     missing_fields: list[str] = Field(default_factory=list)
-    retrieval_query: str = ""
-    context_used: bool = False
     fallbacks: list[str] = Field(default_factory=list)
     urgent_quote: str = Field(default="", exclude=True)
     # Verified current-turn words for two semantic judgments: a specific product, and a visit. "" means the model

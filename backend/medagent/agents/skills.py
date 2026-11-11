@@ -171,6 +171,3 @@ class Skills:
             raise SkillValidationError("no_active_skill_snapshot")
         return snapshot
 
-    @property
-    def content(self) -> Mapping[str, str]:
-        return MappingProxyType({role:document.body for role, document in self.snapshot().documents.items()})
