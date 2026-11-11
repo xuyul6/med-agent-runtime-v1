@@ -30,6 +30,8 @@ services:
       CHROMA_HOST: chroma
       CHROMA_PORT: "8000"
     ports: ["127.0.0.1:8000:8000"]
+    # Mock-hospital bookings (synthetic identities only) survive container rebuilds.
+    volumes: ["appointment-data:/service/data"]
     depends_on:
       redis: {condition: service_healthy}
       chroma: {condition: service_healthy}
@@ -57,5 +59,6 @@ services:
       api: {condition: service_healthy}
 volumes:
   redis-data:
+  appointment-data:
   chroma-data:
     name: medagent-runtime_chromadb-data
