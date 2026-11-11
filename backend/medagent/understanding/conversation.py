@@ -1,6 +1,5 @@
 """Subject isolation and literal user evidence; summaries never establish facts."""
 from dataclasses import dataclass
-import hashlib
 import math
 import re
 import time
@@ -75,12 +74,13 @@ class SubjectTracker:
 
 
 def user_sources(text: str, state: dict, turn_id: str, subject: str) -> list[dict]:
-    messages = [message for message in state.get("messages", [])[-8:] if isinstance(message, dict) and message.get("role") == "user"][-MAX_HISTORY_USERS:]
+    # Every stored user message carries its turn id; one without it cannot be quoted as a source.
+    messages = [message for message in state.get("messages", [])[-8:] if isinstance(message, dict) and message.get("role") == "user"
+                and isinstance(message.get("turn_id"), str) and message["turn_id"]][-MAX_HISTORY_USERS:]
     sources = []
     for index, message in enumerate(messages):
         content = str(message.get("content", ""))[:MAX_HISTORY_CHARACTERS]
-        identity = message.get("turn_id") or "legacy-"+hashlib.sha256(content.encode()).hexdigest()[:16]
-        sources.append({"turn_id":identity, "turn_index":message.get("turn_index", index+1),
+        sources.append({"turn_id":message["turn_id"], "turn_index":message.get("turn_index", index+1),
                         "subject":subject, "text":content, "origin":"history_user"})
     counter = max([state.get("turn_counter", 0), *[item["turn_index"] for item in sources]])
     sources.append({"turn_id":turn_id, "turn_index":counter+1, "subject":subject, "text":text, "origin":"current_user",

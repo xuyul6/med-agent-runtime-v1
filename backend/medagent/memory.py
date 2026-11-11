@@ -101,7 +101,7 @@ class SessionMemory:
                 await self.redis.set("mar2:session:"+scope, json.dumps(state, ensure_ascii=False), ex=86400)
 
     def episode_metadata(self, scope: str, owner: str | None = None) -> dict:
-        # Chroma metadata has no null; summaries written before owners existed carry the session scope only.
+        # Chroma metadata has no null, so a summary without an owner carries the session scope only.
         return {"scope": scope, "created_at": float(self.context_clock()), **({"owner": owner} if owner else {})}
 
     async def recall(self, scope: str, query: str, owner: str | None = None, exclude: str = "") -> list[str]:
@@ -115,9 +115,8 @@ class SessionMemory:
     async def recall_episodes(self, scope: str, query: str, owner: str | None = None, exclude: str = "") -> list[dict]:
         """The summaries most relevant to the query, at most two, as {"written_on", "text"}.
 
-        With an owner, every session of that user and subject counts, so a new session can use earlier ones; the
-        session scope still matches summaries written before owners existed. `exclude` drops the session's current
-        summary, which the caller already has."""
+        With an owner, every session of that user and subject counts, so a new session can use earlier ones; without
+        one only this session's summaries do. `exclude` drops the session's current summary, which the caller already has."""
         if self.episodes is None:
             return []
         count = await asyncio.to_thread(self.episodes.count)
@@ -125,7 +124,7 @@ class SessionMemory:
             return []
         encoded = await self.vectors.encode([query])
         cutoff = self.context_clock()-self.episode_ttl
-        belongs = {"$or":[{"owner":owner}, {"scope":scope}]} if owner else {"scope":scope}
+        belongs = {"owner":owner} if owner else {"scope":scope}
         result = await asyncio.to_thread(self.episodes.query, query_embeddings=encoded, n_results=min(3,count),
                                          where={"$and":[belongs, {"created_at":{"$gte":cutoff}}]},
                                          include=["documents", "metadatas"])

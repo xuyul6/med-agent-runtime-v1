@@ -79,13 +79,6 @@ def catalog_updates(seed: list[Reference], stored: dict[str, Reference]) -> list
         previous = stored.get(ref.key)
         if previous is None:
             updates.append(ref)
-        elif (ref.key == "ibuprofen-overview" and ref.version == "summary-2026-10-27"
-              and (not previous.entities or previous.entities == ref.entities)
-              and hashlib.sha256(json.dumps(previous.model_dump(mode="json", exclude=excluded),
-                  ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-              == "7e6aa7c947a6ba5f8cfdf500a1906fe5de942fb174f037ee19948e2dc3fd54fc"):
-            # Exact old catalog summary only; never replace edited or unapproved records.
-            updates.append(ref)
         elif (previous.model_dump(exclude=excluded) == ref.model_dump(exclude=excluded)
               and (not previous.entities or previous.entities == ref.entities)):
             data = previous.model_dump()
