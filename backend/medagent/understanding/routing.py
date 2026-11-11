@@ -170,7 +170,7 @@ class RoutingPlanner:
                     continue
                 state = monitor.routing_state(agent.instance)
                 choice = InstanceChoice(instance=agent.instance, health=bounded_score(state["health"]),
-                    samples=len(monitor._rows(agent.instance)), monitor_penalty=state["monitor_penalty"], monitor_probe=state["probe_available"],
+                    samples=state["samples"], monitor_penalty=state["monitor_penalty"], monitor_probe=state["probe_available"],
                     standby=getattr(agent, "standby", False))
                 if state["excluded"]:
                     monitor_blocked.append(agent.instance)
@@ -203,9 +203,8 @@ class RoutingPlanner:
             eligible.insert(min(1, len(eligible)), booking)
         requested = self.registry.role_for_intent[understanding.primary]
         monitor_fallback = [item.role for item in candidates if item.intent in domains and "monitor_penalty_threshold" in item.reasons]
-        monitor_reason = ";monitor_fallback=["+",".join(monitor_fallback)+"]" if monitor_fallback else ""
         if not eligible:
-            return RoutingDecision(primary_agent=requested, routing_reason="no_eligible_role"+monitor_reason, routing_confidence=0,
+            return RoutingDecision(primary_agent=requested, routing_reason="no_eligible_role", routing_confidence=0,
                 candidates=candidates, collaboration_status="failed",
                 monitor_fallback=monitor_fallback,
                 fallbacks=[RoutingFallback(role=requested, reason="monitor_penalty_threshold" if monitor_fallback else "no_qualified_role", action="transparent_guidance")])
@@ -215,7 +214,7 @@ class RoutingPlanner:
         for assignment in assignments:
             assignment.other_goals = [item.goal for item in assignments if item is not assignment]
         return RoutingDecision(primary_agent=chosen[0].role, supporting_agents=[item.role for item in chosen[1:]],
-            routing_reason="domain_and_tool_admission_then_primary_intent"+monitor_reason, routing_confidence=chosen[0].score,
+            routing_reason="domain_and_tool_admission_then_primary_intent", routing_confidence=chosen[0].score,
             monitor_fallback=monitor_fallback,
             candidates=candidates, assignments=assignments, deferred_roles=[item.role for item in deferred]+unavailable,
             collaboration_status="single" if len(chosen) == 1 else "planned",

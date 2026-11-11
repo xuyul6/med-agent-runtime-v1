@@ -197,7 +197,7 @@ class Monitor:
                         for key,other in self.agent_series.items())
         return {"health":self.health(name)*(1-state.penalty), "monitor_penalty":state.penalty,
                 "excluded":excluded, "probe_available":excluded and not role_busy and self.clock() >= state.next_probe,
-                "probe_inflight":state.probe_token is not None}
+                "probe_inflight":state.probe_token is not None, "samples":len(self._rows(name))}
 
     def claim(self, name):
         state = self.agent_series[name]

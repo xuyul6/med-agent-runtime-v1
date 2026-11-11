@@ -15,11 +15,6 @@ from .agents.checks import checked_role_output
 from .agents.skills import Skills
 from .tools.registry import ToolBudget, ToolExecutor
 from .memory import owner_key, scope_key
-
-
-def recalled_days(log) -> list[str]:
-    """Days of the earlier summaries this turn handed to the model, read from its own recall event."""
-    return next((item["written_on"] for item in log.events if item["event"] == "memory_recalled"), [])
 from .core.observability import CURRENT, RunLog, event
 from .understanding.risk import RiskGate
 from .agents.profiles import DEFAULT_REGISTRY, ProfileRegistry
@@ -30,6 +25,11 @@ from .agents.collaboration import compose
 from .agents.single import INSTANCE as SINGLE_INSTANCE, SINGLE_AGENT, SingleAgent
 from .monitoring import Monitor, MonitorExcluded, MonitorPolicy
 from .agents.output_validation import AgentOutputError
+
+
+def recalled_days(log) -> list[str]:
+    """Days of the earlier summaries this turn handed to the model, read from its own recall event."""
+    return next((item["written_on"] for item in log.events if item["event"] == "memory_recalled"), [])
 
 
 def role_input(assignment, understanding, question, context, clock):
@@ -165,7 +165,6 @@ class MedicalRuntime:
         assignment.status = "failed"
         if assignment.attempts and all(attempt.error == "MonitorExcluded" for attempt in assignment.attempts):
             if role not in decision.monitor_fallback: decision.monitor_fallback.append(role)
-            decision.routing_reason += ";monitor_fallback=["+role+"]"
         decision.fallbacks.append(RoutingFallback(role=role, reason="instances_exhausted", action="transparent_guidance"))
         return None
 

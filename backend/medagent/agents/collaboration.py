@@ -1,4 +1,6 @@
 """Merge validated sections without permitting a synthesis model to invent facts."""
+import asyncio
+import json
 import re
 from itertools import zip_longest
 from ..core.contracts import Answer, RoutingFallback
@@ -188,8 +190,6 @@ def sections_answer(results, dropped: frozenset = frozenset()) -> Answer:
 
 
 async def compose(decision, outputs: dict, understanding, model, timeout: float) -> tuple[Answer, list, bool]:
-    import asyncio
-    import json
     valid = [outputs[assignment.role] for assignment in decision.assignments if assignment.role in outputs]
     primary = outputs.get(decision.primary_agent)
     degraded = len(valid) != len(decision.assignments) or bool(decision.deferred_roles) or not primary
