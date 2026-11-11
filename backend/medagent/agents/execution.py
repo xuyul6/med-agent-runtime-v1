@@ -161,7 +161,7 @@ class RoleAgent:
         exclude_range_definition = (intent == Intent.REPORT and report_request
                                     and report_sources.unrequested_range_definition(current, memory, references))
         if exclude_range_definition:
-            removed = references.pop(report_sources.RANGE_DEFINITION[0], None)
+            removed = references.pop(report_sources.RANGE_DEFINITION_KEY, None)
             event("reference_selection", role=self.role, reason="unrequested_range_definition",
                   excluded_count=int(removed is not None))
         workflow.complete("prepare_evidence", "evidence", reference_count=len(references))
@@ -294,7 +294,7 @@ class RoleAgent:
         public = [ref.model_dump(mode="json") for ref in references.values()]
         if context_mode == "full":
             available = [r for r in self.index.documents.values() if r.approved and r.domain in self.profile.knowledge_domains
-                         and not (exclude_range_definition and r.key == report_sources.RANGE_DEFINITION[0])]
+                         and not (exclude_range_definition and r.key == report_sources.RANGE_DEFINITION_KEY)]
             if intent == Intent.MEDICINE:
                 available = eligible_references(available, request)
             else:

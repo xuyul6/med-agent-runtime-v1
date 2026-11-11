@@ -262,6 +262,7 @@ class Reply(BaseModel):
     storage: Literal["available", "degraded", "skipped", "memory_preview"]
     usage: dict
     elapsed_ms: float
+    # Always False: no person or emergency service is ever connected. The evaluation and smoke checks assert it.
     handoff_connected: bool = False
     agent_results: list[AgentExecution] = Field(default_factory=list)
     subject: str = "self"

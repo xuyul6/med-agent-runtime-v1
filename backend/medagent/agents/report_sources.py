@@ -8,7 +8,6 @@ from .checks import check_boundaries
 
 # The deterministic mixed-report path quotes only this reviewed summary, unchanged.
 REPORT_RANGE_SOURCE_HASH = "bda2d03ef8df0772268958a0aedb9e1689a9b94da1e6312576380db194b40481"
-REPORT_RANGE_DEFINITION_HASH = "f506943119c77e64b1f33de9bf953309203f9516a666fca18b427d8324475f06"
 REPORT_RANGE_QUESTION = r"参考范围(?:的)?(?:有什么意义|有何意义|是什么意思|是什么|什么含义|含义|定义)"
 
 
@@ -34,7 +33,8 @@ def personal_report_without_item(text: str, *, require_judgment: bool = True) ->
 
 
 REPORT_FIELDS = ("report_item", "value", "unit", "reference_range")
-RANGE_DEFINITION = ("lab-reference-range-definition", REPORT_RANGE_DEFINITION_HASH)
+# Not hash-pinned: its sentences reach an answer through checks.insert_range_sentences, like any approved report source.
+RANGE_DEFINITION_KEY = "lab-reference-range-definition"
 
 
 def reviewed_source(references: dict, key: str, expected_hash: str):
@@ -95,6 +95,6 @@ def unrequested_range_definition(current: str, memory: dict, references: dict) -
     screening_text = re.sub(r"(?:不要|不需要|无需|不想)(?:你|做|进行)?(?:分析|判断|解读|解释|诊断)(?:我的|个人)?病情", "", current)
     workflow_only = (re.search(r"整理|对应|配对|表格|记录", current)
         and not re.search(r"分析|判断|诊断|确诊|疾病|生病|患病|病情|异常|偏高|偏低|正常|治疗|开药|用药|(?:是否|会不会|是不是).{0,6}(?:病|异常)|如何(?:确定|计算)|(?:统计|计算).{0,8}(?:依据|方法)", screening_text))
-    other_report_source = any(key != RANGE_DEFINITION[0] and ref.approved and ref.domain == Intent.REPORT
+    other_report_source = any(key != RANGE_DEFINITION_KEY and ref.approved and ref.domain == Intent.REPORT
                               for key, ref in references.items())
     return bool(not has_prior_user and not asks_range and workflow_only and other_report_source)
