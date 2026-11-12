@@ -6,8 +6,8 @@ This is one repository with a Python backend and Vue frontend. Run Git commands 
 
 - `backend/medagent/`: API, contracts, risk screening, classification, retrieval, memory, execution, monitoring and evaluation.
 - `backend/resources/`: reviewed public reference summaries, role Skills and synthetic evaluation cases.
-- `backend/tests/` and `frontend/tests/`: local-only tests, ignored by Git. `backend/artifacts/` holds synthetic validation reports locally and is ignored by Git.
-- `frontend/src/`: workbench, API client and CSS.
+- `backend/tests/`: deterministic pytest tests; CI runs them with the network guard (`MAR_OFFLINE_TESTS=1`). `backend/artifacts/` holds synthetic validation reports locally and is ignored by Git.
+- `frontend/src/`: workbench, API client and CSS; `frontend/tests/` contains Node tests.
 - `docs/`: local-only and ignored by Git: `guides/` (handover, demo, operations), `design/` (module design), `plans/` (plans and experiment protocols) and `records/` (dated acceptance and repair records by scenario); see `docs/README.md`. `.local-backup/` and `local-notes/` are ignored too.
 
 ## Development Commands

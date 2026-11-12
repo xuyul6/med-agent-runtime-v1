@@ -66,11 +66,11 @@
 
 ## 验证现状
 
-测试文件和评测报告只保留在本地，不随仓库发布；数据集在 `backend/resources/` 中公开。
+离线测试在 `backend/tests/` 和 `frontend/tests/`，每次推送由 CI（`.github/workflows/ci.yml`）在断网保护下运行。评测报告只保留在本地，不随仓库发布；数据集在 `backend/resources/` 中公开。
 
 | 项目 | 方法 | 结果 |
 | --- | --- | --- |
-| 离线测试 | 假模型，不调用付费服务 | 后端 1510 项通过、1 项跳过、3 项为已知缺口（`xfail`，都与没有身份认证有关）；前端 59 项通过，生产构建通过 |
+| 离线测试 | 假模型，不调用付费服务 | 后端 1515 项通过、1 项跳过、3 项为已知缺口（`xfail`，都与没有身份认证有关）；前端 60 项通过，生产构建通过 |
 | 急症筛选 | 红队集 `risk-redteam-v1.json`（104 例）和预留集 `risk-redteam-holdout-v1.json`（40 例），规则版本 `screening-3` | 调优集急症识别 56/56，误报 2/48；预留集 26/26，误报 1/14。预留集结果出来后又改过规则，预留集已不算独立。之后发现程度词和单侧肢体说法大量漏报，补规则后新题集 `risk-redteam-degree-v1.json` 从 1/25 到 25/25，但这些说法是写规则时参考的，结果偏乐观；另写的 12 个换说法（`risk-redteam-paraphrase-v1.json`，没有用来调规则）规则只抓到 1 个，所以规则之后加了模型升级通道。真实模型（`claude-haiku-5-5`）跑一次：换说法 12/12；四套题里规则放过的 81 个非急症回合没有新增误报，包括一条要求判成急症的注入。模型不可用时只剩规则。题目由同一作者编写，只跑过一次，不代表临床验证 |
 | 意图与路由 | 标注集 `routing-labels-v1.json`（58 例）和预留集 `routing-labels-holdout-v1.json`（30 例），离线只用关键词和先验，在线加模型通道 | 离线：调优集主角色和参与角色集合都是 57/58（错的一例是背景里的药名压过了就医请求），预留集主角色 26/30、参与角色集合 25/30。加模型后：调优集全部正确，预留集主角色 30/30、参与角色集合 29/30；这组在线数字测于 `e984f6a` 之前，此后两次改动（主意图只看融合分、关键词零命中不投票）都没有用真实模型重跑。两个集合由同一人编写，预留集已多次用于测量，只能防止针对单个案例打补丁 |
 | 回答边界 | 红队集 `answer-boundary-redteam-v1.json`（38 例违规、30 例正常）和预留集（19 例违规、11 例正常），只测确定性检查，不调用模型 | 调优集违规全部拦截，正常内容无误拦；预留集违规拦住 8/19（改规则前为 0/19），正常内容无误拦。剂量类拦住 7/8；诊断、停换药、安全保证、虚构预约这类说法变化多，只拦住 1/11 |
@@ -206,13 +206,15 @@ backend/medagent/
   smoke/               对运行中后端的联网冒烟检查
   core/                配置、公共契约、模型网关、请求 Trace
 backend/resources/     资料导读、角色 Skills、药名词表、评测与红队数据集
+backend/tests/         按模块与场景分目录的离线测试（假模型）；support/ 是共用辅助
 frontend/src/          Vue 工作台：用户模式是对话和预约，开发者模式另有执行详情、监控、评测
+frontend/tests/        工具函数与 API 客户端的 Node 测试
 ```
 
 ## 验证命令
 
 ```bash
-# backend/：离线测试（测试文件只在本地）
+# backend/：离线测试
 python -m pytest -q
 python -m medagent.evaluation.risk_redteam --output artifacts/risk-redteam.json
 python -m medagent.evaluation.routing_labels --output artifacts/routing-labels.json

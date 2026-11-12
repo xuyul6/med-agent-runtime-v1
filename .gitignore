@@ -24,6 +24,3 @@ backend/artifacts/
 docs/
 # Personal notes such as interview preparation are never published.
 local-notes/
-# Tests are kept locally and not published.
-backend/tests/
-frontend/tests/
