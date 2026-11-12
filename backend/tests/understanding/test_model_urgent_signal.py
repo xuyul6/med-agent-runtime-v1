@@ -3,8 +3,7 @@ from medagent.core.provider import json_schema
 from medagent.evaluation.contracts import EvalLimits
 from medagent.evaluation.risk_redteam import run_with_model
 from medagent.core.config import ROOT, Settings
-from dataclasses import replace
-from medagent.runtime import MedicalRuntime
+from medagent.comparison.single_agent import SingleAgent
 from support.harness import Model, fixture, run
 
 MESSAGE = "我爸喘气特别费劲，一句话都说不完整"
@@ -97,8 +96,8 @@ def test_rule_hit_skips_the_model_so_it_cannot_lower_a_level():
 def test_single_agent_arm_escalates_the_same_way():
     model = Signal("喘气特别费劲")
     async def scenario():
-        base = await fixture(model)
-        runtime = MedicalRuntime(replace(base.settings, architecture="single_agent"), model, base.vectors, base.index, base.memory)
+        runtime = await fixture(model)
+        runtime.answerer = SingleAgent(runtime)
         assert (await runtime.chat(Question(text=MESSAGE))).primary_agent == "risk_handoff"
     run(scenario())
     assert model.roles == 0

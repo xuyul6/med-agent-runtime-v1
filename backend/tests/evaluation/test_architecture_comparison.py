@@ -1,6 +1,6 @@
 import json
 from collections import Counter
-from dataclasses import fields, replace
+from dataclasses import fields
 import pytest
 from pydantic import ValidationError
 from support.comparison import RehearsalModel
@@ -9,6 +9,7 @@ from support.multiturn import ask
 from medagent.comparison.cli import build_plan
 from medagent.comparison.contracts import ARM_SETTINGS, ARMS, ComparisonCase, ComparisonRequest, resolve_comparison
 from medagent.comparison.runner import ArchitectureIsolation, run_comparison, schedule
+from medagent.comparison.single_agent import SingleAgent
 from medagent.core.contracts import Question
 from medagent.runtime import MedicalRuntime
 
@@ -16,8 +17,9 @@ MARK = "INJECTION-single-9c1"
 
 
 def single(runtime, model=None):
-    return MedicalRuntime(replace(runtime.settings, architecture="single_agent"), model or runtime.model,
-                          runtime.vectors, runtime.index, runtime.memory)
+    arm = MedicalRuntime(runtime.settings, model or runtime.model, runtime.vectors, runtime.index, runtime.memory)
+    arm.answerer = SingleAgent(arm)
+    return arm
 
 
 class SingleModel(Model):
@@ -55,7 +57,7 @@ def test_schedule_puts_every_arm_first_equally_often_for_each_case():
     assert plan["planned_targets"] == 3*len(rows) and plan["online_status"] == "not_run"
 
 
-def test_arm_runtimes_differ_from_the_base_only_by_their_arm_settings():
+def test_arm_runtimes_differ_from_the_base_only_by_arm_settings_or_the_answerer():
     async def scenario():
         source = await fixture(RehearsalModel(), preview=False)
         isolation = ArchitectureIsolation(source, "arms", None)
@@ -64,7 +66,7 @@ def test_arm_runtimes_differ_from_the_base_only_by_their_arm_settings():
             for arm in ARMS:
                 runtime = await isolation.arm_branch(arm, None)
                 changed = {f.name for f in fields(source.settings) if getattr(runtime.settings, f.name) != getattr(source.settings, f.name)}
-                assert changed == set(ARM_SETTINGS[arm]) and (runtime.single is not None) == (arm == "single_agent")
+                assert changed == set(ARM_SETTINGS[arm]) and isinstance(runtime.answerer, SingleAgent) == (arm == "single_agent")
             assert isolation.settings == source.settings
         finally:
             await isolation.cleanup()
@@ -123,11 +125,12 @@ def test_single_agent_still_short_circuits_on_critical_risk():
     run(scenario())
 
 
-def test_unknown_architecture_is_rejected():
+def test_the_product_has_no_switch_that_turns_the_baseline_on():
+    """The comparison attaches the baseline to a runtime; settings and environment cannot."""
     async def scenario():
         runtime = await fixture()
-        with pytest.raises(ValueError, match="invalid_architecture"):
-            MedicalRuntime(replace(runtime.settings, architecture="swarm"), None, runtime.vectors, runtime.index, runtime.memory)
+        assert not {"architecture", "single_agent_attempts", "single_agent_open_tools"} & {f.name for f in fields(runtime.settings)}
+        assert not hasattr(runtime, "single") and not isinstance(runtime.answerer, SingleAgent)
     run(scenario())
 
 
@@ -238,7 +241,7 @@ def test_single_agent_range_claim_is_replaced_by_the_source_sentence_without_a_r
 
 
 def test_single_agent_range_claim_is_repaired_once_with_permitted_sentences_like_the_role_path(monkeypatch):
-    monkeypatch.setattr("medagent.agents.checks.insert_range_sentences", lambda text, keys, references: (text, keys, 0))
+    monkeypatch.setattr("medagent.comparison.single_agent.insert_range_sentences", lambda text, keys, references: (text, keys, 0))
     async def scenario():
         model = ScriptedSingle("参考范围是统计得到的区间，大家都差不多。", "参考范围需要由医护结合情况解释。")
         reply = await single(await fixture(model, preview=False), model).chat(Question(text=RANGE_QUESTION))
@@ -251,7 +254,7 @@ def test_single_agent_range_claim_is_repaired_once_with_permitted_sentences_like
 
 
 def test_single_agent_range_claim_fails_when_the_repair_also_breaks_the_rule(monkeypatch):
-    monkeypatch.setattr("medagent.agents.checks.insert_range_sentences", lambda text, keys, references: (text, keys, 0))
+    monkeypatch.setattr("medagent.comparison.single_agent.insert_range_sentences", lambda text, keys, references: (text, keys, 0))
     async def scenario():
         bad = "参考范围是统计得到的区间，大家都差不多。"
         model = ScriptedSingle(bad, bad)
@@ -263,7 +266,8 @@ def test_single_agent_range_claim_fails_when_the_repair_also_breaks_the_rule(mon
 
 
 def test_single_answer_checks_match_the_role_path(monkeypatch):
-    from medagent.agents.checks import VISIT_URGENCY_ATTRIBUTION_NOTICE, checked_single_answer
+    from medagent.agents.checks import VISIT_URGENCY_ATTRIBUTION_NOTICE
+    from medagent.comparison.single_agent import checked_single_answer
     from medagent.agents.output_validation import AgentOutputError
     from medagent.core.config import ROOT
     from medagent.core.contracts import Reference

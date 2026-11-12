@@ -2,7 +2,6 @@ from dataclasses import replace
 import json
 import time
 import httpx
-from .contracts import Answer
 from .observability import event
 from ..agents.profiles import DEFAULT_REGISTRY
 from ..understanding.conversation import FIELD_NAMES
@@ -34,13 +33,19 @@ def role_json_schema(role: str) -> dict:
     return strict_schema(profile.output_contract)
 
 
+# Generation stages that are not a role contract name their own output format here; None runs the round without one.
+# Under an output schema the model answered without calling the booking tool, so the round that drafts only calls it.
+STAGE_SCHEMAS: dict[str, dict | None] = {"agent_appointment_action": None}
+
+
+def register_stage(stage: str, schema: dict | None) -> None:
+    """Let a caller outside the role contracts (the comparison baseline) declare the output format of its own stage."""
+    STAGE_SCHEMAS[stage] = schema
+
+
 def json_schema(stage: str) -> dict | None:
-    if stage == "agent_single_agent":
-        # The single-agent baseline returns a plain answer, not a role contract.
-        return strict_schema(Answer)
-    if stage in {"agent_appointment_action", "agent_single_agent_action"}:
-        # Under an output schema the model answered without calling the booking tool; this round only calls it.
-        return None
+    if stage in STAGE_SCHEMAS:
+        return STAGE_SCHEMAS[stage]
     if stage.startswith("agent_"):
         return role_json_schema(stage.removeprefix("agent_"))
     string = {"type":"string"}

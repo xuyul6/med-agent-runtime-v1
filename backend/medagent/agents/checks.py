@@ -200,24 +200,6 @@ def add_urgency_notice(limitations: list[str]) -> None:
             limitations[0] = VISIT_URGENCY_ATTRIBUTION_NOTICE+"\n"+limitations[0]
 
 
-def checked_single_answer(data: dict, references: dict, *, visit_task: bool, evidence_requested: bool) -> Answer:
-    """The role path's answer-level evidence checks; its payload checks have no counterpart in a plain answer."""
-    answer = checked_answer(data, references)
-    if any(not references[key].approved for key in answer.reference_keys):
-        raise AgentOutputError("reference_outside_role_scope",["reference_keys"])
-    answer.text, answer.reference_keys, inserted = insert_range_sentences(answer.text, answer.reference_keys, references)
-    if inserted:
-        event("report_range_inserted", role="single_agent", count=inserted)
-    check_report_range_claims(answer.text, answer.reference_keys, references, "text")
-    if visit_task and unmatched_urgency_sentences([answer.text, *answer.questions, *answer.next_steps, *answer.limitations],
-                                                  answer.reference_keys, references):
-        add_urgency_notice(answer.limitations)
-    # Nothing retrieved: saying so honestly is the correct answer, as in the role path's source gap.
-    if evidence_requested and references and not answer.reference_keys:
-        raise AgentOutputError("requested_evidence_not_returned",["reference_keys"])
-    return answer
-
-
 def checked_role_output(profile: AgentProfile, data: dict, references: dict) -> AgentOutput:
     try:
         output = profile.output_contract.model_validate(data, strict=True)

@@ -151,13 +151,16 @@ class SingleBookingModel(BookingModel):
 
 async def single_runtime(model, clock, open_tools=False):
     import json
+    from medagent.comparison.single_agent import SingleAgent
     from medagent.core.config import ROOT, Settings
     from medagent.core.contracts import Reference
     from medagent.knowledge.retrieval import ReferenceIndex, Vectorizer
     from medagent.memory import SessionMemory
     from medagent.runtime import MedicalRuntime
-    settings = Settings(preview=False, embeddings="hash", architecture="single_agent", single_agent_open_tools=open_tools)
+    settings = Settings(preview=False, embeddings="hash")
     vectors = Vectorizer("hash")
     index = ReferenceIndex(vectors, model)
     await index.upsert([Reference.model_validate(x) for x in json.loads((ROOT/"resources/references.json").read_text())])
-    return MedicalRuntime(settings, model, vectors, index, SessionMemory(model=model), appointments=booking_store(clock))
+    runtime = MedicalRuntime(settings, model, vectors, index, SessionMemory(model=model), appointments=booking_store(clock))
+    runtime.answerer = SingleAgent(runtime, open_tools=open_tools)
+    return runtime

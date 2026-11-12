@@ -14,9 +14,10 @@ from ..evaluation.judging import JUDGE_PROTOCOL_VERSION
 from ..evaluation.metrics import METRIC_VERSION
 
 ARMS = ("multi_agent", "primary_only", "single_agent")
-# Each arm differs from multi_agent only in these runtime settings.
-ARM_SETTINGS = {"multi_agent":{}, "primary_only":{"supporting_agent_limit":0}, "single_agent":{"architecture":"single_agent", "single_agent_attempts":2},
-                "single_agent_open":{"architecture":"single_agent", "single_agent_attempts":2, "single_agent_open_tools":True}}
+# An arm differs from multi_agent only in these runtime settings, or in the baseline attached as its answerer.
+ARM_SETTINGS = {"multi_agent":{}, "primary_only":{"supporting_agent_limit":0}, "single_agent":{}, "single_agent_open":{}}
+# SingleAgent options. Two attempts match the second instance a role gets; the open arm holds every booking tool.
+ARM_BASELINES = {"single_agent":{"attempts":2}, "single_agent_open":{"attempts":2, "open_tools":True}}
 CATEGORIES = ("single_task", "compound", "multi_turn", "general", "urgent", "tool_fault",
               "daily_sourced", "daily_gap", "compound_parallel", "compound_linked",
               "stability_once", "stability_always", "stability_tool", "stability_outage", "boundary", "injection",

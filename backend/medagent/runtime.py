@@ -1,10 +1,11 @@
 import asyncio
+from dataclasses import dataclass, field
 import math
 import time
 import uuid
 from .understanding.classification import IntentRouter
-from .core.contracts import (AgentAssignment, Answer, ExecutionAttempt, InstanceChoice, Intent, Question, Reply, RoutingDecision,
-                             RoutingFallback, TaskUnderstanding, Understanding)
+from .core.contracts import (AgentExecution, Answer, ExecutionAttempt, Intent, PendingAction, Question, Reference, Reply, Risk,
+                             RoutingDecision, RoutingFallback, TaskUnderstanding, Understanding)
 from .agents.execution import RoleAgent, RiskHandoffAgent
 from .agents.appointment import AppointmentAgent
 from .appointments.catalog import HospitalCatalog
@@ -12,7 +13,7 @@ from .appointments.continuation import appointment_request
 from .appointments.store import AppointmentStore
 from .core.config import ROOT
 from .agents.checks import checked_role_output
-from .agents.skills import Skills
+from .agents.skills import SkillSnapshot, Skills
 from .tools.registry import ToolBudget, ToolExecutor
 from .memory import owner_key, scope_key
 from .core.observability import CURRENT, RunLog, event
@@ -22,7 +23,6 @@ from .understanding.conversation import SubjectTracker, institution_request, rec
 from .understanding.consultation_needs import consultation_need
 from .understanding.routing import RoutingPlanner
 from .agents.collaboration import compose
-from .agents.single import INSTANCE as SINGLE_INSTANCE, SINGLE_AGENT, SingleAgent
 from .monitoring import Monitor, MonitorExcluded, MonitorPolicy
 from .agents.output_validation import AgentOutputError
 
@@ -68,6 +68,33 @@ def role_input(assignment, understanding, question, context, clock):
     return details, context, visit_followup, query[:6000]
 
 
+@dataclass
+class Turn:
+    """A non-critical turn after the steps every answerer shares: risk gate, memory read, understanding, booking request."""
+    question: Question
+    understanding: Understanding
+    # Session state plus this turn's grounded fields and consultation need.
+    state: dict
+    risk: Risk
+    skill_snapshot: SkillSnapshot
+    tool_budget: ToolBudget
+    appointment: dict | None
+    request_id: str
+
+
+@dataclass
+class TurnResult:
+    """What answering a turn produced, whoever answered it."""
+    decision: RoutingDecision
+    answer: Answer
+    references: list[Reference] = field(default_factory=list)
+    agent_results: list[AgentExecution] = field(default_factory=list)
+    # Role results by role name; empty when no role ran.
+    outputs: dict = field(default_factory=dict)
+    pending_actions: list[PendingAction] = field(default_factory=list)
+    degraded: bool = False
+
+
 class MedicalRuntime:
     def __init__(self, settings, model, vectors, index, memory, profiles=None, skills=None, fallback_model=None, judge_model=None,
                  appointments: AppointmentStore | None = None):
@@ -101,15 +128,9 @@ class MedicalRuntime:
         for role,agents in self.agents.items():
             for agent in agents: self.monitor.register_agent(agent.instance, role)
         self.monitor.register_agent(self.risk_agent.instance, "risk_handoff", deterministic=True)
-        if settings.architecture not in {"multi_agent", SINGLE_AGENT}:
-            raise ValueError("invalid_architecture")
-        if settings.single_agent_attempts not in {1, 2}:
-            raise ValueError("invalid_single_agent_attempts")
-        self.single = (SingleAgent(model, index, self.tools, self.registry, self.appointments, settings.appointment_timezone,
-                                   open_tools=settings.single_agent_open_tools)
-                       if settings.architecture == SINGLE_AGENT else None)
-        if self.single:
-            self.monitor.register_agent(SINGLE_INSTANCE, SINGLE_AGENT)
+        # Who answers a non-critical turn: Turn in, TurnResult out. The product plans roles, runs them and merges;
+        # the architecture comparison attaches its single-agent baseline here instead.
+        self.answerer = self._orchestrate
 
     async def _execute(self, assignment, decision, question, understanding, context, risk, skill_snapshot, tool_budget):
         role = assignment.role
@@ -205,29 +226,29 @@ class MedicalRuntime:
             event("skills_snapshot", snapshot_id=skill_snapshot.snapshot_id, common_hash=skill_snapshot.common_hash)
             risk = self.risk.screen(question.text, scope)
             event("risk", level=risk.level, reasons=risk.reasons, version=risk.rule_version)
-            pending_actions = []
+            storage = "skipped"
             if risk.level == "CRITICAL":
                 self._followup_event("urgent", followup)
-                understanding, decision, answer, refs, agent_results = self._urgent(question, risk, skill_snapshot, tool_budget, log)
-                degraded, storage = False, "skipped"
+                understanding, result = self._urgent(question, risk, skill_snapshot, tool_budget, log)
             elif "urgent_hint_cleared:correction" in risk.reasons:
                 # Like the alarm itself, lifting it touches no model, retrieval or storage; the user asks again afresh.
-                understanding, decision, answer, refs, agent_results = self._clarified(question, log)
-                degraded, storage = False, "skipped"
+                understanding, result = self._clarified(question, log)
             else:
-                understanding, decision, answer, refs, agent_results, degraded, storage, risk, pending_actions = await self._consult(
+                understanding, result, storage, risk = await self._consult(
                     question, resolution, scope, risk, skill_snapshot, tool_budget, log, followup)
+            decision = result.decision
             self.monitor.observe_execution(decision, log.request_id)
             event("routing_execution", primary=decision.primary_agent, status=decision.collaboration_status, monitor_fallback=decision.monitor_fallback,
                 assignments=[{"task_id":assignment.task_id, "role":assignment.role, "status":assignment.status,
                               "selected_instance":assignment.selected_instance, "attempts":[attempt.model_dump() for attempt in assignment.attempts]}
                              for assignment in decision.assignments], fallbacks=[fallback.model_dump() for fallback in decision.fallbacks])
             reply = Reply(request_id=log.request_id, session=session, intent=understanding, risk=risk,
-                          primary_agent=decision.primary_agent, supporting_agents=decision.supporting_agents, answer=answer, references=refs,
-                          degraded=degraded, storage=storage, usage=log.usage(), elapsed_ms=round(log.elapsed,1),
-                          agent_results=agent_results, subject=question.subject, routing_decision=decision,
-                          pending_actions=pending_actions, recalled_summaries=recalled_days(log))
-            self.monitor.finish(log, degraded)
+                          primary_agent=decision.primary_agent, supporting_agents=decision.supporting_agents,
+                          answer=result.answer, references=result.references,
+                          degraded=result.degraded, storage=storage, usage=log.usage(), elapsed_ms=round(log.elapsed,1),
+                          agent_results=result.agent_results, subject=question.subject, routing_decision=decision,
+                          pending_actions=result.pending_actions, recalled_summaries=recalled_days(log))
+            self.monitor.finish(log, result.degraded)
             return reply
         finally:
             CURRENT.reset(token)
@@ -249,7 +270,7 @@ class MedicalRuntime:
         assignment.attempts.append(ExecutionAttempt(instance=result.instance, status="ok"))
         result.execution.task_id = assignment.task_id
         decision.collaboration_status = "single"
-        return understanding, decision, result.answer, [], [result.execution]
+        return understanding, TurnResult(decision, result.answer, agent_results=[result.execution])
 
     def _clarified(self, question, log):
         understanding = Understanding(primary=Intent.GENERAL, confidence=1, subject=question.subject, turn_id=log.request_id)
@@ -260,14 +281,14 @@ class MedicalRuntime:
         answer = Answer(text=("已按你的说明解除上一轮的急症提示，这一轮没有处理其他内容。需要咨询的话，请把问题重新发一次；"
                               f"如果这些情况正在发生，请立即联系{self.settings.emergency_phone}或就近急诊。"),
                         limitations=["只根据你的说明解除提示，没有作医学判断。"])
-        return understanding, decision, answer, [], []
+        return understanding, TurnResult(decision, answer)
 
     @staticmethod
     def _followup_event(reason: str, followup) -> None:
         event("appointment_followup", reason=reason, **({"followup_kind":followup.kind} if followup is not None else {}))
 
     async def _consult(self, question, resolution, scope, risk, skill_snapshot, tool_budget, log, followup=None):
-        """Memory read, understanding, routing, role execution, merge and memory write for a non-critical turn."""
+        """Memory read, understanding, the answerer and memory write for a non-critical turn."""
         owner = None if resolution.ambiguous else owner_key(question.user, question.subject)
         state, storage, degraded = await self._read_state(scope, question.text, resolution.ambiguous, owner)
         if not self.settings.preview and self.index.collection is None:
@@ -278,31 +299,16 @@ class MedicalRuntime:
             risk = self.risk.escalate(scope)
             event("risk", level=risk.level, reasons=risk.reasons, version=risk.rule_version)
             self._followup_event("urgent", followup)
-            return (*self._urgent(question, risk, skill_snapshot, tool_budget, log), False, "skipped", risk, [])
+            understanding, result = self._urgent(question, risk, skill_snapshot, tool_budget, log)
+            return understanding, result, "skipped", risk
         store = self.appointments
         appointment, reason = appointment_request(text=question.text, understanding=understanding, followup=followup,
             subject=question.subject, now=store.now(), catalog=store.catalog, today=store.today())
         self._followup_event(reason, followup)
         state = {**state, "grounded_fields":{name:fact.model_dump(mode="json") for name,fact in understanding.entities.items()}}
         state["consultation_need"] = need[0]
-        single_pending = []
-        if self.single:
-            decision, answer, refs, agent_results, outputs, single_pending = await self._single_agent(
-                question, understanding, state, risk, skill_snapshot, tool_budget, log, appointment)
-            degraded = degraded or decision.collaboration_status == "failed"
-        else:
-            decision = self.planner.plan(question.text, understanding, self.agents, self.monitor, consultation_need=need[0],
-                                         appointment=appointment)
-            event("routing", **self.planner.trace(decision))
-            self.monitor.observe_routing(decision, log.request_id)
-            execution_started = time.perf_counter()
-            outputs = await self._dispatch(decision, question, understanding, {**state, "appointment_request":appointment},
-                                           risk, skill_snapshot, tool_budget)
-            remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
-            answer, refs, routing_degraded = await compose(decision, outputs, understanding,
-                self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
-            degraded = degraded or routing_degraded
-            agent_results = [outputs[assignment.role].execution for assignment in decision.assignments if assignment.role in outputs]
+        result = await self.answerer(Turn(question, understanding, state, risk, skill_snapshot, tool_budget, appointment, log.request_id))
+        decision, answer, outputs = result.decision, result.answer, result.outputs
         if decision.primary_agent in outputs:
             understanding.missing_fields = outputs[decision.primary_agent].execution.missing_fields
         if risk.level == "CAUTION":
@@ -315,46 +321,27 @@ class MedicalRuntime:
         except Exception as exc:
             degraded, storage = True, "degraded"
             event("memory_error", stage="write", error=type(exc).__name__)
-        booking = outputs.get("appointment")
-        # The card is the only way to confirm, so an answered draft reaches the reply whatever the merge did.
-        pending_actions = single_pending or (booking.pending_actions if booking is not None and booking.execution.status == "answered" else [])
-        return understanding, decision, answer, refs, agent_results, degraded, storage, risk, pending_actions
+        result.degraded = result.degraded or degraded
+        return understanding, result, storage, risk
 
-    async def _single_agent(self, question, understanding, state, risk, skill_snapshot, tool_budget, log, appointment=None):
-        """Comparison baseline: one agent answers the whole turn; no routing, role contracts or merge."""
-        assignment = AgentAssignment(task_id="task:single", role=SINGLE_AGENT, intent=understanding.primary,
-            goal="单个 Agent 完成本轮全部信息任务。", input_text=question.text,
-            instances=[InstanceChoice(instance=SINGLE_INSTANCE, health=1, samples=0)])
-        decision = RoutingDecision(primary_agent=SINGLE_AGENT, routing_reason="single_agent_baseline", routing_confidence=1,
-                                   assignments=[assignment], collaboration_status="single")
-        event("routing", primary=SINGLE_AGENT, support=[], reason=decision.routing_reason, confidence=1,
-              monitor_fallback=[], confidence_kind="engineering_score", candidates=[])
-        for _ in range(self.settings.single_agent_attempts):
-            started = time.perf_counter()
-            try:
-                answer, refs, execution, pending = await asyncio.wait_for(self.single.run(question, understanding, state, risk,
-                    skill_snapshot, tool_budget, appointment), self.settings.agent_timeout)
-                break
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                status = "timeout" if isinstance(exc, TimeoutError) else "failed"
-                diagnostic = {"error_code":exc.code, "error_stage":exc.stage} if isinstance(exc, AgentOutputError) else {}
-                assignment.attempts.append(ExecutionAttempt(instance=SINGLE_INSTANCE, status=status, error=type(exc).__name__, **diagnostic))
-                self.monitor.record(SINGLE_INSTANCE, False, (time.perf_counter()-started)*1000, status=status, error=type(exc).__name__)
-                event("agent", instance=SINGLE_INSTANCE, task_id=assignment.task_id, status=status, error=type(exc).__name__, **diagnostic)
-        else:
-            assignment.status = "failed"
-            decision.collaboration_status = "failed"
-            decision.fallbacks.append(RoutingFallback(role=SINGLE_AGENT, reason=status, action="transparent_guidance"))
-            answer = Answer(text="当前未能完成可靠回答。请稍后重试，或携带问题和相关资料咨询医护人员。",
-                            limitations=["未作医学判断，也未执行医院操作或人工连接。"])
-            return decision, answer, [], [], {}, []
-        assignment.selected_instance, assignment.status = SINGLE_INSTANCE, execution.status
-        assignment.attempts.append(ExecutionAttempt(instance=SINGLE_INSTANCE, status="ok"))
-        self.monitor.record(SINGLE_INSTANCE, True, (time.perf_counter()-started)*1000)
-        event("agent", instance=SINGLE_INSTANCE, task_id=assignment.task_id, status="ok")
-        return decision, answer, refs, [execution], {}, pending
+    async def _orchestrate(self, turn: Turn) -> TurnResult:
+        """The product's answerer: plan the roles, run them in parallel and merge their sections."""
+        question, understanding = turn.question, turn.understanding
+        decision = self.planner.plan(question.text, understanding, self.agents, self.monitor,
+                                     consultation_need=turn.state["consultation_need"], appointment=turn.appointment)
+        event("routing", **self.planner.trace(decision))
+        self.monitor.observe_routing(decision, turn.request_id)
+        execution_started = time.perf_counter()
+        outputs = await self._dispatch(decision, question, understanding, {**turn.state, "appointment_request":turn.appointment},
+                                       turn.risk, turn.skill_snapshot, turn.tool_budget)
+        remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
+        answer, references, degraded = await compose(decision, outputs, understanding,
+            self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
+        booking = outputs.get("appointment")
+        return TurnResult(decision, answer, references,
+            [outputs[assignment.role].execution for assignment in decision.assignments if assignment.role in outputs], outputs,
+            # The card is the only way to confirm, so an answered draft reaches the reply whatever the merge did.
+            booking.pending_actions if booking is not None and booking.execution.status == "answered" else [], degraded)
 
     async def _read_state(self, scope, text, ambiguous, owner=None):
         """Session state for this scope; a storage failure degrades to an empty state instead of failing the turn."""

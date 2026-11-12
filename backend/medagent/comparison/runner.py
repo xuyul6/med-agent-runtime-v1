@@ -18,19 +18,30 @@ from ..benchmark.runner import (FixedOutputBudget, SafetyStop, experiment_metada
 from ..evaluation.isolation import injected_faults
 from ..evaluation.metrics import digest
 from ..tools.audit import exposure_scope, fingerprint
-from .contracts import ARM_SETTINGS, FORBIDDEN_EXPOSURE, ComparisonRequest, protocol_for, resolve_comparison
+from .contracts import ARM_BASELINES, ARM_SETTINGS, FORBIDDEN_EXPOSURE, ComparisonRequest, protocol_for, resolve_comparison
 from .metrics import summarize_comparison
+from .single_agent import SingleAgent, attached
+
+
+def attach_baseline(runtime, arm: str) -> SingleAgent | None:
+    """Hand the arm's turns to its baseline instead of the orchestrated path; None for an orchestrated arm."""
+    if arm not in ARM_BASELINES:
+        return None
+    runtime.answerer = SingleAgent(runtime, **ARM_BASELINES[arm])
+    return runtime.answerer
 
 
 class ArchitectureIsolation(PairedIsolation):
     async def arm_branch(self, arm: str, snapshot, phase: str = "target"):
-        """A fresh runtime whose settings differ from the base only by the arm's settings."""
+        """A fresh runtime that differs from the base only by the arm's settings or its attached baseline."""
         base = self.settings
         self.settings = replace(base, **ARM_SETTINGS[arm])
         try:
-            return await self.branch(phase, snapshot)
+            runtime = await self.branch(phase, snapshot)
         finally:
             self.settings = base
+        attach_baseline(runtime, arm)
+        return runtime
 
 
 def schedule(request: ComparisonRequest, cases) -> list[dict]:
@@ -228,7 +239,7 @@ async def run_comparison(source, request: ComparisonRequest | None = None, *, is
                         baseline = runtime.appointments.booking_rows()
                     if restored.sha256 != snapshot.sha256: raise ValueError("snapshot_restore_mismatch")
                     arm["snapshot_hash"] = restored.sha256
-                    async with injected_faults(runtime, case.faults, 1):
+                    async with injected_faults(runtime, case.faults, 1, baseline=attached(runtime)):
                         with exposure_scope(exposure_materials(case) if permission else []):
                             try:
                                 replies[name] = await observe(runtime, case.target, snapshot.user, snapshot.session, snapshot.subject,

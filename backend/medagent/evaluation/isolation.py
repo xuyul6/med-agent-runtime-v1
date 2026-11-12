@@ -7,7 +7,6 @@ import tempfile
 from .budget import BudgetedModel, judge_source
 from .contracts import GENERATION_FAULTS
 from ..agents.output_validation import AgentOutputError
-from ..agents.single import DOMAIN_ROLES, SINGLE_AGENT
 from ..appointments.store import AppointmentStore
 from ..memory import SessionMemory
 from ..core.observability import event
@@ -130,12 +129,13 @@ class EvaluationIsolation:
 
 
 class FaultModel:
-    def __init__(self, base, kinds, domain=None): self.base,self.kinds,self.domain,self.fired_once = base,kinds,domain,False
+    def __init__(self, base, kinds, stages=None):
+        """stages: the generations a domain fault hits; None hits every generation."""
+        self.base,self.kinds,self.stages,self.fired_once = base,kinds,stages,False
 
     def generation_fails(self, stage):
-        """A domain fault hits that role, and the single agent, whose one generation has to write every domain."""
         if not self.kinds & GENERATION_FAULTS or not stage.startswith("agent_"): return None
-        if self.domain is not None and stage not in {"agent_"+SINGLE_AGENT, "agent_"+DOMAIN_ROLES[self.domain]}: return None
+        if self.stages is not None and stage not in self.stages: return None
         if "generation_failure_always" in self.kinds: return "generation_failure_always"
         if self.fired_once: return None
         self.fired_once = True
@@ -159,10 +159,13 @@ class FaultModel:
 
 
 @asynccontextmanager
-async def injected_faults(runtime, faults, turn):
+async def injected_faults(runtime, faults, turn, baseline=None):
+    """baseline: an answerer attached in place of the roles (the comparison's single agent). It calls the model itself,
+    and its one generation, named by its .stage, writes every domain."""
     kinds = {fault.kind for fault in faults if fault.turn is None or fault.turn == turn}
     available,collection,registry = runtime.memory.available,runtime.index.collection,runtime.tools.registry
-    base_model,agent_models = runtime.model,[(agent,agent.model) for agents in runtime.agents.values() for agent in agents]
+    callers = [agent for agents in runtime.agents.values() for agent in agents]+([baseline] if baseline is not None else [])
+    base_model,agent_models = runtime.model,[(caller,caller.model) for caller in callers]
     memory_model,index_model,router_model = runtime.memory.model,runtime.index.model,runtime.router.model
     try:
         if "memory_unavailable" in kinds: runtime.memory.available = False
@@ -182,14 +185,15 @@ async def injected_faults(runtime, faults, turn):
             runtime.planner.tools = runtime.tools.registry
         if base_model is not None:
             domain = next((fault.domain for fault in faults if fault.kind in GENERATION_FAULTS),None)
-            wrapper = FaultModel(base_model,kinds,domain)
+            # A domain fault hits the role that owns the domain, and a baseline that writes every domain at once.
+            stages = None if domain is None else {"agent_"+role for role,profile in runtime.registry.profiles.items()
+                if domain in profile.knowledge_domains} | ({baseline.stage} if baseline is not None else set())
+            wrapper = FaultModel(base_model,kinds,stages)
             runtime.model = runtime.memory.model = runtime.index.model = runtime.router.model = wrapper
             for agent,_ in agent_models: agent.model = wrapper
-            if runtime.single: runtime.single.model = wrapper
         yield kinds
     finally:
         runtime.memory.available,runtime.index.collection = available,collection
         runtime.tools.registry = runtime.planner.tools = registry
         runtime.model, runtime.memory.model, runtime.index.model,runtime.router.model = base_model,memory_model,index_model,router_model
         for agent,model in agent_models: agent.model = model
-        if runtime.single: runtime.single.model = base_model

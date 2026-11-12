@@ -1,15 +1,14 @@
 """The single agent retries a failed turn once, matching the second instance a role gets."""
 import asyncio
-from dataclasses import replace
 
 import pytest
 
 from support.comparison import RehearsalModel
 from support.harness import fixture, run
-from medagent.comparison.contracts import ARM_SETTINGS
+from medagent.comparison.contracts import ARM_BASELINES
+from medagent.comparison.single_agent import SingleAgent
 from medagent.core.contracts import Question
 from medagent.memory import scope_key
-from medagent.runtime import MedicalRuntime
 
 
 class Flaky(RehearsalModel):
@@ -26,9 +25,9 @@ class Flaky(RehearsalModel):
 
 def single_runtime(attempts, fail_first, **kwargs):
     async def build():
-        base = await fixture(Flaky(fail_first, **kwargs))
-        settings = replace(base.settings, architecture="single_agent", single_agent_attempts=attempts)
-        return MedicalRuntime(settings, base.model, base.vectors, base.index, base.memory)
+        runtime = await fixture(Flaky(fail_first, **kwargs))
+        runtime.answerer = SingleAgent(runtime, attempts=attempts)
+        return runtime
     return run(build())
 
 
@@ -86,4 +85,4 @@ def test_attempts_outside_one_or_two_are_rejected():
 
 
 def test_the_comparison_arm_retries_once():
-    assert ARM_SETTINGS["single_agent"]["single_agent_attempts"] == 2
+    assert ARM_BASELINES["single_agent"]["attempts"] == 2

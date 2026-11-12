@@ -3,27 +3,34 @@
 It keeps everything the orchestrated path shares (risk gate, memory, intent understanding, retrieval filters,
 model, tool budget, citation and boundary checks) and removes what is being compared: routing, role-specific
 contracts, parallel role execution and merging. One prompt carries the shared rules and every role's rules.
+
+The product runtime does not know this module. The comparison attaches a SingleAgent to a runtime as its
+answerer; the shared steps before and after the answer stay the runtime's own.
 """
+import asyncio
 import json
+import time
 from dataclasses import replace
 from pydantic import ValidationError
-from ..core.contracts import AgentExecution, Intent
+from ..core.contracts import (AgentAssignment, AgentExecution, Answer, ExecutionAttempt, InstanceChoice, Intent, RoutingDecision,
+                              RoutingFallback)
 from ..tools.audit import appointment_attempts, observe_model_input
 from ..core.observability import event
-from ..core.provider import object_from_text
+from ..core.provider import object_from_text, register_stage, strict_schema
 from ..tools.contracts import LookupArguments
 from ..tools.registry import ToolBudgetExceeded, ToolContext
 from ..appointments.params import WINDOW_NAMES
 from ..appointments.preparation import followup_for, prepare
 from ..appointments.resolution import pending_from_issued
 from ..appointments.store import subject_label
-from .contracts import AppointmentInput
+from ..agents.contracts import AppointmentInput
 from ..understanding.conversation import role_details
-from .checks import checked_single_answer, explicit_reference_request, report_range_source_quotes
-from .execution import (EVIDENCE_MISSING_NOTICE, REPORT_RANGE_INSTRUCTION, REPORT_RANGE_REPAIR, ROLE_DATA_PREFACE,
-                        model_blocks)
-from .output_validation import AgentOutputError
-from .profiles import DEFAULT_REGISTRY
+from ..agents.checks import (add_urgency_notice, check_report_range_claims, checked_answer, explicit_reference_request,
+                             insert_range_sentences, report_range_source_quotes, unmatched_urgency_sentences)
+from ..agents.execution import (EVIDENCE_MISSING_NOTICE, REPORT_RANGE_INSTRUCTION, REPORT_RANGE_REPAIR, ROLE_DATA_PREFACE,
+                                model_blocks)
+from ..agents.output_validation import AgentOutputError
+from ..runtime import Turn, TurnResult
 
 SINGLE_AGENT = "single_agent"
 INSTANCE = "single_agent.1"
@@ -42,12 +49,86 @@ OPEN_TOOLS = ("open_search_slots", "open_find_bookings", "open_propose_appointme
 OPEN_RULE = ("\n预约工具每轮都可用，查不查、约不约由你决定；open_propose_* 只能用本轮查到的编号，每轮最多 3 份草稿。"
              "草稿只是待确认，用户点击确认后才会提交。")
 
+# The baseline returns a plain answer, not a role contract. Like the booking role, the round that may draft runs
+# without an output schema: under one the model answered without calling the tool.
+register_stage("agent_"+SINGLE_AGENT, strict_schema(Answer))
+register_stage("agent_"+SINGLE_AGENT+"_action", None)
+
+
+def checked_single_answer(data: dict, references: dict, *, visit_task: bool, evidence_requested: bool) -> Answer:
+    """The role path's answer-level evidence checks; its payload checks have no counterpart in a plain answer."""
+    answer = checked_answer(data, references)
+    if any(not references[key].approved for key in answer.reference_keys):
+        raise AgentOutputError("reference_outside_role_scope",["reference_keys"])
+    answer.text, answer.reference_keys, inserted = insert_range_sentences(answer.text, answer.reference_keys, references)
+    if inserted:
+        event("report_range_inserted", role="single_agent", count=inserted)
+    check_report_range_claims(answer.text, answer.reference_keys, references, "text")
+    if visit_task and unmatched_urgency_sentences([answer.text, *answer.questions, *answer.next_steps, *answer.limitations],
+                                                  answer.reference_keys, references):
+        add_urgency_notice(answer.limitations)
+    # Nothing retrieved: saying so honestly is the correct answer, as in the role path's source gap.
+    if evidence_requested and references and not answer.reference_keys:
+        raise AgentOutputError("requested_evidence_not_returned",["reference_keys"])
+    return answer
+
+
+def attached(runtime) -> "SingleAgent | None":
+    """The baseline answering for this runtime, or None on the orchestrated path."""
+    return runtime.answerer if isinstance(runtime.answerer, SingleAgent) else None
+
 
 class SingleAgent:
-    def __init__(self, model, index, tools, registry=DEFAULT_REGISTRY, appointments=None, timezone: str = "Asia/Shanghai",
-                 open_tools: bool = False):
-        self.model, self.index, self.tools, self.registry = model, index, tools, registry
-        self.appointments, self.timezone, self.open_tools = appointments, timezone, open_tools
+    # The one generation that writes every domain; a fault on any domain reaches it.
+    stage = "agent_"+SINGLE_AGENT
+
+    def __init__(self, runtime, attempts: int = 1, open_tools: bool = False):
+        """Reads the model, index, tools, profiles and booking store of the runtime it will answer for.
+
+        attempts: 2 retries a failed turn once, matching the second instance a role gets."""
+        if attempts not in {1, 2}:
+            raise ValueError("invalid_single_agent_attempts")
+        self.runtime, self.attempts, self.open_tools = runtime, attempts, open_tools
+        self.model, self.index, self.tools, self.registry = runtime.model, runtime.index, runtime.tools, runtime.registry
+        self.appointments, self.timezone = runtime.appointments, runtime.settings.appointment_timezone
+        runtime.monitor.register_agent(INSTANCE, SINGLE_AGENT)
+
+    async def __call__(self, turn: Turn) -> TurnResult:
+        """Answer the turn as one assignment; no routing, role contracts or merge."""
+        question, understanding, monitor = turn.question, turn.understanding, self.runtime.monitor
+        assignment = AgentAssignment(task_id="task:single", role=SINGLE_AGENT, intent=understanding.primary,
+            goal="单个 Agent 完成本轮全部信息任务。", input_text=question.text,
+            instances=[InstanceChoice(instance=INSTANCE, health=1, samples=0)])
+        decision = RoutingDecision(primary_agent=SINGLE_AGENT, routing_reason="single_agent_baseline", routing_confidence=1,
+                                   assignments=[assignment], collaboration_status="single")
+        event("routing", primary=SINGLE_AGENT, support=[], reason=decision.routing_reason, confidence=1,
+              monitor_fallback=[], confidence_kind="engineering_score", candidates=[])
+        for _ in range(self.attempts):
+            started = time.perf_counter()
+            try:
+                answer, refs, execution, pending = await asyncio.wait_for(self.run(question, understanding, turn.state, turn.risk,
+                    turn.skill_snapshot, turn.tool_budget, turn.appointment), self.runtime.settings.agent_timeout)
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                status = "timeout" if isinstance(exc, TimeoutError) else "failed"
+                diagnostic = {"error_code":exc.code, "error_stage":exc.stage} if isinstance(exc, AgentOutputError) else {}
+                assignment.attempts.append(ExecutionAttempt(instance=INSTANCE, status=status, error=type(exc).__name__, **diagnostic))
+                monitor.record(INSTANCE, False, (time.perf_counter()-started)*1000, status=status, error=type(exc).__name__)
+                event("agent", instance=INSTANCE, task_id=assignment.task_id, status=status, error=type(exc).__name__, **diagnostic)
+        else:
+            assignment.status = "failed"
+            decision.collaboration_status = "failed"
+            decision.fallbacks.append(RoutingFallback(role=SINGLE_AGENT, reason=status, action="transparent_guidance"))
+            answer = Answer(text="当前未能完成可靠回答。请稍后重试，或携带问题和相关资料咨询医护人员。",
+                            limitations=["未作医学判断，也未执行医院操作或人工连接。"])
+            return TurnResult(decision, answer, degraded=True)
+        assignment.selected_instance, assignment.status = INSTANCE, execution.status
+        assignment.attempts.append(ExecutionAttempt(instance=INSTANCE, status="ok"))
+        monitor.record(INSTANCE, True, (time.perf_counter()-started)*1000)
+        event("agent", instance=INSTANCE, task_id=assignment.task_id, status="ok")
+        return TurnResult(decision, answer, refs, [execution], pending_actions=pending)
 
     async def _booking(self, appointment, question, understanding, risk, budget):
         """The same checks and follow-up record as the booking role; the difference is that this context also reads everything else."""

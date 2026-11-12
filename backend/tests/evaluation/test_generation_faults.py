@@ -7,6 +7,7 @@ from support.comparison import RehearsalModel
 from support.harness import fixture, run
 from medagent.comparison.contracts import ARM_SETTINGS, ComparisonCase, ComparisonRequest
 from medagent.comparison.metrics import summarize_comparison
+from medagent.comparison.runner import attach_baseline
 from medagent.core.contracts import Intent, Question
 from medagent.evaluation.contracts import FaultSpec
 from medagent.evaluation.isolation import injected_faults
@@ -19,7 +20,7 @@ def faulted_chat(kind, domain, arm="multi_agent"):
     async def scenario():
         base = await fixture(RehearsalModel())
         runtime = MedicalRuntime(replace(base.settings, **ARM_SETTINGS[arm]), base.model, base.vectors, base.index, base.memory)
-        async with injected_faults(runtime, [FaultSpec(kind=kind, domain=domain)], 1):
+        async with injected_faults(runtime, [FaultSpec(kind=kind, domain=domain)], 1, baseline=attach_baseline(runtime, arm)):
             reply = await runtime.chat(Question(text=COMPOUND))
         return reply, next(row for row in reversed(runtime.monitor.traces) if row["request_id"] == reply.request_id)
     return run(scenario())

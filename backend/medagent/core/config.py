@@ -38,11 +38,6 @@ class Settings:
     memory_timeout: float = 20
     episode_ttl: float = 7*86400
     supporting_agent_limit: int = 2
-    # "single_agent" is the comparison baseline only; the workbench and default runs use "multi_agent".
-    architecture: str = "multi_agent"
-    # Comparison only: the single agent holds every booking tool on every turn, with no request admission.
-    single_agent_open_tools: bool = False
-    single_agent_attempts: int = 1
     agent_concurrency: int = 2
     collaboration_timeout: float = 120
     monitor_interval: float = 10
@@ -109,8 +104,6 @@ class Settings:
             memory_timeout=float(env.get("MAR_MEMORY_TIMEOUT", "20")),
             episode_ttl=float(env.get("MAR_EPISODE_TTL_SECONDS", str(7*86400))),
             supporting_agent_limit=int(env.get("MAR_SUPPORTING_AGENT_LIMIT", "2")),
-            architecture=env.get("MAR_ARCHITECTURE", "multi_agent"),
-            single_agent_attempts=int(env.get("MAR_SINGLE_AGENT_ATTEMPTS", "1")),
             agent_concurrency=int(env.get("MAR_AGENT_CONCURRENCY", "2")),
             collaboration_timeout=float(env.get("MAR_COLLABORATION_TIMEOUT", "120")),
             # The app keeps bookings across restarts in an ignored local file; tests use Settings() and stay in memory.
