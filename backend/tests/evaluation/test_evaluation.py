@@ -16,7 +16,7 @@ from medagent.evaluation.isolation import EvaluationIsolation
 from medagent.evaluation.metrics import BaselineError, BaselineStore, classification_metrics, compare_baseline
 from medagent.memory import SessionMemory
 from medagent.core.observability import CURRENT, RunLog, event
-from support.harness import fixture, run
+from support.harness import captured_deadlines, expire, fixture, run
 from support.evaluation import JudgeModel
 
 
@@ -324,14 +324,18 @@ def test_invalid_provider_usage_stays_unknown(tokens):
     assert log.usage()['input_tokens'] is None and log.usage()['measurement'] == 'unavailable'
 
 
-def test_deadline_preserves_partial_turn_results_and_cleans_up_isolated_state():
+def test_deadline_preserves_partial_turn_results_and_cleans_up_isolated_state(monkeypatch):
+    deadlines = captured_deadlines(monkeypatch)
     async def scenario():
         class Slow(JudgeModel):
             async def json(self,stage,system,content,budget=900):
-                if stage == 'evaluation_judge': await asyncio.sleep(10)
+                if stage == 'evaluation_judge':
+                    # The run's deadline passes once the first turn has its reply, however long the setup took.
+                    expire(deadlines[0])
+                    await asyncio.sleep(10)
                 return await super().json(stage,system,content,budget)
         runtime = await fixture(Slow())
-        result = await evaluate(runtime,request(['你好','谢谢'],limits={'timeout_seconds':.5}))
+        result = await evaluate(runtime,request(['你好','谢谢'],limits={'timeout_seconds':60}))
         assert not result['complete'] and result['stop_reason'] == 'timeout'
         assert result['cases'][0]['turns'][0]['reply']
         assert result['cases'][0]['not_run_turns'] == [2]

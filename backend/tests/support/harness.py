@@ -24,6 +24,24 @@ def role_data(messages) -> dict:
     return json.loads(messages[0]["content"].split("\n", 1)[1])
 
 
+def captured_deadlines(monkeypatch) -> list:
+    """Collect the deadlines a runner opens with asyncio.timeout, so a fake model can end one with expire().
+
+    A short real deadline also has to outlast the temporary store setup before the first call, and that takes
+    several times longer on a cold or slow machine: the test then fails although the runner behaved correctly."""
+    opened, real = [], asyncio.timeout
+    def recorded(delay):
+        opened.append(real(delay))
+        return opened[-1]
+    monkeypatch.setattr(asyncio, "timeout", recorded)
+    return opened
+
+
+def expire(deadline) -> None:
+    """Make an open deadline pass now; the task is cancelled at its next await."""
+    deadline.reschedule(asyncio.get_running_loop().time())
+
+
 class ToolValue(Contract):
     value: str
 

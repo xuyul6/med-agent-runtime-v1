@@ -15,7 +15,7 @@ from medagent.core.contracts import Question
 from medagent.evaluation.budget import BudgetedModel, EvaluationBudgetExceeded
 from medagent.evaluation.metrics import digest
 from medagent.core.observability import event
-from support.harness import run, fixture
+from support.harness import captured_deadlines, expire, run, fixture
 from support.medication import EvidenceModel
 
 
@@ -257,16 +257,19 @@ def test_duplicate_scenarios_cannot_inflate_sample_size_by_renaming_ids():
     with pytest.raises(ValidationError,match="duplicate_scenario_content"): BenchmarkRequest.model_validate(raw)
 
 
-def test_deadline_during_target_keeps_partial_call_usage_and_unrun_arms():
+def test_deadline_during_target_keeps_partial_call_usage_and_unrun_arms(monkeypatch):
+    deadlines = captured_deadlines(monkeypatch)
     class Slow(CountingModel):
         async def message(self,*args,**kwargs):
             event("model",stage=args[0],model="synthetic",input_tokens=11,output_tokens=2,
                   cache_read_input_tokens=0,cache_creation_input_tokens=0)
-            await asyncio.sleep(.5)
+            # The run's deadline passes while this call is in flight, however long the setup before it took.
+            expire(deadlines[0])
+            await asyncio.sleep(10)
             return await super().message(*args,**kwargs)
     async def scenario():
         request = small_request(cases=[{"id":"deadline","target":{"message":"整理就医资料。"}}],
-                                cache_conditions=["cold"],limits={"timeout_seconds":.3})
+                                cache_conditions=["cold"],limits={"timeout_seconds":60})
         report = await run_benchmark(await fixture(Slow()),request)
         assert report["stop_reason"] == "timeout" and not report["complete"]
         arms = [arm for pair in report["pairs"] for arm in pair["arms"].values()]
