@@ -17,7 +17,7 @@ from ..knowledge.retrieval import ReferenceIndex, has_query_overlap, visit_scope
 from ..understanding.medications import canonical
 from ..understanding.conversation import has_visit_context
 from .contracts import (
-    OpenSlotQuery, BookingSearchResult, ChecklistResult, ContextResult, DraftResult, EmptyArguments, FieldCheck, HandoffSummary, LookupArguments,
+    BookingSearchResult, ChecklistResult, ContextResult, DraftResult, EmptyArguments, FieldCheck, HandoffSummary, LookupArguments,
     LookupResult, MedicationScopeResult, ProposeAppointmentArguments, ProposeCancellationArguments, ReferenceScope,
     ReferenceSelection, SlotSearchResult, SlotView,
 )
@@ -288,60 +288,6 @@ def propose_cancellation(context: ToolContext, arguments: ProposeCancellationArg
                     lambda **who: context.appointments.propose_cancel(**who, appointment_id=arguments.appointment_id))
 
 
-OPEN_DRAFT_LIMIT = 3
-
-
-def open_search_slots(context: ToolContext, arguments: OpenSlotQuery) -> dict:
-    """Open comparison arm: the model chooses what to search; every slot found this turn becomes proposable."""
-    from ..appointments.params import parse_day, parse_window
-    store = context.appointments
-    catalog, today = store.catalog, store.today()
-    hospitals = catalog.match_hospital(arguments.institution) if arguments.institution else []
-    day, window = parse_day(arguments.appointment_date, today), parse_window(arguments.time_window)
-    if day.state != "valid" or window.state == "invalid" or not catalog.bookable(day.value, today):
-        return {"slots":[]}
-    found = [item for hospital, dept in catalog.match_department(arguments.department, hospitals[0].id if len(hospitals) == 1 else None)
-             for item in store.search(hospital.id, dept.id, day.value, window.value)]
-    context.slots.update({slot.slot_id:slot for slot, _ in found})
-    return {"slots":[slot_view(slot, remaining) for slot, remaining in found]}
-
-
-def open_find_bookings(context: ToolContext, arguments: EmptyArguments) -> dict:
-    from ..appointments.resolution import booking_view
-    store = context.appointments
-    found = [booking for booking in store.bookings(context.user, context.request.subject) if store.catalog.bookable(booking.slot.day, store.today())]
-    context.bookings.update({booking.appointment_id:booking for booking in found})
-    return {"bookings":[booking_view(booking).model_dump() for booking in found]}
-
-
-def _open_propose(context: ToolContext, candidate: str, candidates: dict, propose, already: set) -> dict:
-    from ..appointments.store import AppointmentError
-    if candidate not in candidates:
-        raise ToolInputError("slot_not_from_this_search" if candidates is context.slots else "booking_not_from_this_search")
-    if len(context.issued) >= OPEN_DRAFT_LIMIT:
-        raise ToolInputError("draft_limit_per_turn")
-    if candidate in already:
-        raise ToolInputError("slot_already_drafted")
-    try:
-        draft, token = propose(user=context.user, session=context.session, subject=context.request.subject)
-    except AppointmentError as error:
-        raise ToolInputError(error.code) from error
-    context.issued[draft.draft_id] = (draft, token)
-    return {"draft_id":draft.draft_id, "kind":draft.kind, "summary":draft.summary, "needs_user_confirmation":True}
-
-
-def open_propose_appointment(context: ToolContext, arguments: ProposeAppointmentArguments) -> dict:
-    return _open_propose(context, arguments.slot_id, context.slots,
-                         lambda **who: context.appointments.propose_create(**who, slot_id=arguments.slot_id),
-                         {draft.slot_id for draft, _ in context.issued.values() if draft.kind == "create"})
-
-
-def open_propose_cancellation(context: ToolContext, arguments: ProposeCancellationArguments) -> dict:
-    return _open_propose(context, arguments.appointment_id, context.bookings,
-                         lambda **who: context.appointments.propose_cancel(**who, appointment_id=arguments.appointment_id),
-                         {draft.appointment_id for draft, _ in context.issued.values() if draft.kind == "cancel"})
-
-
 SPECIALISTS = frozenset({"symptom_guide", "drug_reference", "report_explainer", "visit_guide"})
 DEFAULT_TOOLS = ToolRegistry([
     ToolSpec("inspect_request_context", "核对当前已验证的咨询对象和输入字段，不读取其他会话。", EmptyArguments, ContextResult,
@@ -368,15 +314,6 @@ DEFAULT_TOOLS = ToolRegistry([
              frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), propose_appointment, timeout=1, side_effect="propose_write", stage="action"),
     ToolSpec("propose_cancellation", "为本次查询得到的唯一已有预约生成待确认的取消草稿；不会写入，需用户点击确认。", ProposeCancellationArguments, DraftResult,
              frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), propose_cancellation, timeout=1, side_effect="propose_write", stage="action"),
-    # The open comparison arm only; no product role holds these.
-    ToolSpec("open_search_slots", "按科室、日期和时段查询模拟医院号源，可选医院。", OpenSlotQuery, SlotSearchResult,
-             frozenset({"single_agent_open"}), frozenset({Intent.APPOINTMENT}), open_search_slots, timeout=1, stage="retrieval"),
-    ToolSpec("open_find_bookings", "查询当前用户、当前咨询对象在模拟医院的全部可取消预约。", EmptyArguments, BookingSearchResult,
-             frozenset({"single_agent_open"}), frozenset({Intent.APPOINTMENT}), open_find_bookings, timeout=1, stage="retrieval"),
-    ToolSpec("open_propose_appointment", "为本轮查到的号源生成待确认的预约草稿，每轮最多 3 份；不会写入，需用户点击确认。", ProposeAppointmentArguments, DraftResult,
-             frozenset({"single_agent_open"}), frozenset({Intent.APPOINTMENT}), open_propose_appointment, timeout=1, side_effect="propose_write", stage="action"),
-    ToolSpec("open_propose_cancellation", "为本轮查到的已有预约生成待确认的取消草稿，每轮最多 3 份；不会写入，需用户点击确认。", ProposeCancellationArguments, DraftResult,
-             frozenset({"single_agent_open"}), frozenset({Intent.APPOINTMENT}), open_propose_cancellation, timeout=1, side_effect="propose_write", stage="action"),
     ToolSpec("create_handoff_summary", "同步整理已有风险规则标识，明确未连接人工，不调用外部依赖。", EmptyArguments, HandoffSummary,
              frozenset({"risk_handoff"}), frozenset({Intent.URGENT}), handoff_summary, timeout=1, stage="handoff"),
 ])

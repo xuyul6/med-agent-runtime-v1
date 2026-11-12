@@ -86,13 +86,6 @@ class BookingSearchResult(Contract):
     bookings: list[BookingView]
 
 
-class OpenSlotQuery(Contract):
-    department: str = Field(min_length=1, max_length=40)
-    appointment_date: str = Field(min_length=1, max_length=40)
-    time_window: str | None = Field(default=None, max_length=20)
-    institution: str | None = Field(default=None, max_length=40)
-
-
 class ProposeAppointmentArguments(Contract):
     slot_id: str = Field(min_length=1, max_length=120)
 

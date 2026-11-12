@@ -27,7 +27,8 @@ def test_tool_catalog_and_profile_whitelists_share_registered_definitions():
     with TestClient(create_app(Settings(developer_tools=True, preview=True), runtime)) as client:
         tools = client.get("/tools").json()["tools"]
         agents = client.get("/agents").json()["agents"]
-        assert len(tools) == 18                     # four open_* tools belong to the comparison arm only
+        # The comparison's open_* tools are not the product's: its open arm adds them to its own runtime.
+        assert len(tools) == 14 and not any(tool["name"].startswith("open_") for tool in tools)
         for tool in tools:
             assert tool["input_schema"]["additionalProperties"] is False
             assert tool["output_schema"]["additionalProperties"] is False

@@ -8,8 +8,8 @@ import re
 import uuid
 from ..core.observability import event
 
-PROPOSALS = {'propose_appointment': ('create', 'slot_id'), 'propose_cancellation': ('cancel', 'appointment_id'),
-             'open_propose_appointment': ('create', 'slot_id'), 'open_propose_cancellation': ('cancel', 'appointment_id')}
+# Tools that propose a booking change: (action, argument that names the target).
+PROPOSALS = {'propose_appointment': ('create', 'slot_id'), 'propose_cancellation': ('cancel', 'appointment_id')}
 PATTERNS = {'create': r'[a-z0-9-]+:[a-z0-9-]+:\d{4}-\d{2}-\d{2}:(?:am|pm)', 'cancel': r'apt-[0-9a-f]{12}'}
 MATERIALS = ContextVar('synthetic_exposure_materials', default=())
 SAFE_ERRORS = frozenset({'action_mismatch', 'slot_not_from_this_search', 'booking_not_from_this_search',
@@ -35,11 +35,12 @@ def outcome(error: BaseException | None) -> str:
 
 
 class AppointmentAttempts:
-    def __init__(self, calls: list[dict], role: str, instance: str, model_round: int, request_action: str | None):
+    def __init__(self, calls: list[dict], role: str, instance: str, model_round: int, request_action: str | None,
+                 proposals: dict = PROPOSALS):
         self.pending = {}
         for index, call in enumerate(calls):
-            if call.get('name') not in PROPOSALS: continue
-            action, key = PROPOSALS[call['name']]
+            if call.get('name') not in proposals: continue
+            action, key = proposals[call['name']]
             arguments = call.get('input')
             target = arguments.get(key) if isinstance(arguments, dict) else None
             valid = isinstance(target, str) and len(target) <= 120 and re.fullmatch(PATTERNS[action], target) is not None
@@ -56,8 +57,10 @@ class AppointmentAttempts:
 
 
 @contextmanager
-def appointment_attempts(calls: list[dict], role: str, instance: str, model_round: int, request_action: str | None):
-    attempts = AppointmentAttempts(calls, role, instance, model_round, request_action)
+def appointment_attempts(calls: list[dict], role: str, instance: str, model_round: int, request_action: str | None,
+                         proposals: dict = PROPOSALS):
+    """proposals: the proposal tools the caller holds; a caller with tools of its own passes them too."""
+    attempts = AppointmentAttempts(calls, role, instance, model_round, request_action, proposals)
     error = None
     try:
         yield attempts

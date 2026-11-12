@@ -14,11 +14,11 @@ from dataclasses import replace
 from pydantic import ValidationError
 from ..core.contracts import (AgentAssignment, AgentExecution, Answer, ExecutionAttempt, InstanceChoice, Intent, RoutingDecision,
                               RoutingFallback)
-from ..tools.audit import appointment_attempts, observe_model_input
+from ..tools.audit import PROPOSALS, appointment_attempts, observe_model_input
 from ..core.observability import event
 from ..core.provider import object_from_text, register_stage, strict_schema
 from ..tools.contracts import LookupArguments
-from ..tools.registry import ToolBudgetExceeded, ToolContext
+from ..tools.registry import ToolBudgetExceeded, ToolContext, ToolRegistry
 from ..appointments.params import WINDOW_NAMES
 from ..appointments.preparation import followup_for, prepare
 from ..appointments.resolution import pending_from_issued
@@ -31,6 +31,7 @@ from ..agents.execution import (EVIDENCE_MISSING_NOTICE, REPORT_RANGE_INSTRUCTIO
                                 model_blocks)
 from ..agents.output_validation import AgentOutputError
 from ..runtime import Turn, TurnResult
+from .open_tools import OPEN_PROPOSALS, OPEN_ROLE, OPEN_SPECS, OPEN_TOOLS
 
 SINGLE_AGENT = "single_agent"
 INSTANCE = "single_agent.1"
@@ -44,8 +45,6 @@ ROLES_IN_PROMPT = ("general", "symptom_guide", "drug_reference", "report_explain
 
 
 PROPOSE = {"create":"propose_appointment", "cancel":"propose_cancellation"}
-# The open comparison arm holds these on every turn, without request admission.
-OPEN_TOOLS = ("open_search_slots", "open_find_bookings", "open_propose_appointment", "open_propose_cancellation")
 OPEN_RULE = ("\n预约工具每轮都可用，查不查、约不约由你决定；open_propose_* 只能用本轮查到的编号，每轮最多 3 份草稿。"
              "草稿只是待确认，用户点击确认后才会提交。")
 
@@ -92,6 +91,10 @@ class SingleAgent:
         self.model, self.index, self.tools, self.registry = runtime.model, runtime.index, runtime.tools, runtime.registry
         self.appointments, self.timezone = runtime.appointments, runtime.settings.appointment_timezone
         runtime.monitor.register_agent(INSTANCE, SINGLE_AGENT)
+        if open_tools:
+            # The open arm's tools join the registry of this runtime only; the trace checks look every tool up there.
+            runtime.tools.registry = runtime.planner.tools = ToolRegistry([*runtime.tools.registry.specs.values(), *OPEN_SPECS])
+            for spec in OPEN_SPECS: runtime.monitor.register_tool(spec.name, spec.dependency)
 
     async def __call__(self, turn: Turn) -> TurnResult:
         """Answer the turn as one assignment; no routing, role contracts or merge."""
@@ -191,7 +194,7 @@ class SingleAgent:
             expected = tuple(getattr(item, "slot_id", None) or item.appointment_id for item in preparation.candidates) if propose else ()
         if self.open_tools and self.appointments is not None:
             request = AppointmentInput(text=question.text, intent=Intent.APPOINTMENT, action="create", subject=question.subject, risk=risk)
-            opened = ToolContext(replace(self.registry["appointment"], role="single_agent_open", tool_scope=OPEN_TOOLS), request, self.index,
+            opened = ToolContext(replace(self.registry["appointment"], role=OPEN_ROLE, tool_scope=OPEN_TOOLS), request, self.index,
                                  user=question.user, session=question.session, appointments=self.appointments)
             if booking is not None:
                 # What the shared preparation found is proposable too; the open tools add the agent's own searches.
@@ -249,7 +252,8 @@ class SingleAgent:
             blocks = model_blocks(result)
             calls = [block for block in blocks if block.get("type") == "tool_use"]
             if calls:
-                with appointment_attempts(calls, SINGLE_AGENT, INSTANCE, turn + 1, booking.request.action if booking else None) as attempts:
+                with appointment_attempts(calls, SINGLE_AGENT, INSTANCE, turn + 1, booking.request.action if booking else None,
+                                          {**PROPOSALS, **OPEN_PROPOSALS} if opened is not None else PROPOSALS) as attempts:
                     if repairing or turn >= 2 or len(calls) > 3:
                         raise ToolBudgetExceeded("tool_round_or_batch_limit")
                     messages.append({"role":"assistant", "content":blocks})

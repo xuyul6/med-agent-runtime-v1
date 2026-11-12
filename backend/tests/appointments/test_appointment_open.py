@@ -1,11 +1,22 @@
 """The open single-agent arm: every booking tool on every turn, its own searches, at most three drafts, writes only by confirmation."""
 import json
 
+from medagent.comparison.open_tools import OPEN_SPECS
 from medagent.core.contracts import Question
+from medagent.tools.registry import DEFAULT_TOOLS, ToolRegistry
 from support.appointments import Clock, SingleBookingModel, single_runtime, trace_of
 from support.harness import role_data, run
 
 OPEN = ["open_search_slots", "open_find_bookings", "open_propose_appointment", "open_propose_cancellation"]
+
+
+def test_open_tools_reach_only_the_runtime_of_the_open_arm():
+    assert [spec.name for spec in OPEN_SPECS] == OPEN and not set(OPEN) & set(DEFAULT_TOOLS.specs)
+    strict = run(single_runtime(SingleBookingModel(), Clock()))
+    opened = run(single_runtime(SingleBookingModel(), Clock(), open_tools=True))
+    assert not set(OPEN) & set(strict.tools.registry.specs) and not set(OPEN) & set(strict.monitor.tool_series)
+    assert set(OPEN) <= set(opened.tools.registry.specs) and set(OPEN) <= set(opened.monitor.tool_series)
+    assert opened.planner.tools is opened.tools.registry and not set(OPEN) & set(DEFAULT_TOOLS.specs)
 
 
 class Scripted(SingleBookingModel):
@@ -67,7 +78,7 @@ def test_open_arm_stops_at_three_drafts_and_only_its_own_search():
     from dataclasses import replace
     from medagent.agents.profiles import DEFAULT_REGISTRY
     from test_appointment_tools import call, make_store
-    store, executor = make_store(), ToolExecutor()
+    store, executor = make_store(), ToolExecutor(ToolRegistry(OPEN_SPECS))
     profile = replace(DEFAULT_REGISTRY["appointment"], role="single_agent_open", tool_scope=tuple(OPEN))
     context = ToolContext(profile, AppointmentInput(text="你好", intent=Intent.APPOINTMENT, action="create"), user="u1", session="s",
                           appointments=store)
