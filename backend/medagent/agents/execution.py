@@ -177,7 +177,8 @@ class RoleAgent:
                 "离线预览仅展示执行结构，不生成医疗回答。", references)
         evidence_requested = "lookup_reference" in profile.tool_scope and explicit_reference_request(text)
         system = self._system_prompt(snapshot, context_mode, intent, evidence_requested and not references)
-        return await self._generate(system, data, intent, request, context, budget, workflow, evidence_requested)
+        return await self._generate(system, data, intent, request, context, budget, workflow, evidence_requested,
+                                    self.tools.registry.definitions(profile, notes))
 
     def _recovered_visit_clause(self, intent, subject_changed, visit_followup, original_request) -> str:
         if intent != Intent.VISIT or subject_changed or visit_followup.current != original_request:
@@ -348,11 +349,10 @@ class RoleAgent:
         return system
 
     async def _generate(self, system, data, intent, request, context, budget, workflow, evidence_requested,
-                        definitions: list[dict] | None = None, messages: list[dict] | None = None) -> AgentResult:
+                        definitions: list[dict], messages: list[dict] | None = None) -> AgentResult:
         """At most two tool rounds and one narrowly scoped repair; every draft passes the same validation."""
         profile, references = self.profile, context.references
         messages = messages or [{"role":"user", "content":ROLE_DATA_PREFACE+"\n"+data}]
-        definitions = self.tools.registry.definitions(profile) if definitions is None else definitions
         repairing = False
         for turn in range(3):
             observe_model_input(self.role, self.instance, turn + 1, messages)

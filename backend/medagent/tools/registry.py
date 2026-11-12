@@ -6,7 +6,7 @@ import inspect
 import re
 import time
 from types import MappingProxyType
-from typing import Callable, Literal, TYPE_CHECKING
+from typing import Callable, Collection, Literal, TYPE_CHECKING
 from pydantic import BaseModel, ValidationError
 from ..agents.contracts import AgentInput
 from ..core.contracts import Intent, Reference
@@ -136,13 +136,18 @@ class ToolRegistry:
             raise PermissionError("tool_domain_not_allowed")
         return spec
 
-    def definitions(self, profile: AgentProfile) -> list[dict]:
+    def definitions(self, profile: AgentProfile, already_run: Collection[str] = ()) -> list[dict]:
+        """The tools offered to a role's model.
+
+        One without arguments that the code already ran is left out: its result is in the model's data, and a
+        second call would only cost a model round and tool budget."""
         definitions = []
         for name in profile.tool_scope:
             spec = self.specs[name]
             if profile.role not in spec.allowed_roles:
                 raise ValueError("profile_tool_not_allowed")
-            definitions.append(spec.definition())
+            if name not in already_run or spec.input_contract.model_fields:
+                definitions.append(spec.definition())
         return definitions
 
 
