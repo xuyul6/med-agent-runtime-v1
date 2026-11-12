@@ -6,7 +6,7 @@ import { reportItemsForDisplay } from './utils/report.js'
 import { answerTextForDisplay, recalledNote } from './utils/answer.js'
 import MonitorDetails from './components/MonitorDetails.vue'
 import RoleCatalog from './components/RoleCatalog.vue'
-import { loadRoleCatalog } from './utils/roles.js'
+import { loadRoleCatalog, roleNames } from './utils/roles.js'
 import ExecutionDetails from './components/ExecutionDetails.vue'
 import { fetchRequestTrace } from './utils/execution.js'
 import ToolTrace from './components/ToolTrace.vue'
@@ -59,7 +59,6 @@ const draft = ref({ key: '', title: '', domain: 'medicine', text: '', url: '', v
 const drugAliases = ref('')
 const medicationMetadata = ref(emptyMedicationMetadata())
 const visitPurpose = ref('')
-const roleNames = { symptom_guide: '症状整理', report_explainer: '报告文字', drug_reference: '药品资料', visit_guide: '就医准备', appointment: '预约', general: '咨询接待', risk_handoff: '风险提示' }
 const developer = computed(() => developerMode(status.value))
 const connection = computed(() => connectionLabel(status.value, developer.value))
 
