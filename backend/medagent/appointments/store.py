@@ -216,6 +216,21 @@ class AppointmentStore:
         self._connection.execute("update drafts set status = 'confirmed' where draft_id = ?", (draft_id,))
         return Booking(appointment_id, user, subject, slot, "booked" if kind == "create" else "cancelled")
 
+    def forget(self, user: str) -> int:
+        """Delete every booking, draft and follow-up of this user; returns how many active bookings were removed."""
+        with self._lock:
+            self._connection.execute("begin immediate")
+            try:
+                active = self._connection.execute("delete from bookings where user = ? and status = 'booked'", (user,)).rowcount
+                self._connection.execute("delete from bookings where user = ?", (user,))
+                self._connection.execute("delete from drafts where user = ?", (user,))
+                self._connection.execute("delete from followups where user = ?", (user,))
+            except BaseException:
+                self._connection.execute("rollback")
+                raise
+            self._connection.execute("commit")
+        return active
+
     def save_followup(self, followup: Followup) -> None:
         with self._lock:
             self._connection.execute("insert or replace into followups values (?, ?, ?, ?, ?, ?, ?, ?, ?)",

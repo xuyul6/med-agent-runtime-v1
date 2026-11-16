@@ -10,7 +10,7 @@ from .agents.execution import RoleAgent, RiskHandoffAgent
 from .agents.appointment import AppointmentAgent
 from .appointments.catalog import HospitalCatalog
 from .appointments.continuation import appointment_request
-from .appointments.store import AppointmentStore
+from .appointments.store import SUBJECT_LABELS, AppointmentStore
 from .core.config import ROOT
 from .agents.checks import checked_role_output
 from .agents.skills import SkillSnapshot, Skills
@@ -221,6 +221,11 @@ class MedicalRuntime:
         followup = self.appointments.take_followup(question.user, session)
         scope = scope_key(question.user, session, "__unresolved__" if resolution.ambiguous else question.subject)
         try:
+            # The index lets a later "forget this user" find the session; losing it never fails the turn.
+            await asyncio.wait_for(self.memory.track(question.user, session, question.subject), timeout=3)
+        except Exception as exc:
+            event("memory_error", stage="track", error=type(exc).__name__)
+        try:
             tool_budget = ToolBudget(self.settings.tool_call_limit)
             skill_snapshot = self.skills.snapshot()
             event("skills_snapshot", snapshot_id=skill_snapshot.snapshot_id, common_hash=skill_snapshot.common_hash)
@@ -252,6 +257,25 @@ class MedicalRuntime:
             return reply
         finally:
             CURRENT.reset(token)
+
+    async def forget(self, user: str) -> dict:
+        """Delete one demo user's sessions, summaries, bookings and in-process pointers. Nobody else's records change.
+
+        Storage goes first: if it fails, nothing else is touched and the caller can retry."""
+        if not self.memory.available:
+            raise ConnectionError("memory_unavailable")
+        try:
+            forgotten = await asyncio.wait_for(self.memory.forget(user, tuple(SUBJECT_LABELS)), timeout=self.settings.memory_timeout)
+        except Exception as exc:
+            event("memory_error", stage="forget", error=type(exc).__name__)
+            raise ConnectionError("memory_unavailable") from exc
+        for session in {session for session, _ in forgotten.sessions}:
+            self.subjects.active.pop(scope_key(user, session, "__subject_pointer__"), None)
+            for subject in {*SUBJECT_LABELS, "__unresolved__", *(item[1] for item in forgotten.sessions if item[0] == session)}:
+                self.risk.forget(scope_key(user, session, subject))
+        bookings = self.appointments.forget(user)
+        event("user_forgotten", sessions=len(forgotten.sessions), summaries=forgotten.summaries, bookings=bookings)
+        return {"user":user, "sessions":len(forgotten.sessions), "summaries":forgotten.summaries, "bookings":bookings}
 
     def _urgent(self, question, risk, skill_snapshot, tool_budget, log):
         """A critical risk is answered by the deterministic handoff role before any model, retrieval or storage."""

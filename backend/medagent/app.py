@@ -1,7 +1,7 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Path as PathParam, Query, Response
 from redis.asyncio import Redis
 from datetime import date, timedelta
 from typing import Literal
@@ -195,6 +195,14 @@ def create_app(settings: Settings | None=None, runtime: MedicalRuntime | None=No
     @app.get("/appointments", response_model=list[BookingView])
     async def appointments(user: str = Query(min_length=1, max_length=100)):
         return [booking_view(booking) for booking in app.state.runtime.appointments.upcoming(user)]
+
+    @app.delete("/users/{user}")
+    async def forget_user(user: str = PathParam(min_length=1, max_length=100)):
+        # No authentication: like every other route, `user` is a demo label, so anyone who knows it can delete it.
+        try:
+            return await app.state.runtime.forget(user)
+        except ConnectionError:
+            raise HTTPException(503, "memory_unavailable") from None
 
     @app.get("/runtime", dependencies=developer)
     @app.get("/monitor", dependencies=developer)

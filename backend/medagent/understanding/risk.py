@@ -116,6 +116,11 @@ class RiskGate:
         # Hints raised by self-harm are never lifted by a correction; only resolution or expiry ends them.
         self.self_harm = set()
 
+    def forget(self, scope: str) -> None:
+        """Drop the follow-up hint of a forgotten user's scope."""
+        self.hints.pop(scope, None)
+        self.self_harm.discard(scope)
+
     def findings(self, text: str) -> list[str]:
         text = normalize(text)
         if context_excludes(text):

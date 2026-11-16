@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 import weakref
+from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from .core.observability import event
@@ -21,6 +22,17 @@ def owner_key(user: str, subject: str) -> str:
     return hashlib.sha256(json.dumps(["episode-owner", user, subject], ensure_ascii=False).encode()).hexdigest()
 
 
+def account_key(user: str) -> str:
+    """The index of one user's sessions, so they can all be found again when the user is forgotten."""
+    return hashlib.sha256(json.dumps(["account", user], ensure_ascii=False).encode()).hexdigest()
+
+
+@dataclass
+class Forgotten:
+    sessions: list[tuple[str, str]]
+    summaries: int
+
+
 class SessionMemory:
     def __init__(self, redis=None, episodes=None, vectors=None, model=None, episode_ttl: float = EPISODE_TTL_SECONDS,
                  timezone: str = "Asia/Shanghai"):
@@ -30,6 +42,7 @@ class SessionMemory:
         self.timezone = ZoneInfo(timezone)
         self.episode_ttl, self.purged_at = episode_ttl, None
         self.local = {}
+        self.accounts = {}
         self.locks = weakref.WeakValueDictionary()
         self.available = True
         self.context_clock = time.time
@@ -99,6 +112,55 @@ class SessionMemory:
                     self.local.pop(next(iter(self.local)))
             else:
                 await self.redis.set("mar2:session:"+scope, json.dumps(state, ensure_ascii=False), ex=86400)
+
+    async def track(self, account: str, session: str, subject: str) -> None:
+        """Record that this user used this session and subject. Kept as long as their summaries may live."""
+        entry = json.dumps([session, subject], ensure_ascii=False)
+        if self.redis is None:
+            entries = self.accounts.setdefault(account_key(account), set())
+            if len(entries) < 512:
+                entries.add(entry)
+            if len(self.accounts) > 256:
+                self.accounts.pop(next(iter(self.accounts)))
+            return
+        key = "mar2:account:"+account_key(account)
+        await self.redis.sadd(key, entry)
+        await self.redis.expire(key, int(max(self.episode_ttl, 86400)))
+
+    async def forget(self, account: str, subjects=()) -> Forgotten:
+        """Delete this user's session states and every summary they own; other users' records stay.
+
+        Summaries are found by owner for the well-known subjects even after the session index has expired."""
+        from .appointments.store import SUBJECT_LABELS
+        key = account_key(account)
+        if self.redis is None:
+            entries = self.accounts.pop(key, set())
+        else:
+            entries = await self.redis.smembers("mar2:account:"+key)
+        pairs = set()
+        for entry in entries:
+            try:
+                session, subject = json.loads(entry)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(session, str) and isinstance(subject, str):
+                pairs.add((session, subject))
+        scopes = [scope_key(account, session, subject) for session, subject in sorted(pairs)]
+        if self.redis is None:
+            for scope in scopes:
+                self.local.pop(scope, None)
+        else:
+            await self.redis.delete("mar2:account:"+key, *("mar2:session:"+scope for scope in scopes))
+        summaries = 0
+        if self.episodes is not None:
+            owners = sorted({owner_key(account, subject) for subject in {*SUBJECT_LABELS, *subjects, *(item[1] for item in pairs)}})
+            where = {"$or":[{"owner":{"$in":owners}}, {"scope":{"$in":scopes}}]} if scopes else {"owner":{"$in":owners}}
+            rows = await asyncio.to_thread(self.episodes.get, where=where, include=["metadatas"])
+            if rows["ids"]:
+                await asyncio.to_thread(self.episodes.delete, ids=rows["ids"])
+            summaries = len(rows["ids"])
+        event("memory_forgotten", sessions=len(pairs), summaries=summaries)
+        return Forgotten(sorted(pairs), summaries)
 
     def episode_metadata(self, scope: str, owner: str | None = None) -> dict:
         # Chroma metadata has no null, so a summary without an owner carries the session scope only.
