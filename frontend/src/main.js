@@ -1,5 +1,5 @@
+import './styles/base.css'
 import { createApp } from 'vue'
-import Workbench from './Workbench.vue'
-import './styles/theme.css'
+import App from './App.vue'
 
-createApp(Workbench).mount('#app')
+createApp(App).mount('#app')
