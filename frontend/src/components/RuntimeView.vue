@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api } from '../api/client.js'
-import { ROLE_LABELS, errorMessage, label, milliseconds, percent } from '../lib/format.js'
+import { ROLE_LABELS, errorMessage, label, milliseconds, percent, toolCaller } from '../lib/format.js'
 
 const monitor = ref(null)
 const agents = ref([])
@@ -40,6 +40,8 @@ const instances = computed(() => Object.entries((monitor.value && monitor.value.
 const alerts = computed(() => (monitor.value && monitor.value.active_alerts) || [])
 const toolNames = computed(() => tools.value.map(item => item.name))
 const sideEffects = computed(() => Object.fromEntries(tools.value.map(item => [item.name, item.side_effect])))
+const callers = computed(() => Object.fromEntries(tools.value.map(item => [item.name, toolCaller(item.invoked_by)])))
+const modelTools = computed(() => tools.value.filter(item => (item.invoked_by || []).includes('model')).length)
 
 function alertText (alert) {
   if (typeof alert === 'string') return alert
@@ -116,7 +118,9 @@ onBeforeUnmount(() => clearInterval(timer))
 
     <section class="card panel">
       <h2>角色与工具权限</h2>
-      <p class="muted sub">每个角色只能调用自己范围内的工具；写操作工具只会生成草稿。</p>
+      <p class="muted sub">
+        每个角色只能用自己范围内的工具，代码调用和模型调用都要过这道检查。大部分工具由代码在固定步骤调用，模型只拿到需要它做选择的那几个<template v-if="tools.length">（{{ tools.length }} 个里有 {{ modelTools }} 个）</template>；写操作只会生成待确认草稿。
+      </p>
       <div class="table-wrap">
         <table class="matrix">
           <thead>
@@ -133,6 +137,12 @@ onBeforeUnmount(() => clearInterval(timer))
               </td>
             </tr>
           </tbody>
+          <tfoot>
+            <tr>
+              <td>调用方</td>
+              <td v-for="name in toolNames" :key="name" class="cell caller" :class="{ model: callers[name].includes('模型') }">{{ callers[name] }}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
       <div class="legend">
@@ -180,6 +190,9 @@ td .dot { display: inline-block; }
 .has { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--accent); }
 .has.read_external { background: transparent; box-shadow: inset 0 0 0 2px var(--accent); }
 .has.propose_write { background: var(--caution); }
+.matrix tfoot td { border-top: 1px solid var(--line-strong); border-bottom: 0; color: var(--ink-3); font-size: 12px; }
+.matrix .caller { writing-mode: vertical-rl; padding: 10px 0; letter-spacing: .05em; }
+.matrix .caller.model { color: var(--accent); font-weight: 600; }
 .legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--ink-2); margin-top: 12px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 

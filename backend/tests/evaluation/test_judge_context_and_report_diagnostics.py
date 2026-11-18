@@ -225,7 +225,7 @@ def test_report_schema_and_skill_explain_payload_without_relaxing_types():
     assert payload["properties"]["term_explanations"]["items"] == {"$ref":"#/$defs/EvidenceItem"}
     assert "正文不能代替此载荷" in payload["properties"]["term_explanations"]["description"]
     assert runtime.registry["report_explainer"].version == "role-contracts-6"
-    assert runtime.skills.snapshot().documents["report_explainer"].version == "1.7.0"
+    assert runtime.skills.snapshot().documents["report_explainer"].version == "1.7.1"
 
 
 async def offline_report():

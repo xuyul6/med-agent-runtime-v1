@@ -126,6 +126,15 @@ export function label (table, key) {
   return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : String(key)
 }
 
+const CALLERS = { code: '代码', model: '模型' }
+
+// Who may call a registered tool: the code at a fixed step, the role model as a tool it picks, or both.
+export function toolCaller (invokedBy) {
+  if (!Array.isArray(invokedBy) || !invokedBy.length) return '—'
+  if (!invokedBy.every(item => Object.prototype.hasOwnProperty.call(CALLERS, item))) return '—'
+  return invokedBy.map(item => CALLERS[item]).join('+')
+}
+
 export function riskReason (code) {
   const text = String(code)
   if (text.startsWith('urgent_hint_cleared')) return '此前的紧急提示已解除'

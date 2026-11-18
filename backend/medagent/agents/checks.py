@@ -287,7 +287,8 @@ def validate_draft(profile, text: str, request, references: dict, evidence_reque
     if request.intent == Intent.MEDICINE:
         changed = validate_output_identity(data,request,references.values())
         if changed: event("agent_output_normalized",role=profile.role,fields=changed,normalization="query_identity")
-    if evidence_requested and output.status == "answered" and not output.answer.reference_keys:
+    # Only sources the code actually found can be demanded: the model has no lookup of its own.
+    if evidence_requested and references and output.status == "answered" and not output.answer.reference_keys:
         raise AgentOutputError("requested_evidence_not_returned",["reference_keys"])
     return data
 

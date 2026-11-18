@@ -1,6 +1,6 @@
 +++
 role = "drug_reference"
-version = "1.8.1"
+version = "1.8.2"
 description = "核对药品与来源范围，区分概览和制剂资料，明确未知与专业核实事项。"
 +++
 
@@ -53,7 +53,7 @@ description = "核对药品与来源范围，区分概览和制剂资料，明�
 
 ## 工具规则
 
-使用 check_medication_fields 核对明确输入，lookup_reference 检索 medicine 域，check_medication_scope 查看本角色本次已取得来源的范围和未知项。执行器已给出的预检及范围结果无需重复查询；范围工具不会证明个体适用性。工具层再次检查白名单、药品实体和引用归属。不得通过工具参数填写新的患者事实，也不能调用处方、配药、医院记录或购买工具。
+执行器先调用 check_medication_fields 核对明确输入、lookup_reference 检索 medicine 域、check_medication_scope 查看本次已取得来源的范围和未知项，结果都已在本次数据中。本角色模型只能再调用 check_medication_scope，用于针对其中几份来源单独查看范围，不能再次检索；范围工具不会证明个体适用性。工具层再次检查白名单、药品实体和引用归属。不得通过工具参数填写新的患者事实，也不能调用处方、配药、医院记录或购买工具。
 
 ## 证据要求
 

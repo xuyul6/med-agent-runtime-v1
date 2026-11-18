@@ -27,11 +27,18 @@ from ..agents.contracts import AppointmentInput
 from ..understanding.conversation import role_details
 from ..agents.checks import (add_urgency_notice, check_report_range_claims, checked_answer, explicit_reference_request,
                              insert_range_sentences, report_range_source_quotes, unmatched_urgency_sentences)
-from ..agents.execution import (EVIDENCE_MISSING_NOTICE, REPORT_RANGE_INSTRUCTION, REPORT_RANGE_REPAIR, ROLE_DATA_PREFACE,
-                                model_blocks)
+from ..agents.execution import REPORT_RANGE_REPAIR, ROLE_DATA_PREFACE, model_blocks
 from ..agents.output_validation import AgentOutputError
 from ..runtime import Turn, TurnResult
 from .open_tools import OPEN_PROPOSALS, OPEN_ROLE, OPEN_SPECS, OPEN_TOOLS
+
+# This baseline's model looks sources up itself, so it keeps the wording it was measured with; the product roles
+# no longer offer the lookup to their model and use different text.
+REPORT_RANGE_INSTRUCTION = ("参考范围的统计性质或区间定义，如与本轮任务无关就不要扩展；确需使用时，"
+    "初始检索的 report_range_evidence 列出可用完整句及其来源，必须逐句引用并标明相应来源。"
+    "之后若工具另取资料，仍须以实际取得并引用的完整来源句为准；不能将列表之外的未检索资料当作证据。\n")
+EVIDENCE_MISSING_NOTICE = ("\n本轮明确要求查阅或引用来源，当前尚无资料。必须先调用lookup_reference取得实际来源，再完成回答；"
+    "仅描述模板或说来源待核实不算完成。检索无适用资料时明确说明无法完成，不编造来源。")
 
 SINGLE_AGENT = "single_agent"
 INSTANCE = "single_agent.1"

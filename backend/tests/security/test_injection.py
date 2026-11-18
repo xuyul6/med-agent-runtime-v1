@@ -129,11 +129,12 @@ def test_hijacked_model_cannot_call_tools_outside_role_scope(role_text, tool):
 def test_tool_arguments_cannot_smuggle_facts_into_logs():
     secret = "确诊肺癌晚期-" + MARK
     async def scenario():
-        tool = {"name":"lookup_reference", "input":{"query":"布洛芬", "domain":"medicine", "patient_fact":secret}}
+        # The one tool this role's model is offered; an extra argument is refused by the input contract.
+        tool = {"name":"check_medication_scope", "input":{"keys":[], "patient_fact":secret}}
         runtime = await fixture(Hijacked(tools=[tool]))
         reply = await runtime.chat(Question(text="想查成人布洛芬公开资料"))
         trace = next(item for item in runtime.monitor.traces if item["request_id"] == reply.request_id)
-        statuses = [event["status"] for event in trace["events"] if event["event"] == "tool" and event.get("name") == "lookup_reference"]
+        statuses = [event["status"] for event in trace["events"] if event["event"] == "tool" and event.get("name") == "check_medication_scope"]
         assert statuses[-1] == "invalid_request"
         assert secret not in json.dumps(trace, ensure_ascii=False) and secret not in visible(reply)
     run(scenario())

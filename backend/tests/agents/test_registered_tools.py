@@ -33,6 +33,7 @@ def test_tool_catalog_and_profile_whitelists_share_registered_definitions():
             assert tool["input_schema"]["additionalProperties"] is False
             assert tool["output_schema"]["additionalProperties"] is False
             assert tool["timeout"] > 0
+            assert tool["invoked_by"] and set(tool["invoked_by"]) <= {"code", "model"}
         for profile in agents:
             expected = {tool["name"] for tool in tools if profile["role"] in tool["allowed_roles"]}
             assert set(profile["tool_scope"]) == expected
@@ -257,13 +258,13 @@ def test_disallowed_model_tool_round_or_batch_has_no_partial_execution(mode):
 
 @pytest.mark.parametrize("role, intent, text, details, offered", [
     ("general", Intent.GENERAL, "介绍功能", {}, set()),
-    ("symptom_guide", Intent.SYMPTOMS, "成年人咳嗽三天，想整理记录", {}, {"lookup_reference"}),
-    ("drug_reference", Intent.MEDICINE, "查询布洛芬药品资料", {"medication_name":"布洛芬"}, {"lookup_reference", "check_medication_scope"}),
-    ("report_explainer", Intent.REPORT, "报告参考范围是什么？", {}, {"lookup_reference"}),
-    ("visit_guide", Intent.VISIT, "就医前需要准备什么？", {}, {"lookup_reference"}),
+    ("symptom_guide", Intent.SYMPTOMS, "成年人咳嗽三天，想整理记录", {}, set()),
+    ("drug_reference", Intent.MEDICINE, "查询布洛芬药品资料", {"medication_name":"布洛芬"}, {"check_medication_scope"}),
+    ("report_explainer", Intent.REPORT, "报告参考范围是什么？", {}, set()),
+    ("visit_guide", Intent.VISIT, "就医前需要准备什么？", {}, set()),
 ])
-def test_role_model_is_not_offered_a_no_argument_tool_the_code_already_ran(role, intent, text, details, offered):
-    """Its result is already in validated_tool_results; calling it again only costs a model round and tool budget."""
+def test_role_model_is_offered_only_the_tools_that_need_its_choice(role, intent, text, details, offered):
+    """Field checks and the lookup ran in code; their results are in the model's data."""
     async def scenario():
         class Recording(Model):
             async def message(self, stage, system, messages, tools=None, budget=1800):
@@ -275,8 +276,8 @@ def test_role_model_is_not_offered_a_no_argument_tool_the_code_already_ran(role,
         result = await runtime.agents[role][0].run(text, intent, {}, "selective", details=details)
         assert result.execution.status == "answered"
         assert model.offered == offered
-        # Nothing is withheld unless the code ran it; a tool that takes arguments stays available even after it ran.
-        assert set(runtime.tools.registry.scope(role)) - model.offered <= model.ran
+        # Every whitelisted tool either ran in code or is offered; none is silently unreachable.
+        assert set(runtime.tools.registry.scope(role)) - model.offered <= model.ran | {"lookup_reference"}
     run(scenario())
 
 

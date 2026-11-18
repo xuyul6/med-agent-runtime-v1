@@ -106,5 +106,5 @@ def test_report_skill_scopes_unrequested_range_definition_in_actual_model_contex
         assert not reply.degraded and model.systems
         assert "不主动扩展参考范围的统计性质或区间定义" in model.systems[0]
         assert "不得省略完成当前问题所需的限制或安全提示" in model.systems[0]
-        assert runtime.skills.snapshot().documents["report_explainer"].version == "1.7.0"
+        assert runtime.skills.snapshot().documents["report_explainer"].version == "1.7.1"
     run(scenario())

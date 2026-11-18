@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ROLE_LABELS, citedReferences, dayLabel, errorMessage, label, milliseconds, paragraphs, percent, remaining,
-  riskReason, safeUrl, sortedScores, tokens
+  riskReason, safeUrl, sortedScores, tokens, toolCaller
 } from '../src/lib/format.js'
 import { demoUser, isValidUserId, knownUsers, newUserId, removeUser, useUser } from '../src/lib/identity.js'
 
@@ -121,4 +121,13 @@ test('removing a user drops it from the list and hands over the current seat', (
   assert.deepEqual(knownUsers(storage), ['bob'])
   assert.equal(removeUser('bob', storage, () => 0), 'demo-000000')
   assert.deepEqual(knownUsers(storage), ['demo-000000'])
+})
+
+test('toolCaller names who may call a tool, and reads an unknown list as unknown', () => {
+  assert.equal(toolCaller(['code']), '代码')
+  assert.equal(toolCaller(['model']), '模型')
+  assert.equal(toolCaller(['code', 'model']), '代码+模型')
+  assert.equal(toolCaller([]), '—')
+  assert.equal(toolCaller(undefined), '—')
+  assert.equal(toolCaller(['code', 'shell']), '—')
 })

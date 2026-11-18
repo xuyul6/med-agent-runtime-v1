@@ -75,12 +75,12 @@ def open_propose_cancellation(context: ToolContext, arguments: ProposeCancellati
 OPEN_ROLE = "single_agent_open"
 OPEN_SPECS = [
     ToolSpec("open_search_slots", "按科室、日期和时段查询模拟医院号源，可选医院。", OpenSlotQuery, SlotSearchResult,
-             frozenset({OPEN_ROLE}), frozenset({Intent.APPOINTMENT}), open_search_slots, timeout=1, stage="retrieval"),
+             frozenset({OPEN_ROLE}), frozenset({Intent.APPOINTMENT}), open_search_slots, timeout=1, stage="retrieval", run_by_code=False, offered_to_model=True),
     ToolSpec("open_find_bookings", "查询当前用户、当前咨询对象在模拟医院的全部可取消预约。", EmptyArguments, BookingSearchResult,
-             frozenset({OPEN_ROLE}), frozenset({Intent.APPOINTMENT}), open_find_bookings, timeout=1, stage="retrieval"),
+             frozenset({OPEN_ROLE}), frozenset({Intent.APPOINTMENT}), open_find_bookings, timeout=1, stage="retrieval", run_by_code=False, offered_to_model=True),
     ToolSpec("open_propose_appointment", "为本轮查到的号源生成待确认的预约草稿，每轮最多 3 份；不会写入，需用户点击确认。", ProposeAppointmentArguments, DraftResult,
-             frozenset({OPEN_ROLE}), frozenset({Intent.APPOINTMENT}), open_propose_appointment, timeout=1, side_effect="propose_write", stage="action"),
+             frozenset({OPEN_ROLE}), frozenset({Intent.APPOINTMENT}), open_propose_appointment, timeout=1, side_effect="propose_write", stage="action", run_by_code=False, offered_to_model=True),
     ToolSpec("open_propose_cancellation", "为本轮查到的已有预约生成待确认的取消草稿，每轮最多 3 份；不会写入，需用户点击确认。", ProposeCancellationArguments, DraftResult,
-             frozenset({OPEN_ROLE}), frozenset({Intent.APPOINTMENT}), open_propose_cancellation, timeout=1, side_effect="propose_write", stage="action"),
+             frozenset({OPEN_ROLE}), frozenset({Intent.APPOINTMENT}), open_propose_cancellation, timeout=1, side_effect="propose_write", stage="action", run_by_code=False, offered_to_model=True),
 ]
 OPEN_TOOLS = tuple(spec.name for spec in OPEN_SPECS)

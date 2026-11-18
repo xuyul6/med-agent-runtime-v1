@@ -93,6 +93,13 @@ class ToolSpec:
     side_effect: Literal["compute", "read_external", "propose_write"] = "compute"
     dependency: bool = False
     stage: Literal["preflight", "retrieval", "context", "handoff", "action"] = "context"
+    # Who may call it: the code at a fixed step of the role's flow, the role model as a tool it chooses, or both.
+    run_by_code: bool = True
+    offered_to_model: bool = False
+
+    @property
+    def invoked_by(self) -> list[str]:
+        return (["code"] if self.run_by_code else [])+(["model"] if self.offered_to_model else [])
 
     def definition(self) -> dict:
         return {"name":self.name, "description":self.description, "input_schema":self.input_contract.model_json_schema()}
@@ -100,7 +107,8 @@ class ToolSpec:
     def describe(self) -> dict:
         return {**self.definition(), "output_schema":self.output_contract.model_json_schema(),
                 "allowed_roles":sorted(self.allowed_roles), "domains":sorted(domain.value for domain in self.domains),
-                "timeout":self.timeout, "side_effect":self.side_effect, "dependency":self.dependency, "stage":self.stage}
+                "timeout":self.timeout, "side_effect":self.side_effect, "dependency":self.dependency, "stage":self.stage,
+                "invoked_by":self.invoked_by}
 
 
 class ToolRegistry:
@@ -114,7 +122,8 @@ class ToolRegistry:
             if not all(isinstance(contract, type) and issubclass(contract, BaseModel)
                        for contract in [spec.input_contract, spec.output_contract]) or not callable(spec.handler):
                 raise ValueError("invalid_tool_contract:"+spec.name)
-            if spec.dependency != (spec.side_effect == "read_external") or spec.stage not in {"preflight", "retrieval", "context", "handoff", "action"}:
+            if spec.dependency != (spec.side_effect == "read_external") or spec.stage not in {"preflight", "retrieval", "context", "handoff", "action"} \
+                    or not spec.invoked_by:
                 raise ValueError("invalid_tool_execution_policy:"+spec.name)
             if spec.dependency and not inspect.iscoroutinefunction(spec.handler):
                 raise ValueError("dependency_handler_must_be_async:"+spec.name)
@@ -136,17 +145,17 @@ class ToolRegistry:
             raise PermissionError("tool_domain_not_allowed")
         return spec
 
-    def definitions(self, profile: AgentProfile, already_run: Collection[str] = ()) -> list[dict]:
-        """The tools offered to a role's model.
+    def definitions(self, profile: AgentProfile) -> list[dict]:
+        """The tools offered to a role's model: only those in its whitelist that need the model's choice.
 
-        One without arguments that the code already ran is left out: its result is in the model's data, and a
-        second call would only cost a model round and tool budget."""
+        The code already ran the rest, and their results are in the model's data. A second reference lookup with a
+        model-written query would search the same small catalog again and could name a symptom the user never said."""
         definitions = []
         for name in profile.tool_scope:
             spec = self.specs[name]
             if profile.role not in spec.allowed_roles:
                 raise ValueError("profile_tool_not_allowed")
-            if name not in already_run or spec.input_contract.model_fields:
+            if spec.offered_to_model:
                 definitions.append(spec.definition())
         return definitions
 
@@ -303,7 +312,7 @@ DEFAULT_TOOLS = ToolRegistry([
              SPECIALISTS, frozenset({Intent.SYMPTOMS, Intent.MEDICINE, Intent.REPORT, Intent.VISIT}), lookup_reference,
              side_effect="read_external", dependency=True, stage="retrieval"),
     ToolSpec("check_medication_scope", "核对本角色已取得来源的范围与未知项，不保证个人适用性。", ReferenceSelection, MedicationScopeResult,
-             frozenset({"drug_reference"}), frozenset({Intent.MEDICINE}), medication_scope, timeout=1),
+             frozenset({"drug_reference"}), frozenset({Intent.MEDICINE}), medication_scope, timeout=1, offered_to_model=True),
     ToolSpec("build_visit_checklist", "根据本次已取得的项目模板生成通用准备清单，不创建预约。", EmptyArguments, ChecklistResult,
              frozenset({"visit_guide"}), frozenset({Intent.VISIT}), visit_checklist, timeout=1),
     ToolSpec("search_slots", "按代码已解析的科室、日期和时段查询模拟医院号源，模型不能传查询条件。", EmptyArguments, SlotSearchResult,
@@ -311,9 +320,11 @@ DEFAULT_TOOLS = ToolRegistry([
     ToolSpec("find_bookings", "查询当前用户、当前咨询对象在模拟医院的已有预约，按已解析字段过滤。", EmptyArguments, BookingSearchResult,
              frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), find_bookings, timeout=1, stage="retrieval"),
     ToolSpec("propose_appointment", "为本次查询得到的唯一号源生成待确认的预约草稿；不会写入，需用户点击确认。", ProposeAppointmentArguments, DraftResult,
-             frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), propose_appointment, timeout=1, side_effect="propose_write", stage="action"),
+             frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), propose_appointment, timeout=1, side_effect="propose_write", stage="action",
+             run_by_code=False, offered_to_model=True),
     ToolSpec("propose_cancellation", "为本次查询得到的唯一已有预约生成待确认的取消草稿；不会写入，需用户点击确认。", ProposeCancellationArguments, DraftResult,
-             frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), propose_cancellation, timeout=1, side_effect="propose_write", stage="action"),
+             frozenset({"appointment"}), frozenset({Intent.APPOINTMENT}), propose_cancellation, timeout=1, side_effect="propose_write", stage="action",
+             run_by_code=False, offered_to_model=True),
     ToolSpec("create_handoff_summary", "同步整理已有风险规则标识，明确未连接人工，不调用外部依赖。", EmptyArguments, HandoffSummary,
              frozenset({"risk_handoff"}), frozenset({Intent.URGENT}), handoff_summary, timeout=1, stage="handoff"),
 ])
@@ -337,9 +348,12 @@ class ToolExecutor:
                 "consecutive_fails":max(self.failures.get(key, 0) for key in keys), "probe_inflight":any(key in self.probes for key in keys),
                 "cooldown_remaining_seconds":max(0, until-self.clock())}
 
-    def _prepare(self, name: str, arguments: dict, context: ToolContext, budget: ToolBudget):
+    def _prepare(self, name: str, arguments: dict, context: ToolContext, budget: ToolBudget, offered=None):
         budget.consume()
         spec = self.registry.authorize(name, context)
+        # A model call is held to what this round offered it, not to the role's whole whitelist.
+        if offered is not None and name not in offered:
+            raise PermissionError("tool_not_offered")
         try:
             request = spec.input_contract.model_validate(arguments)
         except ValidationError as exc:
@@ -396,12 +410,13 @@ class ToolExecutor:
         if isinstance(error, asyncio.CancelledError): return "cancelled"
         return "failed"
 
-    async def call(self, name: str, arguments: dict, context: ToolContext, budget: ToolBudget) -> BaseModel:
+    async def call(self, name: str, arguments: dict, context: ToolContext, budget: ToolBudget, *,
+                   offered: Collection[str] | None = None) -> BaseModel:
         started, probe, generation, spec = self.clock(), None, None, None
         invoked, filtered_before = False, context.scope_filtered_count
         circuit = name
         try:
-            spec, request = self._prepare(name, arguments, context, budget)
+            spec, request = self._prepare(name, arguments, context, budget, offered)
             # A domain's failures stay in that domain: a role retry counts twice, which must not block other roles' lookups.
             if isinstance(request, LookupArguments):
                 circuit = f"{name}:{request.domain.value}"

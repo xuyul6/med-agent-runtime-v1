@@ -96,7 +96,8 @@ class AppointmentAgent(RoleAgent):
         with appointment_attempts(calls, self.role, self.instance, 0, request.action) as attempts:
             if len(calls) > 3:
                 raise ToolBudgetExceeded("tool_round_or_batch_limit")
-            # Extra calls get error results: the tool itself allows one draft per turn.
+            # Extra calls get error results: the tool itself allows one draft per turn. A call to the other drafting tool
+            # is left to that tool's own action check, so the permission audit keeps reporting it as action_mismatch.
             messages += [{"role": "assistant", "content": blocks}, {"role": "user", "content": await self._tool_results(calls, context, budget, attempts)}]
         result = await self._generate(system, data, intent, request, context, budget, workflow, False, definitions=[], messages=messages)
         payload = result.execution.payload
