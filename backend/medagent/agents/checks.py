@@ -65,13 +65,18 @@ BOUNDARIES = (
      r"(?:肯定|一定|完全|绝对)(?:没问题|没事|安全|没有(?:风险|副作用))|放心(?:吃|用|服用)|(?:很|非常)安全"
      r"|没有(?:任何)?(?:风险|副作用)", REFUSAL_BEFORE),
     ("medical_boundary_violation", "diagnosis",
-     r"确诊为|诊断为|你患有|患有|(?:很|极|非常|大)可能是|看起来像|应该是|考虑(?:是|为)|大概率|多半是|你得的是|这是典型的",
-     REFUSAL_BEFORE),
+     # "患有糖尿病的人" describes a group; only telling the user what they have is a diagnosis.
+     r"确诊为|诊断为|(?:你|您)(?:可能|也许|应该|大概)?患有|(?:很|极|非常|大)可能是|看起来像|应该是|考虑(?:是|为)|大概率|多半是|你得的是|这是典型的",
+     REFUSAL_BEFORE + r"|如果|假如|若是|要是|若"),
     ("medical_boundary_violation", "prescription", r"(?:给你|为你|帮你)开(?:药|处方|点|些)?", REFUSAL_BEFORE),
     ("medical_boundary_violation", "action_claim",
      r"已(?:经)?(?:帮你|为你|替你|给你)?(?:预约|挂号|挂好|联系|通知|转接|安排|呼叫)|帮你(?:预约|挂号|挂好)"
      r"|(?:救护车|医生)(?:正在路上|稍后会|会联系你|会回电)", CONDITION_BEFORE),
 )
+
+
+SYMPTOM_CUE = r"拉肚子|腹泻|拉稀|大便|小便|排便|呕吐|吐|咳|痛|疼|发烧|发热|醒|发作|抽搐"
+MEDICATION_CUE = r"药|片|粒|胶囊|剂|服|吃|喷|滴|涂|贴|针|mg|毫克|毫升|ml|" + NAMES
 
 
 def check_boundaries(data) -> None:
@@ -86,18 +91,28 @@ def check_boundaries(data) -> None:
             for item in value:
                 yield from strings(item)
     for text in strings(data):
-        for clause in re.findall(r"[^。！？!?；;\n，,]+[。！？!?；;\n，,]?", text):
-            if re.search(USER_QUOTE, clause):
-                continue
-            question = re.search(r"(?:吗|？|\?)\s*[。！？!?；;，,]?$", clause)
-            for code, rule, pattern, excused_by in BOUNDARIES:
-                for match in re.finditer(pattern, clause, re.I):
-                    before = clause[:match.start()]
-                    # Wording inside quotation marks is mentioned ("不能说“一定安全”"), not asserted.
-                    quoted = before.count("“") > before.count("”") or before.count("「") > before.count("」")
-                    if excused_by and (question or quoted or re.search(excused_by, before)):
+        for sentence in re.findall(r"[^。！？!?；;\n]+[。！？!?；;\n]?", text):
+            clauses = re.findall(r"[^。！？!?；;\n，,]+[。！？!?；;\n，,]?", sentence)
+            for index, clause in enumerate(clauses):
+                # How often a symptom happens ("拉肚子，一天四五次") is not a dose: the count's own part names no medicine,
+                # and it or the part just before it names a symptom without a medicine.
+                previous = clauses[index-1] if index else ""
+                symptom_count = not re.search(MEDICATION_CUE, clause, re.I) and bool(
+                    re.search(SYMPTOM_CUE, clause)
+                    or re.search(SYMPTOM_CUE, previous) and not re.search(MEDICATION_CUE, previous, re.I))
+                if re.search(USER_QUOTE, clause):
+                    continue
+                question = re.search(r"(?:吗|？|\?)\s*[。！？!?；;，,]?$", clause)
+                for code, rule, pattern, excused_by in BOUNDARIES:
+                    if rule == "dose_frequency" and symptom_count:
                         continue
-                    raise AgentOutputError(code, rules=(rule,))
+                    for match in re.finditer(pattern, clause, re.I):
+                        before = clause[:match.start()]
+                        # Wording inside quotation marks is mentioned ("不能说“一定安全”"), not asserted.
+                        quoted = before.count("“") > before.count("”") or before.count("「") > before.count("」")
+                        if excused_by and (question or quoted or re.search(excused_by, before)):
+                            continue
+                        raise AgentOutputError(code, rules=(rule,))
 
 
 RANGE_CLAIM = r"参考范围.*(?:统计|区间)|(?:统计|区间).*参考范围"
