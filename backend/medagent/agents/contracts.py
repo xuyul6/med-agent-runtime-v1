@@ -1,4 +1,5 @@
 """Role inputs and outputs; medical facts are never inferred by these schemas."""
+import re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -65,9 +66,33 @@ class ReportItem(Contract):
     reference_range: str | None = None
 
 
+# Units as they are printed next to a lab value: percent, per mille, counts per litre, and mass or amount per volume.
+LAB_UNIT = r"(?:%|‰|[×xX]\s*10\^?\d+\s*/\s*L|[μµumnpk]?(?:mol|g|IU|U)\s*/\s*[dmμµ]?L|fL|pg|mmHg)"
+
+
+def written_unit(value: str | None, text: str) -> str | None:
+    """The unit the user wrote with this value, either inside the value or right after it in their own words."""
+    if not value:
+        return None
+    inside = re.fullmatch(r"\s*[-+]?\d+(?:\.\d+)?\s*("+LAB_UNIT+r")\s*", value)
+    if inside:
+        return inside.group(1)
+    if not re.fullmatch(r"\s*[-+]?\d+(?:\.\d+)?\s*", value):
+        return None
+    after = re.search(r"(?<![\d.])"+re.escape(value.strip())+r"(?![\d.])\s*("+LAB_UNIT+")", text)
+    return after.group(1) if after else None
+
+
 class ReportInput(AgentInput):
     intent: Literal[Intent.REPORT]
     items: list[ReportItem] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def unit_written_with_the_value(self):
+        # Extraction may leave the unit empty although the user typed it ("78%"); that is not a missing field.
+        self.items = [item if item.unit else item.model_copy(update={"unit":written_unit(item.value, self.text)})
+                      for item in self.items]
+        return self
 
     def information_gaps(self) -> list[str]:
         return [name for name in ["value", "unit", "reference_range"] if any(not getattr(item, name) for item in self.items)]
