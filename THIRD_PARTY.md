@@ -22,6 +22,7 @@
 - [美国退伍军人事务部：Understand Your Kidney Lab Tests](https://www.va.gov/EKIDNEYCLINIC/rooms/laboratory/topics/understand-your-kidney-lab-tests/index.asp)：2026-10-29 核对血液检验报告的项目名称和结果阅读示例，整理独立中文导读 `lab-structure-overview`；示例不覆盖所有报告格式或个人诊断。
 - [NHS：Ibuprofen for adults](https://www.nhs.uk/medicines/ibuprofen-for-adults/)：英国成人药品概览。不是本项目编写的制剂说明书，不能外推到儿童、其他剂型或地区。
 - [DailyMed：Advil 布洛芬包衣片](https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=1a665e64-9f30-be37-4a83-38789f1f1e89)：Haleon US Holdings LLC 提交的在用标签，SPL v38；项目只写美国 Advil 200 mg 口服包衣片的成人资料摘要。并核对厂商 LBL-00000027 v38.0，不镜像 PDF、包装图或全文。
+- NHS 症状页面：[Cough](https://www.nhs.uk/conditions/cough/)、[High temperature (fever) in adults](https://www.nhs.uk/conditions/fever-in-adults/)、[Headaches](https://www.nhs.uk/conditions/headaches/)、[Sore throat](https://www.nhs.uk/conditions/sore-throat/)、[Diarrhoea and vomiting](https://www.nhs.uk/conditions/diarrhoea-and-vomiting/)。2026-11-16 核对页面审阅日期、自我照护和何时就医的章节，自行撰写中文导读 `symptom-*-nhs`。页面中的药物建议未收录；英国的 GP、111、999 渠道改写为"联系医生""尽快就医""急救电话或急诊"；婴幼儿阈值未收录，成人发烧导读不适用于儿童。
 - `consultation-record` 和 `symptom-record` 是本项目的信息整理模板；没有医学指南或医院业务来源的含义。
 - `backend/resources/medication-names.json` 是项目作者整理的常见药品通用名（国际非专利名）及英文名列表，只用于识别用户提到的药名；不含剂量或临床内容，不是药品数据库，也不表示已有对应资料。
 

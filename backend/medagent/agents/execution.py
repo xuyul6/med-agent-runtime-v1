@@ -154,6 +154,16 @@ class RoleAgent:
         required = intent in {Intent.MEDICINE, Intent.REPORT, Intent.VISIT}
         if required:
             await self.tools.call("lookup_reference", {"query":reference_query or text,"domain":intent.value}, context, budget)
+        elif intent == Intent.SYMPTOMS:
+            # Care information needs a source, so the code looks it up. The record does not depend on it: a timeout,
+            # an open circuit or a spent budget leaves the user's own description to write, without care information.
+            # The user's own words and their known symptom decide the overview, not the role's task description.
+            known = request.symptom or ""
+            try:
+                await self.tools.call("lookup_reference", {"query":(current+"，"+known).strip("，"),
+                                                           "domain":intent.value}, context, budget)
+            except Exception as exc:
+                event("symptom_lookup_unavailable", role=self.role, error=type(exc).__name__)
         for name in profile.tool_scope:
             if self.tools.registry.specs[name].stage == "context":
                 result = await self.tools.call(name, {}, context, budget)

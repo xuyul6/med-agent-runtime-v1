@@ -44,6 +44,21 @@ def visit_scope_rejection(ref: Reference) -> str | None:
     return None
 
 
+# "没有发烧" denies the symptom: it must not bring in the fever overview.
+# A bare 不 only denies when it is not 不停/不断/不住/不适/不舒服, and the denial cannot reach across a pause.
+SYMPTOM_DENIAL = r"(?:没有|没|无|未|否认|不(?!停|断|住|适|舒服))[^，。；,;！？!?\s]{0,2}$"
+
+
+def names_symptom(text: str, alias: str) -> bool:
+    """The text mentions the symptom at least once without denying it."""
+    lowered, target, start = text.lower(), alias.lower(), 0
+    while (index := lowered.find(target, start)) >= 0:
+        if not re.search(SYMPTOM_DENIAL, lowered[max(0, index-6):index]):
+            return True
+        start = index+1
+    return False
+
+
 def has_query_overlap(query: str, ref: Reference, visit_context: bool | None = None) -> bool:
     """Minimum evidence gate; shared terms do not prove semantic relevance."""
     # Institution-specific visit evidence has no verified source contract yet.
@@ -175,6 +190,12 @@ class ReferenceIndex:
             eligible = {k:r for k,r in eligible.items() if any(alias.lower() in query.lower() for alias in r.entities)}
             if medication_request is not None:
                 eligible = {k:r for k,r in eligible.items() if rejection_reason(r, medication_request) is None}
+        elif domain == Intent.SYMPTOMS.value:
+            # A symptom overview applies only when the request names its symptom; the record template has no entities.
+            named = query + " " + trusted_query
+            eligible = {k:r for k,r in eligible.items()
+                        if any(names_symptom(named, alias) for alias in r.entities)
+                        or not r.entities and has_query_overlap(trusted_query, r, visit_context)}
         else:
             eligible = {k:r for k,r in eligible.items() if has_query_overlap(trusted_query, r, visit_context)}
         async def lexical():

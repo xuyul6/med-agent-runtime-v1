@@ -132,5 +132,164 @@
       "formulation": "coated_tablet_oral",
       "strength": "200mg"
     }
+  },
+  {
+    "key": "symptom-cough-nhs",
+    "title": "咳嗽：自我照护与何时就医",
+    "domain": "symptoms",
+    "text": "NHS 的咳嗽页面说明，咳嗽通常会在3到4周内自行好转。自我照护包括：多休息、多补充水分；如果发烧或不适到无法正常活动，留在家中并减少与他人接触。出现以下情况应联系医生：咳嗽持续超过3周、不明原因体重下降、免疫力低下（例如正在化疗或有糖尿病）。出现以下情况应尽快就医：咳嗽很严重或迅速加重、感觉非常不舒服、胸痛、颈部两侧淋巴结肿痛、呼吸困难、咳血。页面另列出药房可购买的缓解用品，本导读未收录，用药问题请咨询药师；页面也说明咳嗽通常不需要抗生素。",
+    "url": "https://www.nhs.uk/conditions/cough/",
+    "version": "summary-2026-11-16",
+    "scope": "英国 NHS 面向公众的咳嗽概览；成人为主，儿童另有注意事项；不用于判断病因或选择药物。",
+    "approved": true,
+    "entities": [
+      "咳嗽",
+      "干咳",
+      "咳痰",
+      "cough"
+    ],
+    "provenance": {
+      "organization": "NHS website (England)",
+      "document_type": "public_overview",
+      "source_version": "page-reviewed-2023-12-08",
+      "updated_on": "2023-12-08",
+      "checked_on": "2026-11-16",
+      "sections": [
+        "How you can treat a cough yourself",
+        "Non-urgent advice: See a GP if",
+        "Urgent advice: Ask for an urgent GP appointment or get help from NHS 111 if"
+      ],
+      "use_conditions": "Contains public sector information licensed under the Open Government Licence v3.0. 项目自行编写中文导读，不复制原文；页面中的药物建议未收录；不代表 NHS 背书。",
+      "terms_url": "https://www.nhs.uk/our-policies/terms-and-conditions/"
+    }
+  },
+  {
+    "key": "symptom-fever-adult-nhs",
+    "title": "成人发烧：自我照护与何时就医",
+    "domain": "symptoms",
+    "text": "NHS 的成人发烧页面说明，体温通常达到38°C或以上算发烧；即使体温计读数低于38°C，感觉忽冷忽热、发抖也可能是在发烧。发烧常会自行好转。自我照护包括：多休息；多补充水分，以白开水为主，尿液呈浅黄清亮说明补水基本足够；退烧前留在家中，减少与他人接触。测体温宜用数字体温计。如果经过居家照护，发烧没有好转或在加重，应尽快联系医生。体温很高且降不下来时可能更严重。页面另提到不适时可用的常见药物，本导读未收录，用药问题请咨询药师。",
+    "url": "https://www.nhs.uk/conditions/fever-in-adults/",
+    "version": "summary-2026-11-16",
+    "scope": "英国 NHS 面向成人的发烧概览；儿童和婴儿另有页面，不适用；不用于判断病因或选择药物。",
+    "approved": true,
+    "entities": [
+      "发烧",
+      "发热",
+      "高烧",
+      "体温",
+      "fever"
+    ],
+    "provenance": {
+      "organization": "NHS website (England)",
+      "document_type": "public_overview",
+      "source_version": "page-reviewed-2026-10-19",
+      "updated_on": "2026-10-19",
+      "checked_on": "2026-11-16",
+      "sections": [
+        "What is a high temperature?",
+        "Treating a high temperature",
+        "When and where to get medical help"
+      ],
+      "use_conditions": "Contains public sector information licensed under the Open Government Licence v3.0. 项目自行编写中文导读，不复制原文；页面中的药物建议未收录；不代表 NHS 背书。",
+      "terms_url": "https://www.nhs.uk/our-policies/terms-and-conditions/"
+    }
+  },
+  {
+    "key": "symptom-headache-nhs",
+    "title": "头痛：自我照护与何时就医",
+    "domain": "symptoms",
+    "text": "NHS 的头痛页面说明，头痛可能持续半小时到几个小时，有时持续几天。自我照护包括：多喝水；伴有感冒时多休息；尽量放松，压力会加重头痛。宜避免：不吃饭、睡得比平时多、长时间盯着屏幕用眼、饮酒。自行处理后没有好转或在加重，或者经常头痛，应联系医生。出现以下情况应尽快就医：头痛伴视力或眼部问题；咳嗽、打喷嚏、弯腰或运动时诱发或加重；伴呕吐；进食时下颌痛或头皮触痛。出现以下情况应立即拨打急救电话或去急诊：抽搐；身体或面部麻木无力；突然发作且极其剧烈；近3个月内头部受过伤；说话、平衡、行走或记忆困难；嗜睡或意识混乱；视力丧失；按压不褪色的皮疹；高烧伴颈部僵硬或怕光。页面另提到常见止痛药，本导读未收录，用药问题请咨询药师。",
+    "url": "https://www.nhs.uk/conditions/headaches/",
+    "version": "summary-2026-11-16",
+    "scope": "英国 NHS 面向公众的头痛概览；含部分儿童提示；不用于判断病因或选择药物。",
+    "approved": true,
+    "entities": [
+      "头痛",
+      "头疼",
+      "偏头痛",
+      "headache"
+    ],
+    "provenance": {
+      "organization": "NHS website (England)",
+      "document_type": "public_overview",
+      "source_version": "page-reviewed-2024-04-17",
+      "updated_on": "2024-04-17",
+      "checked_on": "2026-11-16",
+      "sections": [
+        "How you can ease headaches yourself",
+        "Non-urgent advice: See a GP if",
+        "Urgent advice: Ask for an urgent GP appointment or get help from NHS 111 if",
+        "Immediate action required: Call 999 or go to A&E if"
+      ],
+      "use_conditions": "Contains public sector information licensed under the Open Government Licence v3.0. 项目自行编写中文导读，不复制原文；页面中的药物建议未收录；不代表 NHS 背书。",
+      "terms_url": "https://www.nhs.uk/our-policies/terms-and-conditions/"
+    }
+  },
+  {
+    "key": "symptom-sore-throat-nhs",
+    "title": "喉咙痛：自我照护与何时就医",
+    "domain": "symptoms",
+    "text": "NHS 的喉咙痛页面说明，喉咙痛通常一周内会自行好转。自我照护包括：用温盐水漱口（儿童不宜）；多喝水；吃凉的或软的食物；远离吸烟和烟雾环境；多休息。一周后仍未好转、经常喉咙痛，或者口腔、颈部出现肿块，或口腔溃疡超过3周，应联系医生。出现以下情况应尽快就医：体温很高或忽冷忽热发抖；有脱水迹象（尿量比平时少、尿色深且气味重）；免疫力低下（例如有糖尿病或正在化疗）；对症状感到担心。出现以下情况应立即拨打急救电话或去急诊：呼吸困难或无法吞咽、流口水、呼吸时发出尖锐声音、症状严重且迅速加重。页面另提到药房可买的缓解药物，本导读未收录，用药问题请咨询药师；页面也说明喉咙痛通常不需要抗生素。",
+    "url": "https://www.nhs.uk/conditions/sore-throat/",
+    "version": "summary-2026-11-16",
+    "scope": "英国 NHS 面向公众的喉咙痛概览；儿童另有注意事项；不用于判断病因或选择药物。",
+    "approved": true,
+    "entities": [
+      "喉咙痛",
+      "喉咙疼",
+      "嗓子疼",
+      "嗓子痛",
+      "咽痛",
+      "咽喉痛",
+      "sore throat"
+    ],
+    "provenance": {
+      "organization": "NHS website (England)",
+      "document_type": "public_overview",
+      "source_version": "page-reviewed-2024-04-08",
+      "updated_on": "2024-04-08",
+      "checked_on": "2026-11-16",
+      "sections": [
+        "How to treat a sore throat yourself",
+        "Non-urgent advice: See a GP if",
+        "Urgent advice: Ask for an urgent GP appointment or get advice from 111 now if",
+        "Immediate action required: Call 999 or go to A&E now if"
+      ],
+      "use_conditions": "Contains public sector information licensed under the Open Government Licence v3.0. 项目自行编写中文导读，不复制原文；页面中的药物建议未收录；不代表 NHS 背书。",
+      "terms_url": "https://www.nhs.uk/our-policies/terms-and-conditions/"
+    }
+  },
+  {
+    "key": "symptom-diarrhoea-vomiting-nhs",
+    "title": "腹泻和呕吐：自我照护与何时就医",
+    "domain": "symptoms",
+    "text": "NHS 的腹泻和呕吐页面说明，腹泻通常在5到7天内停止，呕吐通常在1到2天内停止。自我照护包括：在家休息；多补充水分，恶心时小口慢喝；能吃东西时再吃，避开油腻和辛辣食物；不宜喝果汁和碳酸饮料。这类情况容易传染：勤洗手，毛巾和餐具不共用，症状停止至少2天后再上学或上班。出现以下情况应尽快就医：持续呕吐、喝不进水；便血或肛门出血；腹泻超过7天或呕吐超过2天；补液后仍有脱水迹象。出现以下情况应立即拨打急救电话或去急诊：呕血或呕吐物像咖啡渣；呕吐物呈绿色；可能误食有毒物质；颈部僵硬且看亮光时疼痛；突发剧烈头痛或剧烈腹痛；皮肤、嘴唇或舌头发青、发灰或苍白；严重呼吸困难；意识混乱或反应异常。页面另提到口服补液盐等药房用品，本导读未收录，用药问题请咨询药师。",
+    "url": "https://www.nhs.uk/conditions/diarrhoea-and-vomiting/",
+    "version": "summary-2026-11-16",
+    "scope": "英国 NHS 面向公众的腹泻和呕吐概览；婴幼儿另有阈值，本导读未收录；不用于判断病因或选择药物。",
+    "approved": true,
+    "entities": [
+      "腹泻",
+      "拉肚子",
+      "拉稀",
+      "呕吐",
+      "diarrhoea",
+      "vomiting"
+    ],
+    "provenance": {
+      "organization": "NHS website (England)",
+      "document_type": "public_overview",
+      "source_version": "page-reviewed-2023-12-21",
+      "updated_on": "2023-12-21",
+      "checked_on": "2026-11-16",
+      "sections": [
+        "How to treat diarrhoea and vomiting yourself",
+        "How long diarrhoea and vomiting last",
+        "Urgent advice: Call 111 now if",
+        "Immediate action required: Call 999 or go to A&E if you or your child"
+      ],
+      "use_conditions": "Contains public sector information licensed under the Open Government Licence v3.0. 项目自行编写中文导读，不复制原文；页面中的药物建议未收录；不代表 NHS 背书。",
+      "terms_url": "https://www.nhs.uk/our-policies/terms-and-conditions/"
+    }
   }
 ]

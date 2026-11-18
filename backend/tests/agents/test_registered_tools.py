@@ -40,7 +40,7 @@ def test_tool_catalog_and_profile_whitelists_share_registered_definitions():
 
 @pytest.mark.parametrize("text,role,expected", [
     ("你好，介绍功能", "general", {"inspect_request_context"}),
-    ("成年人咳嗽三天", "symptom_guide", {"check_symptom_fields"}),
+    ("成年人咳嗽三天", "symptom_guide", {"check_symptom_fields", "lookup_reference"}),
     ("布洛芬药品资料", "drug_reference", {"check_medication_fields", "lookup_reference", "check_medication_scope"}),
     ("报告参考范围是什么意思", "report_explainer", {"check_report_fields", "lookup_reference"}),
     ("去看医生准备哪些资料", "visit_guide", {"check_visit_fields", "lookup_reference", "build_visit_checklist"}),
@@ -228,11 +228,12 @@ def test_instance_retry_does_not_reset_tool_budget():
 def test_primary_and_support_share_one_tool_budget():
     async def scenario():
         runtime = await fixture(Model())
-        runtime.settings = replace(runtime.settings, tool_call_limit=4)
+        # Symptom check and lookup, visit check, lookup and checklist: five calls drawn from one budget.
+        runtime.settings = replace(runtime.settings, tool_call_limit=5)
         reply = await runtime.chat(Question(text="咳嗽三天，去看医生准备哪些资料？"))
         events = [event for event in runtime.monitor.traces[-1]["events"] if event["event"] == "tool"]
         assert not reply.degraded and len(reply.agent_results) == 2
-        assert len(events) == 4 and max(event["budget_used"] for event in events) == 4
+        assert len(events) == 5 and max(event["budget_used"] for event in events) == 5
         assert {event["role"] for event in events} == {"visit_guide", "symptom_guide"}
     run(scenario())
 
@@ -309,23 +310,20 @@ def test_explicit_source_requirement_respects_local_negation(text, expected):
     assert explicit_reference_request(text) is expected
 
 
-def test_source_task_cannot_succeed_without_reference_and_native_tool_result_is_validated():
+def test_source_task_must_cite_what_the_code_found():
     async def scenario():
         request = "成年人咳嗽三天，请查阅症状记录模板并说明来源。"
-        runtime = await fixture(Model())
+        class Uncited(Model):
+            async def message(self, stage, system, messages, tools=None, budget=1800):
+                return {"content":[{"type":"text", "text":json.dumps(role_output("symptom_guide"), ensure_ascii=False)}]}
+        runtime = await fixture(Uncited())
         with pytest.raises(ValueError, match="requested_evidence_not_returned"):
             await runtime.agents["symptom_guide"][0].run(request, Intent.SYMPTOMS, {}, "selective")
-        class Retrieve(Model):
-            def __init__(self): self.turn = 0
+        class Cited(Model):
             async def message(self, stage, system, messages, tools=None, budget=1800):
-                self.turn += 1
-                if self.turn == 1:
-                    return {"content":[{"type":"tool_use", "id":"source", "name":"lookup_reference",
-                                        "input":{"query":"症状记录模板", "domain":"symptoms"}}]}
-                result = json.loads(messages[-1]["content"][0]["content"])
-                assert result["documents"][0]["key"] == "symptom-record"
+                assert "symptom-record" in [ref["key"] for ref in role_data(messages)["references"]]
                 return {"content":[{"type":"text", "text":json.dumps(role_output("symptom_guide", ["symptom-record"]),ensure_ascii=False)}]}
-        runtime = await fixture(Retrieve())
+        runtime = await fixture(Cited())
         result = await runtime.agents["symptom_guide"][0].run(request, Intent.SYMPTOMS, {}, "selective")
         assert result.answer.reference_keys == ["symptom-record"]
     run(scenario())

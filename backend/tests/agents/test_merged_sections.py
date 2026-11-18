@@ -77,7 +77,7 @@ def test_each_role_is_told_which_other_parts_are_arranged():
     async def scenario():
         model = Recording()
         await (await fixture(model)).chat(Question(text=COMPOUND))
-        assert model.seen["agent_visit_guide"]["assignment"]["other_goals"] == ["整理症状记录和信息缺口；发烧吃什么有歧义时确认饮食或药品方向。"]
+        assert model.seen["agent_visit_guide"]["assignment"]["other_goals"] == ["整理症状记录和信息缺口，按适用资料给出自我照护和就医时机。"]
         assert model.seen["agent_symptom_guide"]["assignment"]["other_goals"] == ["仅整理本次就医准备事项和需向机构核实的问题。"]
     run(scenario())
 
