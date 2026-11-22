@@ -14,6 +14,7 @@ from medagent.evaluation.budget import judge_model_name, judge_source
 from medagent.evaluation.contracts import EvalLimits
 from medagent.evaluation.judging import JUDGE_INSTRUCTIONS, JUDGE_PROTOCOL_VERSION
 from medagent.evaluation.rejudge import score, summarize
+from medagent.evaluation.rejudge import rebuilt_input
 from medagent.runtime import MedicalRuntime
 
 SAVED = Path("artifacts/phase4-comparison-formal-1e5c3ab-2026-10-30.json")
@@ -59,6 +60,32 @@ def test_comparison_scores_with_the_judge_model_only():
     assert report["metadata"]["judge_model"] == "judge-model"
 
 
+def test_two_architecture_judge_receives_only_its_own_final_answer_and_can_be_replayed():
+    class RecordingJudge(Judge):
+        payloads = []
+
+        async def json(self, stage, system, content, budget=950):
+            self.payloads.append(json.loads(content))
+            return await super().json(stage, system, content, budget=budget)
+
+    judge = RecordingJudge()
+    case = ComparisonCase(id="g", category="general", target={"message":"你好，你能做什么？"})
+    async def scenario():
+        base = await fixture(RehearsalModel())
+        base.judge_model = judge
+        return await run_comparison(base, ComparisonRequest(layer="compound", multi_vs_single=True, repetitions=1, cases=[case]))
+    report = run(scenario())
+    assert report["complete"] and "single_pass_exploratory" in report["claim_blockers"]
+    pair, = report["pairs"]
+    assert len(judge.payloads) == 2
+    for name, payload in zip(pair["judge_order"], judge.payloads):
+        arm = pair["arms"][name]
+        assert payload["current_turn"]["answer"] == arm["reply"]["answer"]
+        assert "agent_results" not in payload["current_turn"]
+        assert "primary_agent" not in payload["current_turn"]["runtime_observation"]
+        assert rebuilt_input({"case_id":"g", "observation":arm}, {"g":case}, {}) == payload
+
+
 def test_summary_counts_errors_and_repeat_spread():
     row = lambda pair, old, new: {"pair":pair, "arm":"a", "original_mean":old, "errors":[], "elapsed_ms":[1],
         "original":{key:old for key in ("relevance", "accuracy", "completeness", "helpfulness")},
@@ -71,7 +98,7 @@ def test_summary_counts_errors_and_repeat_spread():
 
 def test_instructions_cap_the_defects_a_judge_may_excuse():
     assert all(text in JUDGE_INSTRUCTIONS for text in ("评分锚点", "完整性不超过 0.5", "准确性不超过 0.6", "有用性不超过 0.8"))
-    assert JUDGE_PROTOCOL_VERSION == "judge-context-5"
+    assert JUDGE_PROTOCOL_VERSION == "judge-context-7"
 
 
 def test_reason_is_written_before_the_scores():

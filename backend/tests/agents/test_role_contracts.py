@@ -105,7 +105,7 @@ def test_missing_medicine_source_is_clarification_without_factual_model_answer()
         class NoAnswer(Model):
             async def message(self, *args, **kwargs): raise AssertionError("no_source_no_answer")
         runtime = await fixture(NoAnswer())
-        reply = await runtime.chat(Question(text="想查阿莫西林的药品说明书。"))
+        reply = await runtime.chat(Question(text="想查头孢克肟的药品说明书。"))
         assert not reply.degraded
         assert reply.agent_results[0].status == "needs_clarification"
         assert reply.agent_results[0].missing_fields == ["source"]

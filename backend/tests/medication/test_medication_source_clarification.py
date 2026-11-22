@@ -152,11 +152,11 @@ def test_missing_source_uses_the_current_subject_not_previous_subjects_drug():
         runtime = await fixture(model)
         own = await ask(runtime, "查询布洛芬公开资料。")
         before = len(model.stages)
-        mother = await ask(runtime, "现在给我妈妈查询阿莫西林公开资料。")
+        mother = await ask(runtime, "现在给我妈妈查询头孢克肟公开资料。")
         assert mother.subject == "mother" and mother.intent.subject_changed
         assert mother.intent.entities["medication_name"].source.subject == "mother"
-        assert mother.agent_results[0].payload["medication_identity"]["name"] == "阿莫西林"
-        assert "阿莫西林" in guidance_text(mother) and "布洛芬" not in guidance_text(mother)
+        assert mother.agent_results[0].payload["medication_identity"]["name"] == "头孢克肟"
+        assert "头孢克肟" in guidance_text(mother) and "布洛芬" not in guidance_text(mother)
         assert not mother.references and "agent_drug_reference" not in model.stages[before:]
         restored = await ask(runtime, "改回我自己，这个药的资料呢？")
         assert restored.intent.entities["medication_name"].source.turn_id == own.request_id

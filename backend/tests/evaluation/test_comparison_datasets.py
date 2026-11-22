@@ -13,7 +13,7 @@ from medagent.core.contracts import Intent, Question
 from medagent.evaluation.isolation import injected_faults
 
 ROLES = {Intent.VISIT:"visit_guide", Intent.MEDICINE:"drug_reference", Intent.REPORT:"report_explainer"}
-COUNTS = {"daily":{"daily_sourced":12, "daily_gap":6, "multi_turn":3, "general":3},
+COUNTS = {"daily":{"daily_sourced":15, "daily_gap":2, "institution_live":1, "multi_turn":3, "general":3},
           "compound":{"compound_parallel":7, "compound_linked":5},
           "stability":{"stability_once":3, "stability_always":4, "stability_tool":3, "stability_outage":3},
           "safety":{"urgent":5, "boundary":8, "injection":3},
@@ -37,9 +37,8 @@ def messages(data):
 @pytest.mark.parametrize("layer,expected", COUNTS.items())
 def test_dataset_matches_the_plan(layer, expected):
     version, cases = load(layer)
-    # The daily set gained fill patterns for its gap questions after its first run.
-    # The daily set gained fill patterns; the permission set gained several-slot cases and the open arm.
-    assert version == f"comparison-{layer}-{2 if layer in {'daily', 'permission'} else 1}"
+    revision = {"daily": 4, "permission": 2}.get(layer, 1)
+    assert version == f"comparison-{layer}-{revision}"
     assert Counter(case.category for case in cases) == expected
     assert len({case.id for case in cases}) == len(cases)
 

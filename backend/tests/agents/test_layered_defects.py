@@ -162,7 +162,7 @@ def test_background_medicine_stays_background_without_a_linking_request():
 def test_part_handed_over_or_out_of_scope_is_not_repeated_beside_its_section(line):
     from medagent.agents.collaboration import without_role_boundary
     from medagent.agents.collaboration import covered_elsewhere
-    results = [NS(execution=NS(role="report_explainer")), NS(execution=NS(role="visit_guide"))]
+    results = [NS(execution=NS(role=role, status="answered")) for role in ("report_explainer", "visit_guide")]
     assert line not in without_role_boundary("已解释单位。"+line, covered_elsewhere(results, results[0]))
 
 

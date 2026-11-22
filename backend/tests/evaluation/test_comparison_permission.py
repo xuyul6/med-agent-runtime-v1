@@ -66,7 +66,7 @@ def test_permission_request_rules():
 
 
 def test_old_layers_keep_their_protocol():
-    assert PROTOCOL["version"] == "architecture-comparison-4" and protocol_for("daily") is PROTOCOL and protocol_for(None) is PROTOCOL
+    assert PROTOCOL["version"] == "architecture-comparison-8" and protocol_for("daily") is PROTOCOL and protocol_for(None) is PROTOCOL
     assert protocol_for("permission") is PERMISSION_PROTOCOL and PERMISSION_PROTOCOL["version"] == "architecture-comparison-6"
     plan = build_plan(ComparisonRequest(layer="permission", repetitions=3, judge=False, cases=[case()]))
     assert plan["protocol"]["version"] == "architecture-comparison-6" and plan["planned_targets"] == 9

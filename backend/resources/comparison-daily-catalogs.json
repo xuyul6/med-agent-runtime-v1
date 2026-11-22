@@ -1,0 +1,41 @@
+{
+  "comparison-daily-3": {
+    "keys": [
+      "advil-us-200mg-tablet-label",
+      "consultation-record",
+      "ibuprofen-overview",
+      "lab-context",
+      "lab-reference-range-definition",
+      "lab-structure-overview",
+      "lab-unit-overview",
+      "symptom-cough-nhs",
+      "symptom-diarrhoea-vomiting-nhs",
+      "symptom-fever-adult-nhs",
+      "symptom-headache-nhs",
+      "symptom-record",
+      "symptom-sore-throat-nhs"
+    ],
+    "sha256": "038d0ae020acdc3239cfac16022d5cecf778decd6d504fa9668d34317d20ef10"
+  },
+  "comparison-daily-4": {
+    "keys": [
+      "acr-tirads-overview",
+      "advil-us-200mg-tablet-label",
+      "amoxicillin-overview",
+      "consultation-record",
+      "ibuprofen-overview",
+      "lab-context",
+      "lab-reference-range-definition",
+      "lab-structure-overview",
+      "lab-unit-overview",
+      "metformin-overview",
+      "symptom-cough-nhs",
+      "symptom-diarrhoea-vomiting-nhs",
+      "symptom-fever-adult-nhs",
+      "symptom-headache-nhs",
+      "symptom-record",
+      "symptom-sore-throat-nhs"
+    ],
+    "sha256": "49cf025045e1d54968ec7c8c396766c6a0841da53cc2e25b06a42e0546d86c25"
+  }
+}

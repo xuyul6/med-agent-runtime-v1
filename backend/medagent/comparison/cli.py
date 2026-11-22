@@ -7,17 +7,21 @@ from pathlib import Path
 import httpx
 from ..benchmark.cli import write_report
 from ..evaluation.metrics import digest
-from .contracts import LAYERS, ComparisonRequest, protocol_for, resolve_comparison
+from .contracts import LAYERS, ComparisonRequest, daily_reference_snapshot, protocol_for, resolve_comparison
 from .runner import schedule
 
 
 def build_plan(request: ComparisonRequest) -> dict:
     version, cases = resolve_comparison(request)
     pairs = schedule(request, cases)
-    body = request.model_dump(mode="json")
-    body["cases"] = [case.model_dump(mode="json") for case in cases]
-    protocol = protocol_for(request.layer)
+    body = request.model_dump(mode="json", exclude_unset=True)
+    if request.layer == "daily" and request.cases is None:
+        body["daily_version"] = version
+    elif request.cases is None and not request.multi_vs_single:
+        body["cases"] = [case.model_dump(mode="json", exclude_unset=True) for case in cases]
+    protocol = protocol_for(request.layer, multi_vs_single=request.multi_vs_single)
     return {"schema_version":"architecture-comparison-plan-1", "online_status":"not_run", "dataset":version,
+            "cases_hash":digest([case.model_dump(mode="json") for case in cases]), "reference_snapshot":daily_reference_snapshot(version),
             "protocol":deepcopy(protocol), "protocol_hash":digest(protocol), "request":body,
             "cases_per_category":{category:sum(case.category == category for case in cases) for category in {c.category for c in cases}},
             "planned_pairs":len(pairs), "planned_targets":len(request.arm_names)*len(pairs), "schedule":pairs,
@@ -33,6 +37,15 @@ async def compare(url: str, output: str, request: ComparisonRequest) -> dict:
     if report.get("metadata", {}).get("protocol_hash") != plan["protocol_hash"]:
         report["conclusion"] = "not_established"
         report.setdefault("claim_blockers", []).append("client_server_protocol_mismatch")
+    if request.multi_vs_single and report.get("metadata", {}).get("cases_hash") != plan["cases_hash"]:
+        report["conclusion"] = "not_established"
+        report.setdefault("claim_blockers", []).append("client_server_cases_mismatch")
+    if plan["reference_snapshot"] and (
+        report["metadata"].get("cases_hash") != plan["cases_hash"]
+        or report["metadata"].get("references_hash") != plan["reference_snapshot"]["sha256"]
+    ):
+        report["conclusion"] = "not_established"
+        report.setdefault("claim_blockers", []).append("client_server_daily_snapshot_mismatch")
     write_report(output, report)
     print(f'complete={report["complete"]}; conclusion={report["conclusion"]}. Saved: {output}')
     return report

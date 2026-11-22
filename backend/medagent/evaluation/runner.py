@@ -10,12 +10,13 @@ import uuid
 from ..core.config import ROOT, UNHASHED_SETTINGS
 from ..core.contracts import Intent, Question, RoutingDecision
 from .budget import BudgetedModel, ModelBudget, aggregate_usage, judge_model_name, judge_source
-from .contracts import DialogCase, EvaluationRequest, IntentCase, JudgeScore
+from .contracts import DialogCase, EvaluationRequest, IntentCase
 from .isolation import EvaluationIsolation, ReferenceSnapshotError, injected_faults
 from .metrics import (BaselineError, BaselineStore, CLASSIFIER_LABELS, GATED_LABELS, METRIC_VERSION,
                                 POLICY, classification_metrics, compare_baseline, digest, exceeds_drop)
 from ..agents.checks import check_boundaries
-from .judging import JUDGE_INSTRUCTIONS, judge_audit, judge_input
+from .judging import grade_result, judge_audit, judge_input, request_grade
+from .required_points import POINT_VALIDATOR_VERSION, PointReviewRequired
 from ..core.observability import CURRENT, RunLog
 
 
@@ -221,12 +222,20 @@ async def run_intent(runtime, case, run_id, row=None):
     return row
 
 
-async def judge_turn(model, turn, reply, history, *, audit=None, trace=None):
+async def judge_turn(model, turn, reply, history, *, audit=None, trace=None, source_policy=None, points=None, hide_roles=False):
     if model is None: raise RuntimeError("judge_model_unavailable")
-    payload = judge_input(turn,reply,history,trace=trace)
+    payload = judge_input(turn,reply,history,trace=trace,source_policy=source_policy,points=points,hide_roles=hide_roles)
     if audit is not None: audit.update(judge_audit(payload))
-    result = await model.json("evaluation_judge",JUDGE_INSTRUCTIONS,json.dumps(payload,ensure_ascii=False),950)
-    return JudgeScore.model_validate(result).result()
+    if audit is not None and hide_roles: audit["hide_roles"] = True
+    result = await request_grade(model, payload, 1500 if points else 950)
+    if audit is not None and points:
+        audit["point_validator"] = POINT_VALIDATOR_VERSION
+    try:
+        return grade_result(payload, result)
+    except PointReviewRequired as exc:
+        if audit is not None:
+            audit.update(review_reason=str(exc), raw_judgment=result)
+        raise
 
 
 async def run_dialog(runtime, case, run_id, request, budget, row=None):

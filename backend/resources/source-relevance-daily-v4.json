@@ -1,0 +1,149 @@
+{
+  "version": "daily-evidence-recall-1",
+  "daily_catalog": "comparison-daily-4",
+  "cases": [
+    {
+      "id": "tirads0",
+      "query": "甲状腺彩超报告里的 TI-RADS 分级是什么意思",
+      "domain": "report",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "acr-tirads-overview"
+      ]
+    },
+    {
+      "id": "tirads1",
+      "query": "甲状腺超声单子上的 TI-RADS 是拿来做什么的？",
+      "domain": "report",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "acr-tirads-overview"
+      ]
+    },
+    {
+      "id": "tirads2",
+      "query": "医生写的 TIRADS 是什么意思？",
+      "domain": "report",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "acr-tirads-overview"
+      ]
+    },
+    {
+      "id": "tirads-old",
+      "query": "甲状腺彩超报告里的 TI-RADS 分级是什么意思",
+      "domain": "report",
+      "expected_recall": false,
+      "expected_source_keys": [],
+      "daily_catalog": "comparison-daily-3"
+    },
+    {
+      "id": "amox0",
+      "query": "阿莫西林是什么类型的药",
+      "domain": "medicine",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "amoxicillin-overview"
+      ]
+    },
+    {
+      "id": "amox1",
+      "query": "阿莫西林属于哪一类药呀？",
+      "domain": "medicine",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "amoxicillin-overview"
+      ]
+    },
+    {
+      "id": "amox2",
+      "query": "amoxicillin 是哪类药物？",
+      "domain": "medicine",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "amoxicillin-overview"
+      ]
+    },
+    {
+      "id": "met0",
+      "query": "二甲双胍的资料帮我查查",
+      "domain": "medicine",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "metformin-overview"
+      ]
+    },
+    {
+      "id": "met1",
+      "query": "想了解二甲双胍通常拿来做什么。",
+      "domain": "medicine",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "metformin-overview"
+      ]
+    },
+    {
+      "id": "met2",
+      "query": "metformin 属于什么药？",
+      "domain": "medicine",
+      "expected_recall": true,
+      "expected_source_keys": [
+        "metformin-overview"
+      ]
+    },
+    {
+      "id": "d-gap-lianhua0",
+      "query": "我想查连花清瘟胶囊的一般用途，只看通用药品资料。",
+      "domain": "medicine",
+      "expected_recall": false,
+      "expected_source_keys": []
+    },
+    {
+      "id": "d-gap-lianhua1",
+      "query": "连花清瘟一般用来干什么？",
+      "domain": "medicine",
+      "expected_recall": false,
+      "expected_source_keys": []
+    },
+    {
+      "id": "d-gap-breath-c130",
+      "query": "看碳13尿素呼气试验报告时，DOB 数值达到多少才算阳性？",
+      "domain": "report",
+      "expected_recall": false,
+      "expected_source_keys": [],
+      "allowed_context_keys": [
+        "lab-structure-overview",
+        "lab-unit-overview",
+        "lab-reference-range-definition",
+        "lab-context"
+      ]
+    },
+    {
+      "id": "d-gap-breath-c131",
+      "query": "报告上写着碳13尿素呼气试验，DOB 的阳性界值是多少？",
+      "domain": "report",
+      "expected_recall": false,
+      "expected_source_keys": [],
+      "allowed_context_keys": [
+        "lab-structure-overview",
+        "lab-unit-overview",
+        "lab-reference-range-definition",
+        "lab-context"
+      ]
+    },
+    {
+      "id": "d-institution-release-time0",
+      "query": "协和医院挂号几点开始放号",
+      "domain": "visit",
+      "expected_recall": false,
+      "expected_source_keys": []
+    },
+    {
+      "id": "d-institution-release-time1",
+      "query": "想打听协和医院周一最早什么时候能挂上号？",
+      "domain": "visit",
+      "expected_recall": false,
+      "expected_source_keys": []
+    }
+  ]
+}

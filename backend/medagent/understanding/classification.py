@@ -17,6 +17,7 @@ LEXICON = {
     Intent.GENERAL: r"你好|功能|能做什么|谢谢",
 }
 CLASSES = [kind for kind in Intent if kind not in {Intent.URGENT, Intent.APPOINTMENT}]
+CHANNEL_WEIGHTS = {"keywords": 7, "language": 9}
 # Semantic judgments the model makes by quoting the turn; see Understanding.
 JUDGMENTS = ("product_quote", "visit_quote", "appointment_quote")
 
@@ -25,13 +26,6 @@ def distribution(values: dict) -> dict[str, float]:
     clean = {item.value: max(0.0, min(1.0, float(values.get(item.value, 0)))) for item in CLASSES}
     total = sum(clean.values())
     return {k: v/total for k,v in clean.items()} if total else {item.value: float(item == Intent.GENERAL) for item in CLASSES}
-
-
-# Fixed uniform prior carrying the weight the vector channel had. That channel never discriminated: its scores were
-# clamped to a uniform distribution. A working version (softmax scale 5-80, 1 or 8 prototypes per class) picked the
-# right class alone for under half of the single-intent labels and never beat this prior on the tuning set, so it was
-# removed. The prior keeps the fused scores, and so every confidence threshold, exactly as they were.
-PRIOR_WEIGHT = .20
 
 
 class IntentRouter:
@@ -46,11 +40,11 @@ class IntentRouter:
         grounded = [fact for candidate in local if (fact := ground_update(candidate, source_map)) is not None]
         preliminary = merge_fields(state.get("entities", {}), grounded, subject)
         hits = {kind.value:len(re.findall(pattern, text)) for kind,pattern in LEXICON.items()}
-        prior = state.get("last_intent", "")
+        last_intent = state.get("last_intent", "")
         followup = bool(re.search(r"这个药|这种药|该药|它|这个指标|那.{0,5}(?:呢|单位|范围)|刚才|更正|说错|不知道|不清楚", text))
         explicit_new_topic = bool(re.match(r"^(?:另外|另一个问题|换个话题|换个问题|再问一个问题)", text.strip()))
         if not any(hits.values()) and text.strip() and len(text) <= 80 and not explicit_new_topic:
-            followup = prior in {kind.value for kind in CLASSES if kind != Intent.GENERAL}
+            followup = last_intent in {kind.value for kind in CLASSES if kind != Intent.GENERAL}
         async def language():
             if self.model is None:
                 raise RuntimeError("preview")
@@ -80,8 +74,7 @@ class IntentRouter:
             return {"scores":distribution(result["scores"]), "tasks":result.get("tasks", []), "updates":result.get("updates", []),
                     "urgent_quote":result.get("urgent_quote"),
                     "judgments":{name:result.get(name) for name in JUDGMENTS}}
-        signals = {"prior": {item.value: 1/len(CLASSES) for item in CLASSES}}
-        weights = {"prior": PRIOR_WEIGHT}
+        signals = {}
         fallbacks, semantic_tasks, semantic_updates, urgent_quote = [], [], [], ""
         judgments = dict.fromkeys(JUDGMENTS)
         try:
@@ -103,18 +96,21 @@ class IntentRouter:
                     fallbacks.append("unverified_"+name+"_ignored")
                 else:
                     judgments[name] = verified[:300]
-            signals["language"], weights["language"] = value["scores"], .45
+            signals["language"] = value["scores"]
         # A turn without any keyword gives the keyword channel nothing to say, so it votes only when it hit something;
-        # with no model either, the empty vote still means general. The prior is a constant and never changes the order.
+        # with no model either, the empty vote still means general.
         if any(hits.values()) or "language" not in signals:
-            signals["keywords"], weights["keywords"] = distribution(hits), .35
-        # The fused score decides the primary intent. The model reads the history and known fields, so it follows a
-        # short follow-up itself; only without it can keywords and the prior not see the previous task.
-        fused = distribution({key: sum(weights[ch]*scores[key] for ch,scores in signals.items()) for key in signals["prior"]})
+            signals["keywords"] = distribution(hits)
+        total_weight = sum(CHANNEL_WEIGHTS[channel] for channel in signals)
+        fused = {
+            kind.value: sum((CHANNEL_WEIGHTS[channel] / total_weight) * scores[kind.value]
+                            for channel, scores in signals.items())
+            for kind in CLASSES
+        }
         primary = Intent(max(fused, key=fused.get))
         if ("language" not in signals and followup and not any(hits[kind.value] for kind in CLASSES if kind != Intent.GENERAL)
-                and prior in {kind.value for kind in CLASSES}):
-            primary = Intent(prior)
+                and last_intent in {kind.value for kind in CLASSES}):
+            primary = Intent(last_intent)
             event("classification_rule", rule="same_subject_followup")
         candidates = []
         for candidate in semantic_updates[:24] if isinstance(semantic_updates, list) else []:

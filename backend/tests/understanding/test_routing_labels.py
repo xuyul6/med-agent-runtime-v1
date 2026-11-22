@@ -26,6 +26,7 @@ def test_label_sets_are_unique_and_primary_is_inside_the_role_set():
 def test_tuning_set_routes_every_case():
     report = run()
     assert report["paid_model_calls"] == 0 and report["language_channel"] == "not_used_offline"
+    assert report["channels"] == ["keywords"]
     assert set(report["summary"]["mismatches"]) <= KNOWN_TUNING_MISSES
 
 
@@ -100,7 +101,7 @@ def test_online_channel_calls_the_model_only_for_understanding_and_keeps_roles_i
     model = StageLog()
     report = run_async(score(DATASET, model=model, model_name="fake"))
     assert set(model.stages) == {"understanding"} and report["kind"] == "online_routing_labels"
-    assert report["channels"][-1] == "language:fake" and report["budget_stop"] is None
+    assert report["channels"] == ["keywords", "language:fake"] and report["budget_stop"] is None
     assert report["paid_model_calls"] == len(model.stages) == report["usage"]["attempted_calls"]
     # Urgent turns stop at the risk gate before understanding; every other scored turn used the language channel.
     assert report["language_channel"] == "scored_cases_without_language:0"

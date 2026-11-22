@@ -19,7 +19,8 @@ from .memory import owner_key, scope_key
 from .core.observability import CURRENT, RunLog, event
 from .understanding.risk import RiskGate
 from .agents.profiles import DEFAULT_REGISTRY, ProfileRegistry
-from .understanding.conversation import SubjectTracker, institution_request, recover_visit_followup, role_details
+from .understanding.conversation import (SubjectTracker, followup_preparation_clause, institution_request,
+                                         recover_visit_followup, role_details)
 from .understanding.consultation_needs import consultation_need
 from .understanding.routing import RoutingPlanner
 from .agents.collaboration import compose
@@ -59,8 +60,8 @@ def role_input(assignment, understanding, question, context, clock):
                 subject_changed=understanding.subject_changed, now=clock())
         except (TypeError, ValueError, OverflowError):
             visit_followup = None
-    if visit_followup is not None and "visit_context" in details:
-        # The recovered clause is the user's own earlier visit wording, which a quote of this turn cannot show.
+    if role == "visit_guide" and (followup_preparation_clause(question.text)
+                                  or visit_followup is not None and "visit_context" in details):
         details["visit_context"] = True
     target = scoped.entities.get("medication_name")
     query = (target.value+" 药品公开资料 "+assignment.input_text if role == "drug_reference" and target and target.state in {"provided", "topic"}
@@ -360,7 +361,8 @@ class MedicalRuntime:
                                        turn.risk, turn.skill_snapshot, turn.tool_budget)
         remaining = self.settings.collaboration_timeout-(time.perf_counter()-execution_started)
         answer, references, degraded = await compose(decision, outputs, understanding,
-            self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)))
+            self.model if remaining > 0 else None, min(self.settings.model_timeout, max(.001, remaining)),
+            current_request=question.text)
         booking = outputs.get("appointment")
         return TurnResult(decision, answer, references,
             [outputs[assignment.role].execution for assignment in decision.assignments if assignment.role in outputs], outputs,

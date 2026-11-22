@@ -26,8 +26,10 @@ async def run_check(dataset=None):
     await source_index.upsert(records)
     source = MedicalRuntime(Settings(preview=True, embeddings="hash"), None, vectors, source_index, SessionMemory())
     isolation = EvaluationIsolation(source, "source-relevance-controlled", ModelBudget(EvalLimits()))
+    catalogs = json.loads((ROOT/"resources/comparison-daily-catalogs.json").read_text()) if "daily_catalog" in data else {}
     selections = [DialogCase.model_validate({"id":case["id"], "turns":[case["query"]],
-                  "reference_snapshot":case["reference_snapshot"]}) for case in cases]
+                  "reference_snapshot":(catalogs[case.get("daily_catalog", data["daily_catalog"])] if catalogs
+                                        else case["reference_snapshot"])}) for case in cases]
     snapshot_preflight(isolation, selections)
     rows = []
     try:
@@ -36,10 +38,17 @@ async def run_check(dataset=None):
             isolation.select_case_references(selection.reference_snapshot.keys)
             found = await isolation.index.search(case["query"], case["domain"])
             keys = [ref.key for ref in found]
+            matched = bool(keys) == case["expected_recall"]
+            if "expected_source_keys" in case:
+                expected = set(case["expected_source_keys"])
+                if not expected <= set(selection.reference_snapshot.keys):
+                    raise ValueError("expected_source_outside_snapshot:" + case["id"])
+                matched = bool(expected & set(keys)) if expected else set(keys) <= set(case.get("allowed_context_keys", []))
             rows.append({"id":case["id"], "domain":case["domain"], "query":case["query"],
                          "expected_recall":case["expected_recall"], "actual_keys":keys,
-                         "matched_expectation":bool(keys) == case["expected_recall"],
-                         "reference_snapshot":case["reference_snapshot"]})
+                         "matched_expectation":matched,
+                         **{k:case[k] for k in ("expected_source_keys", "allowed_context_keys") if k in case},
+                         "reference_snapshot":selection.reference_snapshot.model_dump(mode="json")})
     finally:
         await isolation.cleanup()
     if isolation.cleanup_errors: raise RuntimeError("controlled_reference_cleanup_failed")

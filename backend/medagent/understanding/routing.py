@@ -5,7 +5,8 @@ from .classification import LEXICON
 from .medications import NAMES
 from ..core.contracts import (AgentAssignment, InstanceChoice, Intent, RoutingCandidate, RoutingDecision,
                         RoutingFallback, Understanding)
-from .conversation import VISIT_EVENT, VISIT_PREPARATION_REQUEST, clauses, institution_request, positive_request
+from .conversation import (VISIT_EVENT, VISIT_PREPARATION_REQUEST, clauses, followup_preparation_clause,
+                           institution_request, positive_request)
 from .risk import CURRENT, HISTORICAL, normalize
 
 
@@ -82,6 +83,13 @@ def past_symptoms_only(text: str) -> bool:
     return bool(mentions) and all(re.search(HISTORICAL, clause) and not re.search(CURRENT, clause) for clause in mentions)
 
 
+def past_followups_only(text: str) -> bool:
+    mentions = [part for part in clauses(text) if re.search(LEXICON[Intent.VISIT], part)]
+    return bool(mentions) and all(re.search(r"(?:上次|上回|以前|曾经|去年).{0,8}(?:复查|复诊)", part)
+                                  and not re.search(r"这次|下次|下周|明天|准备去|怎么|如何|哪|能否|是否|什么|吗|[？?]", part)
+                                  and not institution_request(part) for part in mentions)
+
+
 def outside_scope(text: str, kind: Intent) -> bool:
     """A support task is outside the scope when the user narrowed the turn and no clause asks for it.
 
@@ -141,7 +149,15 @@ class RoutingPlanner:
                    or not (re.search(LEXICON[kind], text) and not positive_request(text, LEXICON[kind]))}
         # Support is for current work: a resolved past symptom or a task outside "只想…" stays context.
         domains = {kind for kind in domains if kind in (understanding.primary, Intent.GENERAL)
-                   or not (kind == Intent.SYMPTOMS and past_symptoms_only(text) or outside_scope(text, kind))}
+                   or not (kind == Intent.SYMPTOMS and past_symptoms_only(text)
+                           or kind == Intent.VISIT and not understanding.visit_quote and past_followups_only(text)
+                           or outside_scope(text, kind))}
+        # A drug in the history can win the intent score even when the user only wants a symptom record.
+        if (understanding.primary == Intent.MEDICINE and Intent.SYMPTOMS in domains and outside_scope(text, Intent.MEDICINE)
+                and any(re.search(SCOPE, part) and not re.search(LEXICON[Intent.MEDICINE], part, re.I)
+                        and positive_request(part, r"(?:记录|记下|记一下|整理).{0,24}(?:"+LEXICON[Intent.SYMPTOMS]+r")")
+                        for part in clauses(text))):
+            domains.discard(Intent.MEDICINE)
         # A booking request keeps the information tasks already admitted; only a VISIT that came from booking words goes.
         if appointment is not None and not understanding.subject_ambiguous:
             if not (positive_request(text, VISIT_PREPARATION_REQUEST) or cross_clause_visit_preparation(text) or institution_request(text)):
@@ -232,6 +248,9 @@ class RoutingPlanner:
         fields = [name for name in ROLE_FIELDS[candidate.role] if name in understanding.entities]
         selected = [part for part in clauses(text) if re.search(LEXICON[candidate.intent], part)
                     or candidate.intent == Intent.VISIT and institution_request(part)]
+        if candidate.intent == Intent.VISIT and (request := followup_preparation_clause(text)):
+            # The question after the comma may have no visit keywords of its own.
+            selected += [part for part in clauses(request) if not any(part in line for line in selected)]
         selected += [understanding.entities[name].source.quote for name in fields
                      if understanding.entities[name].source.turn_id == understanding.turn_id]
         excerpt = "\n".join(dict.fromkeys(selected)) or text

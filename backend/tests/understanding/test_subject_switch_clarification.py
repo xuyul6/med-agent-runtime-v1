@@ -60,11 +60,11 @@ def test_explicit_subject_metadata_uses_guidance_without_echoing_subject_values(
 def test_existing_medication_for_current_subject_is_not_asked_again_after_switching_back():
     async def scenario():
         runtime = await fixture(CountStages())
-        named = await ask(runtime,"现在给我妈妈查询阿莫西林公开资料。")
+        named = await ask(runtime,"现在给我妈妈查询头孢克肟公开资料。")
         await ask(runtime,"改回我自己，查询布洛芬公开资料。")
         restored = await ask(runtime,"现在给我妈妈问，这个药的资料呢？")
         fact = restored.intent.entities["medication_name"]
-        assert fact.value == "阿莫西林" and fact.source.subject == "mother" and fact.source.turn_id == named.request_id
+        assert fact.value == "头孢克肟" and fact.source.subject == "mother" and fact.source.turn_id == named.request_id
         assert restored.agent_results[0].missing_fields == ["source"]
         assert "medication_name" not in restored.agent_results[0].missing_fields
         assert "布洛芬" not in guidance_text(restored)
@@ -76,8 +76,8 @@ def test_new_subject_with_explicit_name_does_not_trigger_name_clarification():
     async def scenario():
         runtime = await fixture(CountStages())
         await ask(runtime,"查询布洛芬公开资料。")
-        reply = await ask(runtime,"现在给我妈妈查询阿莫西林公开资料。")
-        assert reply.subject == "mother" and reply.intent.entities["medication_name"].value == "阿莫西林"
+        reply = await ask(runtime,"现在给我妈妈查询头孢克肟公开资料。")
+        assert reply.subject == "mother" and reply.intent.entities["medication_name"].value == "头孢克肟"
         assert reply.agent_results[0].missing_fields == ["source"]
         assert "重新确认当前对象" not in reply.answer.text
     run(scenario())

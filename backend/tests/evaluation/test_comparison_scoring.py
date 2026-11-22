@@ -121,7 +121,7 @@ def test_bootstrap_counts_missing_pairs():
 
 
 def layer_report(layer, category, **rows):
-    arm = lambda **fields: {"status":"completed", "quality":{"mean":.8, **QUALITY}, "elapsed_ms":1,
+    arm = lambda **fields: {"status":"completed", "rule_passed":True, "quality":{"mean":.8, **QUALITY}, "elapsed_ms":1,
                             "usage":{"total_input_tokens":1, "output_tokens":1, "calls":1}, **fields}
     report = {"mode":"online", "complete":True, "pairs":[{"id":f"{case}-1", "case_id":case, "category":category,
         "arms":{"multi_agent":arm(), "single_agent":arm(**rows)}} for case in "abc"]}

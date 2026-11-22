@@ -45,8 +45,8 @@ def test_medication_correction_clears_dependent_fields_and_never_substitutes_old
         runtime = await fixture(ContextModel(updates))
         first = await ask(runtime, "请查成人布洛芬胶囊的公开资料。")
         assert first.intent.entities["formulation"].value == "胶囊"
-        corrected = await ask(runtime, "更正，不是布洛芬，是阿莫西林。")
-        assert corrected.intent.entities["medication_name"].value == "阿莫西林"
+        corrected = await ask(runtime, "更正，不是布洛芬，是头孢克肟。")
+        assert corrected.intent.entities["medication_name"].value == "头孢克肟"
         assert "formulation" not in corrected.intent.entities and "population" not in corrected.intent.entities
         assert not corrected.references
         assert corrected.agent_results[0].missing_fields == ["source"]
@@ -209,14 +209,14 @@ def test_model_receives_only_bounded_user_history_and_no_raw_facts_in_trace():
     run(scenario())
 
 
-def test_keyword_and_literal_context_survive_both_other_classification_channels_failing():
+def test_keyword_and_literal_context_survive_language_channel_failure():
     async def scenario():
         class BrokenLanguage(ContextModel):
             async def json(self, *args, **kwargs): raise ConnectionError("language_failed")
         router = IntentRouter(BrokenLanguage())
         reply = await router.understand("查布洛芬资料", turn_id="one")
         assert reply.primary == Intent.MEDICINE and reply.entities["medication_name"].value == "布洛芬"
-        assert set(reply.signals) == {"keywords", "prior"}
+        assert reply.signals == {"keywords": reply.scores}
         assert set(reply.fallbacks) == {"language_unavailable"}
     run(scenario())
 

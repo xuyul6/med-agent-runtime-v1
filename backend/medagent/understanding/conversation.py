@@ -96,6 +96,34 @@ def clauses(text: str):
 VISIT_EVENT = r"看医生|就医|就诊|复诊|复查|门诊|(?<![不没别])(?:去|到)医院"
 VISIT_PREPARATION_REQUEST = r"(?:" + VISIT_EVENT + r").*(?:准备|带|整理|记录|资料)|挂号.*(?:材料|流程)"
 
+# Keep both halves of "下周复查，我需要带哪些资料" as one excerpt. Only an
+# explicit preparation question can override an empty semantic visit quote.
+PREPARATION_QUESTION = (
+    r"(?:(?:带上?|携带|准备)(?:点|些|一下)?(?:什么|哪些|啥)|(?:怎么|怎样|如何)准备|"
+    r"(?:有)?(?:哪些|什么)(?:资料|材料|东西)(?:需要|要|得)(?:准备|带上?|携带))"
+    r"(?:资料|材料|东西|清单|报告|记录|问题)?"
+)
+FOLLOWUP_PREPARATION = re.compile(
+    r"(?:复查|复诊)(?:的?时候|之前|当天|那天|时|前)?[，,、：:\s]*"
+    r"(?:我们|我)?(?:想问一下|想问|请问|帮我理一下|帮我看看)?(?:应该|需要|得|要|该)?(?:提前)?"
+    r"(?:" + PREPARATION_QUESTION + r"|(?:想问医生的)?问题(?:怎么|如何)(?:整?理|列)|"
+    r"(?:怎么|如何)(?:整理|列出)(?:想|要)问医生的问题)"
+    r"|" + PREPARATION_QUESTION + r"(?:去|参加)(?:复查|复诊)"
+)
+
+
+def followup_preparation_clause(text: str) -> str:
+    for match in FOLLOWUP_PREPARATION.finditer(text):
+        prefix = re.split(r"[。！？!?；;\n，,]", text[:match.start()])[-1]
+        if re.search(r"(?:不想|不问|不用|不必|不要|不需要|无需|没问|别问|取消|没有安排|暂不).{0,10}$|"
+                     r"上次|上回|曾经|以前|去年|举例|例如|假设|[“「\"]", prefix):
+            continue
+        tail = re.split(r"[。！？!?；;\n，,]", text[match.end():], maxsplit=1)[0]
+        if re.search(r"[”」\"]|出差|旅行|行李|送礼", tail):
+            continue
+        return match.group()
+    return ""
+
 
 # Going to a named department is a visit, however the user says it.
 SPECIALTY_VISIT = r"看(?:牙|中医)|(?:口腔|牙|眼|皮肤|儿|妇|产|骨|内|外|耳鼻喉)科"
@@ -290,7 +318,7 @@ def positive_request(text: str, pattern: str) -> bool:
 
 INSTITUTION_REQUEST = (
     r"(?:这家|那家|该|具体|目标).{0,5}(?:医院|诊所|机构)|号源|收费|证件要求|"
-    r"(?:医院|诊所|医疗机构).{0,24}(?:挂号|预约|入口|流程|费用|材料|开放时间|医保|报销|地址|位置|接诊|出诊|排班|营业时间)|"
+    r"(?:医院|诊所|医疗机构).{0,24}(?:挂(?:上|到)?号|放号|预约|入口|流程|费用|材料|开放时间|医保|报销|地址|位置|接诊|出诊|排班|营业时间)|"
     r"(?:预约|挂号).{0,16}(?:医院|诊所|医疗机构)"
 )
 

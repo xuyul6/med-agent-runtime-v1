@@ -73,6 +73,17 @@ def has_query_overlap(query: str, ref: Reference, visit_context: bool | None = N
         query_terms = visit_relevance_terms(query) | ({"就医"} if visit_context else set())
         return bool(query_terms & visit_relevance_terms(ref.title + " " + ref.text))
     if ref.domain == Intent.REPORT:
+        if ref.entities:
+            # Named terminology sources require their topic in the original question.
+            topic = re.sub(r"[-‐‑–—]", "", query.casefold())
+            for alias in ref.entities:
+                term = re.sub(r"[-‐‑–—]", "", alias.casefold())
+                if term.isascii():
+                    if re.search(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", topic):
+                        return True
+                elif term in topic:
+                    return True
+            return False
         overlap = relevance_terms(query) & relevance_terms(ref.title + " " + ref.text)
         if overlap == {"报告"}:
             # A shared domain label alone is insufficient when the user names a topic.

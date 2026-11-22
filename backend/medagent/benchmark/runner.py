@@ -93,13 +93,14 @@ def observed_judge_models(entries) -> list[str]:
                    if event["event"] == "model" and isinstance(event.get("response_model"),str) and event["response_model"]})
 
 
-async def score_observation(reply, turn, snapshot, isolation, budget, row):
+async def score_observation(reply, turn, snapshot, isolation, budget, row, *, hide_roles=False):
     begin = len(budget.entries)
     try:
         if reply is None: raise RuntimeError("target_reply_unavailable")
         judge = BudgetedModel(isolation.judge_model,budget,"judge") if isolation.judge_model else None
         row["judge_context"] = {}
-        row["quality"] = await judge_turn(judge,turn,reply,snapshot.history,audit=row["judge_context"],trace=row.get("trace"))
+        row["quality"] = await judge_turn(judge,turn,reply,snapshot.history,audit=row["judge_context"],trace=row.get("trace"),
+                                          source_policy=row.get("source_gap_policy"), points=row.get("required_points"), hide_roles=hide_roles)
     except asyncio.CancelledError:
         row["judge_error"] = "deadline_or_cancellation"
         raise

@@ -59,7 +59,7 @@ def test_medicine_keyword_survives_classifier_provider_failure():
         router = IntentRouter(None)
         understood = await router.understand("布洛芬药品说明书和用药禁忌")
         assert understood.primary == Intent.MEDICINE
-        assert set(understood.signals) == {"keywords","prior"}
+        assert understood.signals == {"keywords": understood.scores}
     run(scenario())
 
 
@@ -255,7 +255,7 @@ def test_model_primary_leads_and_the_visit_request_stays_as_support():
 def test_medicine_retrieval_does_not_substitute_another_drug():
     async def scenario():
         runtime=await fixture()
-        assert await runtime.index.search("阿莫西林说明资料", "medicine")==[]
+        assert await runtime.index.search("头孢克肟说明资料", "medicine")==[]
         assert (await runtime.index.search("布洛芬公开资料", "medicine"))[0].key=="ibuprofen-overview"
     run(scenario())
 

@@ -113,7 +113,8 @@ def test_a_symptom_followup_gets_no_support_task_from_the_previous_task_wording(
     async def scenario():
         result = await IntentRouter(ScoreModel({"symptoms":.8, "general":.2})).understand("三天了", {"last_intent":"symptoms"}, turn_id="synthetic")
         assert [task.intent for task in result.tasks] == [Intent.SYMPTOMS]
-        assert "keywords" not in result.signals
+        assert result.signals == {"language": result.scores}
+        assert result.confidence == pytest.approx(.8)
     run(scenario())
 
 

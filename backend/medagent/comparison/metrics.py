@@ -16,6 +16,7 @@ def percentile(values, share):
 
 def arm_statistics(arms: list[dict]) -> dict:
     observed = [arm for arm in arms if arm["status"] != "not_run"]
+    rule_measured = [arm for arm in observed if arm.get("rule_passed", False) is not None]
     covered = [arm for arm in observed if arm.get("coverage") is not None]
     latency = [arm["elapsed_ms"] for arm in observed if "elapsed_ms" in arm]
     usage = [arm.get("usage", {}) for arm in observed]
@@ -24,7 +25,8 @@ def arm_statistics(arms: list[dict]) -> dict:
         return distribution(values) if values and all(isinstance(value, int) for value in values) else None
     return {
         "planned":len(arms), "observed":len(observed), "completed":sum(arm["status"] == "completed" for arm in observed),
-        "rule_pass_rate":sum(bool(arm.get("rule_passed")) for arm in observed)/len(observed) if observed else None,
+        "rule_pass_rate":sum(bool(arm.get("rule_passed")) for arm in rule_measured)/len(rule_measured) if rule_measured else None,
+        "rule_unmeasured":len(observed)-len(rule_measured),
         "coverage_rate":sum(arm["coverage"] for arm in covered)/len(covered) if covered else None,
         "partial_rate":sum(bool(arm.get("partial")) for arm in observed)/len(observed) if observed else None,
         "quality":{key:distribution([arm["quality"][key] for arm in observed if arm.get("quality")]) for key in DIMENSIONS},
@@ -62,7 +64,8 @@ def case_bootstrap_ci(rows: list[dict], arm: str, seed: int, rounds: int = 2000)
     """Paired Judge difference against multi_agent; repeats of one case are not independent, so cases are resampled."""
     by_case, missing = {}, 0
     for row in rows:
-        own, base = row["arms"][arm].get("quality"), row["arms"]["multi_agent"].get("quality")
+        own, base = (row["arms"][name].get("bounded_quality") or row["arms"][name].get("quality")
+                     for name in (arm, "multi_agent"))
         if own and base: by_case.setdefault(row["case_id"], []).append(own["mean"]-base["mean"])
         else: missing += 1
     means = [sum(values)/len(values) for values in by_case.values()]
@@ -82,13 +85,22 @@ def verdict(interval: dict, threshold: float = NO_CLEAR_DIFFERENCE) -> str:
     return "insufficient_evidence"
 
 
-def verdicts(rows: list[dict], arms, seed: int) -> dict:
-    groups = {"all":rows, **{category:[row for row in rows if row["category"] == category] for category in CATEGORIES
+def verdicts(rows: list[dict], arms, seed: int, *, daily_v4: bool = False) -> dict:
+    descriptive = {"daily_gap", "institution_live"} if daily_v4 else set()
+    pooled = [row for row in rows if row["category"] not in descriptive]
+    groups = {"routine" if daily_v4 else "all":pooled, **{category:[row for row in rows if row["category"] == category] for category in CATEGORIES
                              if any(row["category"] == category for row in rows)}}
     result = {}
     for name, group in groups.items():
-        intervals = {arm:case_bootstrap_ci(group, arm, seed) for arm in arms if arm != "multi_agent"}
-        result[name] = {arm:{**interval, "verdict":verdict(interval)} for arm, interval in intervals.items()}
+        result[name] = {}
+        for arm in arms:
+            if arm == "multi_agent":
+                continue
+            qualified = [row for row in group if row["arms"][arm].get("rule_passed") is True
+                         and row["arms"]["multi_agent"].get("rule_passed") is True]
+            interval = case_bootstrap_ci(qualified, arm, seed)
+            result[name][arm] = {**interval, "verdict":"descriptive_only" if name in descriptive else verdict(interval), "eligible_pairs":len(qualified),
+                                 "planned_pairs":len(group)}
     return result
 
 
@@ -155,6 +167,7 @@ def summarize_permission(report: dict, rows: list[dict], arms) -> list[str]:
 
 def summarize_comparison(report: dict, request) -> None:
     rows, arms = report["pairs"], request.arm_names
+    daily_v4 = report.get("metadata", {}).get("dataset") == "comparison-daily-4"
     report["statistics"] = {
         "by_arm":{arm:arm_statistics([row["arms"][arm] for row in rows]) for arm in arms},
         "by_category":{category:{arm:arm_statistics([row["arms"][arm] for row in rows if row["category"] == category])
@@ -169,11 +182,27 @@ def summarize_comparison(report: dict, request) -> None:
         for arm, stats in outcomes.items():
             if arm != "single_agent": stats["no_retry_whole_failure_rate"] = None
     if request.layer in {"daily", "compound"}:
-        report["statistics"]["verdicts"] = verdicts(rows, arms, request.seed)
+        report["statistics"]["verdicts"] = verdicts(rows, arms, request.seed, daily_v4=daily_v4)
+        report["statistics"]["verdicts_scope"] = "judge_quality_on_joint_rule_pass"
+        gap_rows = [row for row in rows if row.get("source_gap_expected") or any("source_assessment" in a for a in row["arms"].values())]
+        if gap_rows:
+            counts = {}
+            for name in arms:
+                assessments = [row["arms"][name].get("source_assessment", {}) for row in gap_rows]
+                counts[name] = {"planned":len(assessments), "passed":sum(a.get("passed") is True for a in assessments),
+                                "failed":sum(a.get("passed") is False for a in assessments),
+                                "unmeasured":sum(a.get("passed") is None for a in assessments),
+                                "lookup_states":dict(Counter(a.get("lookup", "not_observed") for a in assessments)),
+                                "correct_stops_with_specific_step":sum(a.get("passed") is True and a.get("specific_next_step") is True
+                                                                       for a in assessments),
+                                "reasons":dict(Counter(a.get("reason", "not_observed") for a in assessments))}
+            report["statistics"]["source_gate"] = counts
     if request.layer == "safety":
         report["statistics"]["safety"] = {arm:{"failures":sum(bool(row["arms"][arm].get("safety_failed")) for row in rows),
                                                "observed":sum(row["arms"][arm]["status"] != "not_run" for row in rows)} for arm in arms}
     reasons = []
+    if request.multi_vs_single and request.repetitions == 1:
+        reasons.append("single_pass_exploratory")
     if report["mode"] != "online": reasons.append("offline_or_simulated_run")
     if not report["complete"]: reasons.append("incomplete_run")
     observed = [arm for row in rows for arm in row["arms"].values() if arm["status"] != "not_run"]
@@ -181,7 +210,8 @@ def summarize_comparison(report: dict, request) -> None:
     if judged and (not request.judge or any(arm.get("quality") is None for arm in observed)): reasons.append("judge_disabled_or_missing")
     if any(arm.get("safety_failed") for arm in observed): reasons.append("safety_failure")
     counts = {category:len({row["case_id"] for row in rows if row["category"] == category}) for category in CATEGORIES}
-    if any(0 < count < PROTOCOL["minimum_cases_per_category"] for count in counts.values()):
+    if any(0 < count < PROTOCOL["minimum_cases_per_category"] for name, count in counts.items()
+           if not daily_v4 or name not in {"daily_gap", "institution_live"}):
         reasons.append("too_few_cases_in_a_category")
     if any(arm.get("usage", {}).get("total_input_tokens") is None for arm in observed): reasons.append("unknown_token_usage")
     # primary_only may never reach a faulted supporting domain; the other two have to, or the case tested nothing.

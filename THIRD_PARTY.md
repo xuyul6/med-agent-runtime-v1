@@ -16,6 +16,9 @@
 
 仅保存自行撰写的短导读，并保留原页面链接、版本与适用范围，不复制整篇正文。
 
+- 美国放射学会的甲状腺超声报告模板列出 ACR TI-RADS 的超声特征和 TR1 至 TR5 风险类别。2026-11-22 核对原始模板并编写术语导读，适用范围限于 ACR 体系。[ACR 报告模板](https://cs.acr.org/-/media/ACR/Files/RADS/TI-RADS/TI-RADS-Diagnostic-Ultrasound-Reporting-Template.pdf)
+- 两条成人通用药物导读依据 MedlinePlus 托管的 ASHP 患者资料，2026-11-22 核对药物类别和一般用途。第三方资料由 ASHP 享有权利。[Amoxicillin](https://medlineplus.gov/druginfo/meds/a685001.html) · [Metformin](https://medlineplus.gov/druginfo/meds/a696005.html) · [MedlinePlus 版权说明](https://medlineplus.gov/about/using/copyright/)
+
 - [FAO：Family Nutrition Guide（2004），Topic 10](https://www.fao.org/4/y5740e/y5740e0d.htm)：2026-10-29 查看生病时饮食和饮水的信息，自行撰写有限导读，不宣称 FAO 背书。该资料较早，不是个人饮食处方；[出版物版权说明](https://www.fao.org/4/y5740e/y5740e00.htm)及 [FAO 网站条款](https://www.fao.org/contact-us/terms/)区分非商业用途和其他使用，后续传播或商用须自行核实相应权利。
 
 - [MedlinePlus：How to Understand Your Lab Results](https://medlineplus.gov/lab-tests/how-to-understand-your-lab-results/)：报告阅读和参考范围的一般背景。2026-10-29 核对 “What is a reference range?” 及不同计量单位的说明，新增独立中文导读 `lab-reference-range-definition`、`lab-unit-overview`；原 `lab-context` 和历史快照保留。导读不提供单位换算或个人参考值，不替代来源原文及专业解释。
@@ -24,7 +27,7 @@
 - [DailyMed：Advil 布洛芬包衣片](https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=1a665e64-9f30-be37-4a83-38789f1f1e89)：Haleon US Holdings LLC 提交的在用标签，SPL v38；项目只写美国 Advil 200 mg 口服包衣片的成人资料摘要。并核对厂商 LBL-00000027 v38.0，不镜像 PDF、包装图或全文。
 - NHS 症状页面：[Cough](https://www.nhs.uk/conditions/cough/)、[High temperature (fever) in adults](https://www.nhs.uk/conditions/fever-in-adults/)、[Headaches](https://www.nhs.uk/conditions/headaches/)、[Sore throat](https://www.nhs.uk/conditions/sore-throat/)、[Diarrhoea and vomiting](https://www.nhs.uk/conditions/diarrhoea-and-vomiting/)。2026-11-16 核对页面审阅日期、自我照护和何时就医的章节，自行撰写中文导读 `symptom-*-nhs`。页面中的药物建议未收录；英国的 GP、111、999 渠道改写为"联系医生""尽快就医""急救电话或急诊"；婴幼儿阈值未收录，成人发烧导读不适用于儿童。
 - `consultation-record` 和 `symptom-record` 是本项目的信息整理模板；没有医学指南或医院业务来源的含义。
-- `backend/resources/medication-names.json` 是项目作者整理的常见药品通用名（国际非专利名）及英文名列表，只用于识别用户提到的药名；不含剂量或临床内容，不是药品数据库，也不表示已有对应资料。
+- `backend/resources/medication-names.json` 是项目整理的药名与别名列表，供识别用户提到的药品，包括通用名及连花清瘟等制剂名称。资料可用性另行核对。
 
 资料更新时核对来源、文本使用条件及适用范围，不把来源页面的权利转授给使用者。
 

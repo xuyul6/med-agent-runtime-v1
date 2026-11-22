@@ -1,0 +1,130 @@
+{
+  "question": "阿莫西林是什么类型的药",
+  "reference": {
+    "key": "amoxicillin-overview",
+    "text": "阿莫西林属于青霉素类抗生素，用于治疗某些细菌感染。普通感冒等病毒感染不在其抗菌作用范围内。",
+    "approved": true
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "text": "在抗生素中，阿莫西林归入青霉素类。它可用于治疗某些由细菌引起的感染。",
+      "expected": "met",
+      "raw_judge": {
+        "points": [
+          {
+            "point_id": "class",
+            "status": "met",
+            "answer_quote": "阿莫西林归入青霉素类",
+            "reference_key": "amoxicillin-overview",
+            "source_quote": "阿莫西林属于青霉素类抗生素"
+          }
+        ],
+        "reason": "回答明确指出阿莫西林属于青霉素类，并引用资料支持；表述简洁准确，对一般用途也有简要说明，但未涉及用户未问的其他信息，整体清楚可用。",
+        "relevance": 1,
+        "accuracy": 1,
+        "helpfulness": 0.9
+      }
+    },
+    {
+      "id": "A2",
+      "text": "它可用于治疗某些由细菌引起的感染。",
+      "expected": "missing",
+      "raw_judge": {
+        "points": [
+          {
+            "point_id": "class",
+            "status": "missing",
+            "answer_quote": "",
+            "reference_key": "",
+            "source_quote": ""
+          }
+        ],
+        "reason": "回答只说明阿莫西林可用于治疗细菌感染，未指出其属于青霉素类抗生素，必答点未完成。引用资料本身支持青霉素类，但回答未作表述。回答内容准确但不完整，且未回答所问的药物类型。",
+        "relevance": 0.6,
+        "accuracy": 0.9,
+        "helpfulness": 0.5
+      }
+    },
+    {
+      "id": "B1",
+      "text": "阿莫西林是青霉素家族里的一种抗菌药。这种药能治疗部分细菌感染，对普通病毒性感冒没有作用。",
+      "expected": "met",
+      "raw_judge": {
+        "points": [
+          {
+            "point_id": "class",
+            "status": "met",
+            "answer_quote": "阿莫西林是青霉素家族里的一种抗菌药",
+            "reference_key": "amoxicillin-overview",
+            "source_quote": "阿莫西林属于青霉素类抗生素，用于治疗某些细菌感染"
+          }
+        ],
+        "reason": "回答指出阿莫西林属于青霉素家族抗菌药，与资料中的青霉素类抗生素一致，并引用了对应资料；表述简洁，补充的普通感冒不起作用也有资料支持，相关且有用。",
+        "relevance": 1,
+        "accuracy": 1,
+        "helpfulness": 0.9
+      }
+    },
+    {
+      "id": "B2",
+      "text": "这种药能治疗部分细菌感染，对普通病毒性感冒没有作用。",
+      "expected": "missing",
+      "raw_judge": {
+        "points": [
+          {
+            "point_id": "class",
+            "status": "missing",
+            "answer_quote": "",
+            "reference_key": "",
+            "source_quote": ""
+          }
+        ],
+        "reason": "回答只说明了阿莫西林能治疗部分细菌感染、对普通病毒性感冒无效，但未指出其属于青霉素类抗生素，未答到必答点。引用资料本身支持该药用途和病毒感染不适用的说法，回答内容准确，但未回应所问的药物类型。",
+        "relevance": 0.5,
+        "accuracy": 0.9,
+        "helpfulness": 0.5
+      }
+    },
+    {
+      "id": "C1",
+      "text": "阿莫西林是一种抗生素。再细分，它属于青霉素这一支。资料提到，阿莫西林的用途之一是治疗某些细菌感染。",
+      "expected": "met",
+      "raw_judge": {
+        "points": [
+          {
+            "point_id": "class",
+            "status": "met",
+            "answer_quote": "再细分，它属于青霉素这一支",
+            "reference_key": "amoxicillin-overview",
+            "source_quote": "阿莫西林属于青霉素类抗生素，用于治疗某些细菌感染"
+          }
+        ],
+        "reason": "回答指出阿莫西林是抗生素并进一步归入青霉素一支，与资料“青霉素类抗生素”一致，满足必答点；表述简洁清楚，引用与结论相符，未涉及资料范围外的内容。",
+        "relevance": 1,
+        "accuracy": 1,
+        "helpfulness": 0.9
+      }
+    },
+    {
+      "id": "C2",
+      "text": "资料提到，阿莫西林的用途之一是治疗某些细菌感染。",
+      "expected": "missing",
+      "raw_judge": {
+        "points": [
+          {
+            "point_id": "class",
+            "status": "missing",
+            "answer_quote": "",
+            "reference_key": "",
+            "source_quote": ""
+          }
+        ],
+        "reason": "回答只说明了阿莫西林的一种用途，未指出其属于青霉素类抗生素，必答点缺失。引用的资料本身支持类别信息，但回答未作答。回答内容本身无错误，表述也清楚，但完整性不足。",
+        "relevance": 0.6,
+        "accuracy": 1,
+        "helpfulness": 0.5
+      }
+    }
+  ]
+}

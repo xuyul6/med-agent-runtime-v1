@@ -54,7 +54,7 @@ def test_timeout_guidance_and_judge_use_observed_failure_without_changing_low_sc
         assert model.judge_payloads[0]["current_turn"]["expected_behavior"]["degraded"] is True
         assert row["judge_context"]["lookup_observation_available"] is True
         assert row["judge_context"]["observed_lookup_failure_count"] == 1
-        assert report["metadata"]["policy"]["judge_protocol_version"] == "judge-context-5"
+        assert report["metadata"]["policy"]["judge_protocol_version"] == "judge-context-7"
 
     run(scenario())
 

@@ -291,5 +291,84 @@
       "use_conditions": "Contains public sector information licensed under the Open Government Licence v3.0. 项目自行编写中文导读，不复制原文；页面中的药物建议未收录；不代表 NHS 背书。",
       "terms_url": "https://www.nhs.uk/our-policies/terms-and-conditions/"
     }
+  },
+  {
+    "key": "acr-tirads-overview",
+    "title": "ACR TI-RADS 甲状腺结节超声风险分级",
+    "domain": "report",
+    "text": "美国放射学会（ACR）的 TI-RADS 用于描述甲状腺结节的超声特征和恶性风险类别。按结节的组成、回声、形状、边缘和强回声灶等特征计分，总分对应 TR1 至 TR5 的影像风险分级。解读前应先核对报告采用的分级体系。",
+    "url": "https://cs.acr.org/-/media/ACR/Files/RADS/TI-RADS/TI-RADS-Diagnostic-Ultrasound-Reporting-Template.pdf",
+    "version": "summary-2026-11-22",
+    "scope": "仅覆盖 ACR TI-RADS 报告术语。其他分级体系、个人诊断及处置超出本导读范围。",
+    "approved": true,
+    "entities": [
+      "TI-RADS",
+      "TIRADS",
+      "甲状腺影像报告和数据系统",
+      "甲状腺结节超声分级",
+      "甲状腺结节风险分级"
+    ]
+  },
+  {
+    "key": "amoxicillin-overview",
+    "title": "阿莫西林的类别与一般用途",
+    "domain": "medicine",
+    "text": "阿莫西林属于青霉素类抗生素，用于治疗某些细菌感染。普通感冒等病毒感染不在其抗菌作用范围内。",
+    "url": "https://medlineplus.gov/druginfo/meds/a685001.html",
+    "version": "summary-2026-11-22",
+    "scope": "美国公开资料中的成人通用药物概述，仅供核对药物类别和一般用途。",
+    "approved": true,
+    "entities": [
+      "阿莫西林",
+      "amoxicillin"
+    ],
+    "provenance": {
+      "organization": "AHFS Patient Medication Information (ASHP), via MedlinePlus",
+      "document_type": "public_overview",
+      "source_version": "revision-2026-05-15",
+      "updated_on": "2026-05-15",
+      "checked_on": "2026-11-22",
+      "sections": [
+        "Why is this medication prescribed?"
+      ],
+      "use_conditions": "项目自行编写简短中文导读，AHFS 原页面内容由 ASHP 享有权利。",
+      "terms_url": "https://medlineplus.gov/about/using/copyright/"
+    },
+    "medication_scope": {
+      "region": "US",
+      "population": "adults_18_plus",
+      "label_population": "本项目仅收录成人通用概述。"
+    }
+  },
+  {
+    "key": "metformin-overview",
+    "title": "二甲双胍的类别与一般用途",
+    "domain": "medicine",
+    "text": "二甲双胍属于双胍类药物，用于帮助控制 2 型糖尿病患者的血糖。其作用包括减少肝脏产生的葡萄糖以及改善身体对胰岛素的反应。",
+    "url": "https://medlineplus.gov/druginfo/meds/a696005.html",
+    "version": "summary-2026-11-22",
+    "scope": "美国公开资料中的成人通用药物概述，仅供核对药物类别和一般用途。",
+    "approved": true,
+    "entities": [
+      "二甲双胍",
+      "metformin"
+    ],
+    "provenance": {
+      "organization": "AHFS Patient Medication Information (ASHP), via MedlinePlus",
+      "document_type": "public_overview",
+      "source_version": "revision-2026-10-15",
+      "updated_on": "2026-10-15",
+      "checked_on": "2026-11-22",
+      "sections": [
+        "Why is this medication prescribed?"
+      ],
+      "use_conditions": "项目自行编写简短中文导读，AHFS 原页面内容由 ASHP 享有权利。",
+      "terms_url": "https://medlineplus.gov/about/using/copyright/"
+    },
+    "medication_scope": {
+      "region": "US",
+      "population": "adults_18_plus",
+      "label_population": "本项目仅收录成人通用概述。"
+    }
   }
 ]

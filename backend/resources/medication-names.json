@@ -1,6 +1,6 @@
 {
-  "version": "medication-names-1",
-  "note": "Common generic (INN) drug names compiled by the project author for entity recognition only; not a drug database, no dosing or clinical content. Brand names are deliberately not mapped to generics.",
+  "version": "medication-names-2",
+  "note": "Common medication names and preparation names for literal entity recognition only. Recognition does not imply evidence is available.",
   "medications": [
     {
       "name": "布洛芬",
@@ -387,6 +387,10 @@
         "amoxicillin-clavulanate",
         "amoxicillin clavulanate"
       ]
+    },
+    {
+      "name": "连花清瘟",
+      "aliases": []
     }
   ]
 }

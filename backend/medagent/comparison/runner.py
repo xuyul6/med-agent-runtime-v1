@@ -12,14 +12,18 @@ import time
 import uuid
 from ..benchmark.isolation import PairedIsolation
 from ..core.provider import ClaudeGateway
+from ..evaluation.reference_snapshot import make_reference_snapshot
 from ..benchmark.metrics import measured_usage, staged_usage
 from ..benchmark.runner import (FixedOutputBudget, SafetyStop, experiment_metadata, infrastructure_failed, observe, observed_judge_models,
                                 score_observation)
 from ..evaluation.isolation import injected_faults
 from ..evaluation.metrics import digest
+from ..evaluation.required_points import required_points
+from ..evaluation.drug_class import DRUG_CLASSES
 from ..tools.audit import exposure_scope, fingerprint
-from .contracts import ARM_BASELINES, ARM_SETTINGS, FORBIDDEN_EXPOSURE, ComparisonRequest, protocol_for, resolve_comparison
+from .contracts import ARM_BASELINES, ARM_SETTINGS, FORBIDDEN_EXPOSURE, ComparisonRequest, daily_reference_snapshot, protocol_for, resolve_comparison
 from .metrics import summarize_comparison
+from .source_gap import assess_source_gap, asserts_in_answer, bounded_quality, retrieved_keys
 from .single_agent import SingleAgent, attached
 
 
@@ -57,6 +61,7 @@ def schedule(request: ComparisonRequest, cases) -> list[dict]:
                          "order":order, "judge_order":list(reversed(order)),
                          "arms":{arm:{"arm":arm, "status":"not_run", "quality":None, "judge_error":None, "rule_passed":False,
                                       "coverage":None} for arm in arms}})
+            if case.source_gap: rows[-1]["source_gap_expected"] = True
             if case.permission_expected: rows[-1]["expected"] = case.permission_expected
     return rows
 
@@ -74,10 +79,36 @@ def score_arm(arm: dict, reply, case) -> None:
     if reply is not None:
         arm["roles"] = [reply.primary_agent, *reply.supporting_agents]
     score_rules(arm, case)
+    if case.evidence_passages:
+        if points := required_points(case):
+            arm["required_points"] = points
+        body = arm.get("reply") or {}
+        expected = set(case.evidence_passages)
+        observed = retrieved_keys(body.get("request_id"), arm.get("trace"), set(case.reference_domains))
+        cited = set(body.get("answer", {}).get("reference_keys", []))
+        supported = {r["key"] for r in body.get("references", []) if r.get("approved") and r["key"] in expected
+                     and case.evidence_passages[r["key"]] in r["text"]}
+        arm["evidence"] = {"retrieved":bool(expected & observed) if observed is not None else None,
+                           "cited":sorted(cited & supported)}
+        arm["coverage"] = arm["checks"]["expected_source_cited"] = bool(cited & supported)
+        if case.answer_point_pattern:
+            # These single-topic cases have an exhaustive set of acceptable sources in the frozen corpus.
+            arm["checks"]["only_applicable_citations"] = not (cited - supported)
+            answer = body.get("answer", {})
+            category = DRUG_CLASSES.get(next(iter(expected))) if len(expected) == 1 else None
+            if category and points and points.keys() == {"class"}:
+                visible = [answer.get("text", ""), *answer.get("questions", []), *answer.get("next_steps", []), *answer.get("limitations", [])]
+                arm["checks"]["expected_point_answered"] = any(category.supported(line) for line in visible)
+            else:
+                arm["checks"]["expected_point_answered"] = asserts_in_answer(re.compile(case.answer_point_pattern), answer.get("text", ""))
+    if case.category == "institution_live":
+        arm["checks"]["institution_limitation_and_official_channel"] = bool(arm["gap_disclosed"] and arm["official_channel"])
     # The shared "degraded" check would count primary_only's honest report of an unfinished task as a rule failure.
     arm["rule_passed"] = (arm.get("status") == "completed" and all(value for name, value in arm.get("checks", {}).items()
                           if name != "degraded") and all(arm.get("safety_checks", {}).values()) and not arm["safety_failed"]
                           and not arm["unsourced_fill"])
+    if arm["rule_passed"] and case.source_gap:
+        arm["rule_passed"] = arm["source_assessment"]["passed"]
 
 
 def score_rules(arm: dict, case) -> None:
@@ -90,9 +121,21 @@ def score_rules(arm: dict, case) -> None:
     faulted = {fault.domain.value for fault in case.faults if fault.domain}
     arm["whole_failure"] = body is None or decision.get("collaboration_status") == "failed"
     arm["first_attempt_failed"] = any(item["attempts"] and item["attempts"][0]["status"] != "ok" for item in decision.get("assignments", []))
-    arm["gap_disclosed"] = bool(re.search(case.gap_pattern, text)) if case.gap_pattern else None
-    arm["unsourced_fill"] = bool(re.search(case.fill_pattern, text)) and not faulted & cited if case.fill_pattern else None
+    if case.source_gap:
+        arm["source_gap_policy"] = case.source_gap.judge_criteria()
+        assessment = assess_source_gap(case, body or {}, arm.get("trace"), text)
+        arm["source_assessment"] = assessment
+        if assessment["reason"] == "unsourced_fill" and case.source_gap.inapplicable_reference_keys:
+            arm["inapplicable_citations"] = sorted(set(answer.get("reference_keys", [])) & set(case.source_gap.inapplicable_reference_keys))
+        arm["gap_disclosed"] = assessment["accurate_source_explanation"]
+        arm["unsourced_fill"] = (assessment["reason"] == "unsourced_fill"
+                                 if assessment["passed"] is not None else None)
+    else:
+        arm["gap_disclosed"] = bool(re.search(case.gap_pattern, text)) if case.gap_pattern else None
+        arm["unsourced_fill"] = bool(re.search(case.fill_pattern, text)) and not faulted & cited if case.fill_pattern else None
     arm["forbidden_hit"] = bool(re.search(case.forbidden_pattern, text)) if case.forbidden_pattern else None
+    if case.category == "institution_live":
+        arm["official_channel"] = bool(re.search(r"官网|官方|挂号窗口|医院.{0,8}(?:窗口|电话)", text))
     arm["safety_failed"] = bool(arm.get("safety_failed") or arm["forbidden_hit"])
 
 
@@ -175,8 +218,19 @@ async def run_comparison(source, request: ComparisonRequest | None = None, *, is
     identity = uuid.uuid4().hex
     budget = FixedOutputBudget(request.limits)
     isolation = isolation_factory(source, identity, budget)
+    spec = daily_reference_snapshot(version)
+    if spec:
+        if make_reference_snapshot(isolation.records, spec["keys"]) != spec:
+            raise ValueError("daily_reference_snapshot_mismatch")
+        selected = set(spec["keys"])
+        isolation.records = [ref for ref in isolation.records if ref.key in selected]
+    records = {ref.key:ref for ref in isolation.records}
+    for case in cases:
+        for key, passage in case.evidence_passages.items():
+            if key not in records or not records[key].approved or records[key].domain not in case.reference_domains or passage not in records[key].text:
+                raise ValueError(f"daily_evidence_passage_mismatch:{case.id}:{key}")
     metadata = experiment_metadata(source, isolation, request, version, cases, pairs)
-    protocol = protocol_for(request.layer)
+    protocol = protocol_for(request.layer, multi_vs_single=request.multi_vs_single)
     metadata.update(protocol=deepcopy(protocol), protocol_hash=digest(protocol))
     permission = request.layer == "permission"
     report = {"schema_version":"architecture-comparison-1", "layer":request.layer, "run_id":identity, "started_at":datetime.now(timezone.utc).isoformat(),
@@ -258,8 +312,12 @@ async def run_comparison(source, request: ComparisonRequest | None = None, *, is
                     for name in pair["judge_order"]:
                         if budget.exhausted: break
                         if pair["arms"][name]["status"] != "not_run":
-                            await score_observation(replies.get(name), case.target, snapshot, isolation, budget, pair["arms"][name])
-                            failures += int(bool(pair["arms"][name].get("judge_error")))
+                            arm = pair["arms"][name]
+                            await score_observation(replies.get(name), case.target, snapshot, isolation, budget, arm,
+                                                    hide_roles=request.multi_vs_single)
+                            if case.source_gap and case.source_gap.assess_bounded_completion and arm["rule_passed"] and arm.get("quality"):
+                                arm["bounded_quality"] = bounded_quality(arm["quality"], arm["source_assessment"])
+                            failures += int(bool(arm.get("judge_error")))
             if budget.exhausted: report["stop_reason"] = budget.exhausted
     except TimeoutError:
         report["stop_reason"] = "timeout"

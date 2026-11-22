@@ -1,6 +1,6 @@
 """Routing check against labelled requests.
 
-Offline (default) uses the keyword channel and the fixed prior only. With a model, only the understanding stage calls it:
+Offline (default) uses only the keyword channel. With a model, only the understanding stage calls it:
 role execution stays in preview, so the paid calls are one per turn and are capped by an explicit budget.
 """
 import argparse
@@ -96,7 +96,7 @@ async def score(dataset: Path, model=None, limits: EvalLimits | None = None,
     missing = sum(not row["language_channel"] for row in rows if row["actual_primary"] != "risk_handoff")
     return {"kind":"online_routing_labels" if online else "offline_routing_labels", "dataset":body["version"],
             "dataset_sha256":hashlib.sha256(raw).hexdigest(), "code_sha256":CODE_HASH,
-            "channels":["keywords", "prior:uniform", *(["language:"+(model_name or "model")] if online else [])],
+            "channels":["keywords", *(["language:"+(model_name or "model")] if online else [])],
             "language_channel":("scored_cases_without_language:"+str(missing)) if online else "not_used_offline",
             "labels":"engineering labels written before rule changes",
             "paid_model_calls":usage["attempted_calls"] if online else 0, "usage":usage, "budget_stop":budget.exhausted,

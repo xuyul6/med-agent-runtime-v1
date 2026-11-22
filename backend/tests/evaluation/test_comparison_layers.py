@@ -43,12 +43,24 @@ def test_layer_selects_its_arms_and_rotates_them():
 def test_plan_counts_only_the_layer_arms():
     request = ComparisonRequest(layer="daily", repetitions=4, cases=[case()])
     plan = build_plan(request)
-    assert plan["planned_targets"] == 8 and plan["protocol"]["version"] == "architecture-comparison-4"
+    assert plan["planned_targets"] == 8 and plan["protocol"]["version"] == "architecture-comparison-8"
 
 
 def test_repetitions_must_rotate_the_layer_arms():
     with pytest.raises(ValueError):
         ComparisonRequest(layer="daily", repetitions=3, cases=[case()])
+
+
+@pytest.mark.parametrize("layer,count", [("daily", 24), ("compound", 12)])
+@pytest.mark.parametrize("repeats", [1, 4])
+def test_two_architecture_plan_preserves_dataset_and_balanced_order(layer, count, repeats):
+    plan = build_plan(ComparisonRequest(layer=layer, multi_vs_single=True, repetitions=repeats))
+    replay = build_plan(ComparisonRequest.model_validate(plan["request"]))
+    assert (replay["dataset"], replay["cases_hash"], replay["schedule"]) == (plan["dataset"], plan["cases_hash"], plan["schedule"])
+    assert plan["planned_targets"] == count * repeats * 2
+    assert set(plan["protocol"]["arms"]) == {"multi_agent", "single_agent"}
+    assert sum(p["order"][0] == "multi_agent" for p in plan["schedule"]) == count * repeats // 2
+    assert all(p["judge_order"] == list(reversed(p["order"])) for p in plan["schedule"])
 
 
 def test_safety_layer_runs_without_judge():

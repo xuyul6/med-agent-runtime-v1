@@ -103,7 +103,7 @@ class VisitInput(AgentInput):
     institution: str | None = None
     region: str | None = None
     institution_specific: bool = False
-    # The understanding model's quoted judgment that the turn is about a visit; None when no model judged it.
+    # Grounded visit context from understanding, an explicit preparation request or a verified follow-up.
     visit_context: bool | None = None
 
 
