@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" width="760" role="img" aria-labelledby="t d">
-<title id="t">历史回归（01ac224）：日常、复合与稳定性三层的 Judge 均分</title>
-<desc id="d">日常层无故障（01ac224 修复后回归）multi 0.812 single 0.833；复合层无故障（01ac224 修复后回归）multi 0.836 single 0.879；稳定性层一次性失败（01ac224 修复后回归）multi 0.878 single 0.890；稳定性层工具故障 multi 0.680 single 0.781；稳定性层角色一直失败 multi 0.649 single 0.416；稳定性层全部中断 multi 0.439 single 0.397</desc>
+<title id="t">日常、复合与稳定性三层的 Judge 均分</title>
+<desc id="d">日常层无故障 multi 0.8803 single 0.9001；复合层无故障 multi 0.8600 single 0.8675；稳定性层一次性失败 multi 0.878 single 0.890；稳定性层工具故障 multi 0.680 single 0.781；稳定性层角色一直失败 multi 0.649 single 0.416；稳定性层全部中断 multi 0.439 single 0.397</desc>
 <style>
 .s{fill:#fcfcfb}.p{fill:#0b0b0b}.q{fill:#52514e}.g{stroke:#e4e3de}.c{stroke:#b9b8b1}.m{fill:#2a78d6}.n{fill:#eb6834}
 text{font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif}
 @media (prefers-color-scheme:dark){.s{fill:#1a1a19}.p{fill:#f0efec}.q{fill:#c3c2b7}.g{stroke:#3a3a37}.c{stroke:#6b6a64}.m{fill:#3987e5}.n{fill:#d95926}}
 </style>
 <rect class="s" width="760" height="430" rx="8"/>
-<text class="p" x="24" y="36" font-size="18" font-weight="600">历史回归 · 日常、复合与稳定性三层的 Judge 均分</text>
-<text class="q" x="24" y="60" font-size="13">版本 01ac224 · 合成题 · 满分 1，各层分别统计</text>
+<text class="p" x="24" y="36" font-size="18" font-weight="600">多 Agent 与单 Agent 在日常、复合和故障条件下的 Judge 均分</text>
+<text class="q" x="24" y="60" font-size="13">合成题，满分 1。日常与复合取 11 月 22 日单轮评测，稳定性取此前故障回归。</text>
 <circle class="m" cx="30" cy="86" r="6"/><text class="q" x="42" y="91" font-size="13">multi（多角色编排）</text>
 <circle class="n" cx="190" cy="86" r="6"/><text class="q" x="202" y="91" font-size="13">single（单 Agent 基线）</text>
 <line class="g" x1="265.7" y1="108" x2="265.7" y2="368" stroke-width="1"/>
@@ -20,42 +20,42 @@ text{font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC
 <line class="g" x1="720.0" y1="108" x2="720.0" y2="368" stroke-width="1"/>
 <text class="q" x="720.0" y="386" font-size="12" text-anchor="middle">1.0</text>
 <text class="p" x="176" y="126" font-size="13" text-anchor="end">无故障</text>
-<text class="q" x="176" y="141" font-size="11" text-anchor="end">日常层 · 01ac224</text>
-<line class="c" x1="577.6" y1="128" x2="593.5" y2="128" stroke-width="2" stroke-linecap="round"/>
-<circle class="m" cx="577.6" cy="128" r="7"/>
-<text class="p" x="565.6" y="132" font-size="12" text-anchor="end">0.812</text>
-<circle class="n" cx="593.5" cy="128" r="7"/>
-<text class="p" x="605.5" y="132" font-size="12" text-anchor="start">0.833</text>
+<text class="q" x="176" y="141" font-size="11" text-anchor="end">日常层</text>
+<line class="c" x1="629.4" y1="128" x2="644.4" y2="128" stroke-width="2" stroke-linecap="round"/>
+<circle class="m" cx="629.4" cy="128" r="7"/>
+<text class="p" x="617.4" y="132" font-size="12" text-anchor="end">0.8803</text>
+<circle class="n" cx="644.4" cy="128" r="7"/>
+<text class="p" x="656.4" y="132" font-size="12" text-anchor="start">0.9001</text>
 <text class="p" x="176" y="170" font-size="13" text-anchor="end">无故障</text>
-<text class="q" x="176" y="185" font-size="11" text-anchor="end">复合层 · 01ac224</text>
-<line class="c" x1="595.8" y1="172" x2="628.4" y2="172" stroke-width="2" stroke-linecap="round"/>
-<circle class="m" cx="595.8" cy="172" r="7"/>
-<text class="p" x="583.8" y="176" font-size="12" text-anchor="end">0.836</text>
-<circle class="n" cx="628.4" cy="172" r="7"/>
-<text class="p" x="640.4" y="176" font-size="12" text-anchor="start">0.879</text>
+<text class="q" x="176" y="185" font-size="11" text-anchor="end">复合层</text>
+<line class="c" x1="614.0" y1="172" x2="619.7" y2="172" stroke-width="2" stroke-linecap="round"/>
+<circle class="m" cx="614.0" cy="172" r="7"/>
+<text class="p" x="602.0" y="176" font-size="12" text-anchor="end">0.8600</text>
+<circle class="n" cx="619.7" cy="172" r="7"/>
+<text class="p" x="631.7" y="176" font-size="12" text-anchor="start">0.8675</text>
 <text class="p" x="176" y="214" font-size="13" text-anchor="end">一次性失败</text>
-<text class="q" x="176" y="229" font-size="11" text-anchor="end">稳定性层 · 01ac224</text>
+<text class="q" x="176" y="229" font-size="11" text-anchor="end">稳定性层</text>
 <line class="c" x1="627.6" y1="216" x2="636.7" y2="216" stroke-width="2" stroke-linecap="round"/>
 <circle class="m" cx="627.6" cy="216" r="7"/>
 <text class="p" x="615.6" y="220" font-size="12" text-anchor="end">0.878</text>
 <circle class="n" cx="636.7" cy="216" r="7"/>
 <text class="p" x="648.7" y="220" font-size="12" text-anchor="start">0.890</text>
 <text class="p" x="176" y="258" font-size="13" text-anchor="end">工具故障</text>
-<text class="q" x="176" y="273" font-size="11" text-anchor="end">稳定性层 · 01ac224</text>
+<text class="q" x="176" y="273" font-size="11" text-anchor="end">稳定性层</text>
 <line class="c" x1="477.7" y1="260" x2="554.2" y2="260" stroke-width="2" stroke-linecap="round"/>
 <circle class="m" cx="477.7" cy="260" r="7"/>
 <text class="p" x="465.7" y="264" font-size="12" text-anchor="end">0.680</text>
 <circle class="n" cx="554.2" cy="260" r="7"/>
 <text class="p" x="566.2" y="264" font-size="12" text-anchor="start">0.781</text>
 <text class="p" x="176" y="302" font-size="13" text-anchor="end">角色一直失败</text>
-<text class="q" x="176" y="317" font-size="11" text-anchor="end">稳定性层 · 01ac224</text>
+<text class="q" x="176" y="317" font-size="11" text-anchor="end">稳定性层</text>
 <line class="c" x1="454.2" y1="304" x2="277.8" y2="304" stroke-width="2" stroke-linecap="round"/>
 <circle class="m" cx="454.2" cy="304" r="7"/>
 <text class="p" x="466.2" y="308" font-size="12" text-anchor="start">0.649</text>
 <circle class="n" cx="277.8" cy="304" r="7"/>
 <text class="p" x="265.8" y="308" font-size="12" text-anchor="end">0.416</text>
 <text class="p" x="176" y="346" font-size="13" text-anchor="end">全部中断</text>
-<text class="q" x="176" y="361" font-size="11" text-anchor="end">稳定性层 · 01ac224</text>
+<text class="q" x="176" y="361" font-size="11" text-anchor="end">稳定性层</text>
 <line class="c" x1="295.2" y1="348" x2="263.4" y2="348" stroke-width="2" stroke-linecap="round"/>
 <circle class="m" cx="295.2" cy="348" r="7"/>
 <text class="p" x="307.2" y="352" font-size="12" text-anchor="start">0.439</text>
