@@ -119,7 +119,9 @@
 | 工具故障后的补答 | `01ac224` | 注入工具故障时，多 Agent 无来源补答 0/12，单 Agent 2/12。该轮主实例和备用实例均使用 Haiku。 |
 | 日常题成本 | `01ac224` | 当轮估算每答约 $0.00126（多 Agent）和 $0.00203（单 Agent）；本次单轮对照报告调用次数。 |
 
-历史图展示 `01ac224` 在日常、复合和几种故障条件下的 Judge 均分。初始实验与其后的回归另存有各自的原始口径，包括安全门人工复核、只用主角色的对照和成本估算。[历史图表](assets/four-layer-comparison.svg) · [完整历史对照与回归记录](https://github.com/xuyul6/med-agent-runtime-v1/blob/ddf9208c1b7d39bb7c79e67c3d4bb616ac0b50d5/README.md#多-agent-对单-agent历史对照)
+历史图展示 `01ac224` 在日常、复合和几种故障条件下的 Judge 均分。初始实验与其后的回归另存有各自的原始口径，包括安全门人工复核、只用主角色的对照和成本估算。[完整历史对照与回归记录](https://github.com/xuyul6/med-agent-runtime-v1/blob/ddf9208c1b7d39bb7c79e67c3d4bb616ac0b50d5/README.md#多-agent-对单-agent历史对照)
+
+![01ac224 历史回归：日常、复合和故障条件下两种架构的 Judge 均分](assets/four-layer-comparison.svg)
 
 #### 来源缺口评测的演变
 
