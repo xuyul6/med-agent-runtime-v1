@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" width="760" role="img" aria-labelledby="t d">
-<title id="t">四层评测 Judge 均分：multi 与 single</title>
+<title id="t">历史回归（01ac224）：日常、复合与稳定性三层的 Judge 均分</title>
 <desc id="d">日常层无故障（01ac224 修复后回归）multi 0.812 single 0.833；复合层无故障（01ac224 修复后回归）multi 0.836 single 0.879；稳定性层一次性失败（01ac224 修复后回归）multi 0.878 single 0.890；稳定性层工具故障 multi 0.680 single 0.781；稳定性层角色一直失败 multi 0.649 single 0.416；稳定性层全部中断 multi 0.439 single 0.397</desc>
 <style>
 .s{fill:#fcfcfb}.p{fill:#0b0b0b}.q{fill:#52514e}.g{stroke:#e4e3de}.c{stroke:#b9b8b1}.m{fill:#2a78d6}.n{fill:#eb6834}
@@ -7,8 +7,8 @@ text{font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC
 @media (prefers-color-scheme:dark){.s{fill:#1a1a19}.p{fill:#f0efec}.q{fill:#c3c2b7}.g{stroke:#3a3a37}.c{stroke:#6b6a64}.m{fill:#3987e5}.n{fill:#d95926}}
 </style>
 <rect class="s" width="760" height="430" rx="8"/>
-<text class="p" x="24" y="36" font-size="18" font-weight="600">无故障时 single 仍略高、差距已缩小，一个角色持续失败时 multi 更高</text>
-<text class="q" x="24" y="60" font-size="13">Judge 均分 0–1，合成题。三层都是 01ac224 修复后回归；各层不能合并比较。</text>
+<text class="p" x="24" y="36" font-size="18" font-weight="600">历史回归 · 日常、复合与稳定性三层的 Judge 均分</text>
+<text class="q" x="24" y="60" font-size="13">版本 01ac224 · 合成题 · 满分 1，各层分别统计</text>
 <circle class="m" cx="30" cy="86" r="6"/><text class="q" x="42" y="91" font-size="13">multi（多角色编排）</text>
 <circle class="n" cx="190" cy="86" r="6"/><text class="q" x="202" y="91" font-size="13">single（单 Agent 基线）</text>
 <line class="g" x1="265.7" y1="108" x2="265.7" y2="368" stroke-width="1"/>
